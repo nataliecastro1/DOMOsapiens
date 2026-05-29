@@ -12,11 +12,11 @@ export const SAMPLE_FILES = [
 ];
 
 export const EXTRACTED_FIELDS = [
-  { label: 'Total savings',          value: '$2,400,000', confidence: 97, variant: 'green' },
-  { label: 'License spend',          value: '$870,000',   confidence: 95, variant: 'green' },
-  { label: 'Compliance risk avoided',value: '$340,000',   confidence: 91, variant: 'green' },
-  { label: 'Support cost reduction', value: '18%',        confidence: 88, variant: 'blue'  },
-  { label: 'Net ROI',                value: '$1,530,000', confidence: 93, variant: 'green' },
+  { label: 'Total savings',           value: '$2,400,000', confidence: 97, variant: 'green', source: 'Sheet: All_ROI_Data · B14' },
+  { label: 'License spend',           value: '$870,000',   confidence: 95, variant: 'green', source: 'Sheet: All_ROI_Data · C14' },
+  { label: 'Compliance risk avoided', value: '$340,000',   confidence: 91, variant: 'green', source: 'Sheet: Compliance · D8'    },
+  { label: 'Support cost reduction',  value: '18%',        confidence: 88, variant: 'blue',  source: 'Sheet: Summary · F22'      },
+  { label: 'Net ROI',                 value: '$1,530,000', confidence: 93, variant: 'green', source: 'Sheet: All_ROI_Data · H14' },
 ];
 
 export const ROI_ROWS = [
