@@ -236,33 +236,93 @@ function ScreenExtract({ onNext }) {
 
 // ─── Screen 4: Store ──────────────────────────────────────────────────────────
 function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
+  const [editValues, setEditValues] = useState(
+    () => Object.fromEntries(EXTRACTED_FIELDS.map(f => [f.label, f.value]))
+  );
+  const [editingLabel, setEditingLabel] = useState(null);
+
+  const commitEdit = (label, val) => {
+    setEditValues(prev => ({ ...prev, [label]: val }));
+    setEditingLabel(null);
+  };
+
+  const handleKeyDown = (e, label) => {
+    if (e.key === 'Enter') commitEdit(label, e.target.value);
+    if (e.key === 'Escape') setEditingLabel(null);
+  };
+
+  const handleSave = () => {
+    const finalFields = EXTRACTED_FIELDS.map(f => ({ ...f, value: editValues[f.label] }));
+    onNext(finalFields);
+  };
+
   return (
     <div className="card">
       <div className="card-title"><i className="ti ti-database" aria-hidden="true" /> Store Results</div>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>Review extracted values before writing to the ROI Tracker.</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
+        Review extracted values before writing to the ROI Tracker. Click the pencil to correct a value.
+      </p>
 
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, padding: '0 0 8px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
-        <span>Field</span>
-        <span style={{ display: 'flex', gap: 40 }}><span>Value</span><span>Conf.</span></span>
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Value</th>
+              <th>Conf.</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {EXTRACTED_FIELDS.map(f => {
+              const current = editValues[f.label];
+              const isEdited = current !== f.value;
+              const isEditing = editingLabel === f.label;
+              return (
+                <tr key={f.label}>
+                  <td>{f.label}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {isEditing ? (
+                        <input
+                          autoFocus
+                          defaultValue={current}
+                          onBlur={e => commitEdit(f.label, e.target.value)}
+                          onKeyDown={e => handleKeyDown(e, f.label)}
+                          style={{ width: 120, padding: '3px 6px', fontSize: 12 }}
+                        />
+                      ) : (
+                        <>
+                          <span style={{ fontWeight: 600 }}>{current}</span>
+                          {isEdited && <Badge color="amber">edited</Badge>}
+                          <button
+                            className="btn small"
+                            style={{ padding: '2px 6px', border: 'none', background: 'transparent', color: 'var(--text-muted)' }}
+                            onClick={() => setEditingLabel(f.label)}
+                            aria-label={`Edit ${f.label}`}
+                          >
+                            <i className="ti ti-pencil" style={{ fontSize: 12 }} aria-hidden="true" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                  <td><Badge color={f.variant}>{f.confidence}%</Badge></td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: 11 }}>{f.source}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-
-      {EXTRACTED_FIELDS.map(f => (
-        <div className="list-row" key={f.label}>
-          <span>{f.label}</span>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            <span style={{ fontWeight: 600 }}>{f.value}</span>
-            <Badge color={f.variant}>{f.confidence}%</Badge>
-          </div>
-        </div>
-      ))}
 
       <label className="field-label" style={{ marginTop: 16, marginBottom: 10 }}>What gets stored</label>
       <div className="store-grid">
         {[
-          { icon: 'ti-table',         title: 'ROI values',      sub: 'Client_ROI_Tracker.xlsx · sheet: All_ROI_Data' },
-          { icon: 'ti-shield-check',  title: 'Audit record',    sub: 'Client_ROI_Tracker.xlsx · sheet: SME_Audit_Log' },
+          { icon: 'ti-table',            title: 'ROI values',      sub: 'Client_ROI_Tracker.xlsx · sheet: All_ROI_Data' },
+          { icon: 'ti-shield-check',     title: 'Audit record',    sub: 'Client_ROI_Tracker.xlsx · sheet: SME_Audit_Log' },
           { icon: 'ti-file-spreadsheet', title: 'Source file ref', sub: selectedFile?.name || '—' },
-          { icon: 'ti-user-check',    title: 'SME checkpoint',  sub: `Approved · ${smeName || '—'}` },
+          { icon: 'ti-user-check',       title: 'SME checkpoint',  sub: `Approved · ${smeName || '—'}` },
         ].map(t => (
           <div className="store-tile" key={t.title}>
             <div className="store-tile-title">
@@ -276,7 +336,7 @@ function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
 
       <div className="btn-row">
         <button className="btn" onClick={onBack}><i className="ti ti-arrow-left" aria-hidden="true" /> Back</button>
-        <button className="btn primary" onClick={onNext}>Save All &amp; Done <i className="ti ti-arrow-right" aria-hidden="true" /></button>
+        <button className="btn primary" onClick={handleSave}>Save All &amp; Done <i className="ti ti-arrow-right" aria-hidden="true" /></button>
       </div>
     </div>
   );
@@ -329,16 +389,18 @@ export default function ExtractionView({ onNav }) {
   const [step, setStep]           = useState(1);
   const [selectedFile, setFile]   = useState(null);
   const [smeName, setSmeName]     = useState('');
+  const [finalFields, setFinalFields] = useState(null);
 
   const handleFileSelect = (file) => { setFile(file); setStep(2); };
   const handleSMEConfirm = ({ smeName: name }) => { setSmeName(name); setStep(3); };
+  const handleStore = (fields) => { setFinalFields(fields); setStep(5); };
 
   const screens = [
     <ScreenRequest key={0} onNext={() => setStep(1)} />,
     <ScreenFiles   key={1} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile} onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
     <ScreenExtract key={3} onNext={() => setStep(4)} />,
-    <ScreenStore   key={4} selectedFile={selectedFile} smeName={smeName} onNext={() => setStep(5)} onBack={() => setStep(3)} />,
+    <ScreenStore   key={4} selectedFile={selectedFile} smeName={smeName} onNext={handleStore} onBack={() => setStep(3)} />,
     <ScreenDone    key={5} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
 
