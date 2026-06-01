@@ -6,6 +6,7 @@ import DashboardsView from './views/DashboardsView';
 import TrackerView from './views/TrackerView';
 import ClientsView from './views/ClientsView';
 import HelpView from './views/HelpView';
+import LoginView from './views/LoginView';
 import './index.css';
 
 const VIEW_META = {
@@ -17,8 +18,13 @@ const VIEW_META = {
 };
 
 export default function App() {
+  const [loggedIn, setLoggedIn]   = useState(false);
   const [activeView, setActiveView] = useState('extract');
   const meta = VIEW_META[activeView] || VIEW_META.extract;
+
+  if (!loggedIn) {
+    return <LoginView onLogin={() => setLoggedIn(true)} />;
+  }
 
   const renderView = () => {
     switch (activeView) {
@@ -33,7 +39,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopBar ctxLabel={meta.ctx} />
+      <TopBar ctxLabel={meta.ctx} onLogout={() => setLoggedIn(false)} />
       <div className="app-body">
         <Sidebar activeView={activeView} onNav={setActiveView} />
         <main className="main">
