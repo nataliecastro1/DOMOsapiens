@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect } from 'react';
 export default function TopBar({ ctxLabel, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const btnRef = useRef(null);
+  const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -23,7 +25,12 @@ export default function TopBar({ ctxLabel, onLogout }) {
       <div className="topbar-right" ref={ref} style={{ position: 'relative' }}>
         {/* Clickable user area */}
         <button
-          onClick={() => setOpen(o => !o)}
+          ref={btnRef}
+          onClick={() => {
+            const rect = btnRef.current.getBoundingClientRect();
+            setDropPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+            setOpen(o => !o);
+          }}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
             background: 'none', border: 'none', cursor: 'pointer', padding: 0,
@@ -34,12 +41,12 @@ export default function TopBar({ ctxLabel, onLogout }) {
           <i className="ti ti-chevron-down" style={{ fontSize: 12, color: '#c8d4e8', marginLeft: 2 }} />
         </button>
 
-        {/* Dropdown */}
+        {/* Dropdown — rendered as fixed so it escapes overflow:hidden on .app */}
         {open && (
           <div style={{
-            position: 'absolute', top: 'calc(100% + 10px)', right: 0,
+            position: 'fixed', top: dropPos.top, right: dropPos.right,
             background: '#fff', border: '1px solid #e2e7ef', borderRadius: 8,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: 160, zIndex: 100,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: 160, zIndex: 9999,
           }}>
             <div style={{ padding: '10px 16px', borderBottom: '1px solid #f0f3f8' }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#001941' }}>Christina D.</div>
