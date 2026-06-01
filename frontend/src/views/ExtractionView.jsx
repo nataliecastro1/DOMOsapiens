@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Badge from '../components/Badge';
+import { extractROI } from '../services/api';
 import {
   CLIENTS, PUBLISHERS, YEARS,
   SAMPLE_FILES, EXTRACTED_FIELDS, EXTRACTION_STEPS,
@@ -176,22 +177,45 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
 }
 
 // ─── Screen 3: Extract ────────────────────────────────────────────────────────
-function ScreenExtract({ onNext }) {
+function ScreenExtract({ selectedFile, onNext }) {
   const [stepStatuses, setStepStatuses] = useState(EXTRACTION_STEPS.map(() => 'pending'));
-  const [done, setDone] = useState(false);
+  const [extractedData, setExtractedData] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    let i = 0;
-    function advance() {
-      if (i >= EXTRACTION_STEPS.length) { setDone(true); return; }
-      setStepStatuses(prev => prev.map((s, idx) => idx === i ? 'running' : s));
-      setTimeout(() => {
-        setStepStatuses(prev => prev.map((s, idx) => idx === i ? 'done' : s));
-        i++;
-        setTimeout(advance, 300);
-      }, 750);
+    let cancelled = false;
+
+    async function runExtraction() {
+      // Animate steps while calling backend
+      for (let i = 0; i < EXTRACTION_STEPS.length; i++) {
+        if (cancelled) return;
+        setStepStatuses(prev => prev.map((s, idx) => idx === i ? 'running' : s));
+
+        // On the last step, actually call the backend
+        if (i === EXTRACTION_STEPS.length - 1) {
+          try {
+            const documentText = selectedFile
+              ? `Document: ${selectedFile.name}\nVersion: ${selectedFile.version}\nClient: Encova Insurance | Publisher: Oracle | Year: 2025`
+              : 'Sample ROI document for Encova Insurance Oracle 2025';
+
+            const result = await extractROI(documentText);
+            if (!cancelled) setExtractedData(result);
+          } catch (err) {
+            if (!cancelled) setError(err.message);
+          }
+        } else {
+          await new Promise(r => setTimeout(r, 700));
+        }
+
+        if (!cancelled) {
+          setStepStatuses(prev => prev.map((s, idx) => idx === i ? 'done' : s));
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
     }
-    advance();
+
+    runExtraction();
+    return () => { cancelled = true; };
   }, []);
 
   const statusBadge = (s) => {
@@ -199,6 +223,19 @@ function ScreenExtract({ onNext }) {
     if (s === 'running') return <Badge color="blue">Running…</Badge>;
     return <Badge color="navy">Pending</Badge>;
   };
+
+  const isDone = stepStatuses.every(s => s === 'done');
+
+  // Convert backend response to display fields
+  const displayFields = extractedData ? [
+    { label: 'Total Savings',           value: extractedData.total_savings           || '—', variant: 'green' },
+    { label: 'License Spend',           value: extractedData.license_spend           || '—', variant: 'green' },
+    { label: 'Compliance Risk Avoided', value: extractedData.compliance_risk_avoided || '—', variant: 'green' },
+    { label: 'Support Cost Reduction',  value: extractedData.support_cost_reduction  || '—', variant: 'blue'  },
+    { label: 'Net ROI',                 value: extractedData.net_roi                 || '—', variant: 'green' },
+  ] : EXTRACTED_FIELDS;
+
+  const confidence = extractedData?.confidence ?? 94;
 
   return (
     <div className="card">
@@ -212,19 +249,25 @@ function ScreenExtract({ onNext }) {
         </div>
       ))}
 
-      {done && (
+      {error && (
+        <div style={{ marginTop: 14, padding: 12, background: 'var(--red-pale)', borderRadius: 6, fontSize: 12, color: 'var(--red-text)' }}>
+          <strong>Backend unavailable:</strong> showing preview data. ({error})
+        </div>
+      )}
+
+      {isDone && (
         <>
           <div style={{ marginTop: 14 }}>
             <label className="field-label">Extracted Fields</label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-              {EXTRACTED_FIELDS.map(f => (
+              {displayFields.map(f => (
                 <Badge key={f.label} color={f.variant}>{f.label.split(' ')[0]}: {f.value}</Badge>
               ))}
-              <Badge color="gold">Confidence: 94%</Badge>
+              <Badge color="gold">Confidence: {confidence}%</Badge>
             </div>
           </div>
           <div className="btn-row">
-            <button className="btn primary" onClick={onNext}>
+            <button className="btn primary" onClick={() => onNext(displayFields)}>
               Review &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
             </button>
           </div>
@@ -399,7 +442,7 @@ export default function ExtractionView({ onNav }) {
     <ScreenRequest key={0} onNext={() => setStep(1)} />,
     <ScreenFiles   key={1} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile} onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
-    <ScreenExtract key={3} onNext={() => setStep(4)} />,
+    <ScreenExtract key={3} selectedFile={selectedFile} onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
     <ScreenStore   key={4} selectedFile={selectedFile} smeName={smeName} onNext={handleStore} onBack={() => setStep(3)} />,
     <ScreenDone    key={5} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];

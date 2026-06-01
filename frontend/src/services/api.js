@@ -15,3 +15,11 @@ export async function post(path, body) {
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
   return res.json();
 }
+
+/**
+ * Send document text to the backend, which calls Claude via Alfred proxy.
+ * Returns extracted ROI fields.
+ */
+export async function extractROI(documentText) {
+  return post('/extract', { document_text: documentText });
+}
