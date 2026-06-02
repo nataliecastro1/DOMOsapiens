@@ -51,8 +51,8 @@ function DashboardBuilder({ templateId, onClose }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <button className="btn small" onClick={onClose}><i className="ti ti-arrow-left" aria-hidden="true" /> All dashboards</button>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Build: {titles[templateId]}</span>
+        <button className="btn ghost small" onClick={onClose}><i className="ti ti-arrow-left" aria-hidden="true" /> All dashboards</button>
+        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--navy)' }}>Build: {titles[templateId]}</span>
       </div>
 
       <div className="card">
@@ -89,7 +89,7 @@ function DashboardBuilder({ templateId, onClose }) {
         </div>
 
         <div className="btn-row">
-          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
           <button className="btn primary" onClick={() => setPreview(true)}>
             Preview Dashboard <i className="ti ti-arrow-right" aria-hidden="true" />
           </button>
@@ -113,9 +113,9 @@ function DashboardBuilder({ templateId, onClose }) {
               { label: 'IBM',       pct: '25%', color: 'var(--gold)',       val: '$740K' },
             ].map(b => (
               <div className="bar-row" key={b.label}>
-                <span style={{ width: 100 }}>{b.label}</span>
+                <span className="bar-label">{b.label}</span>
                 <div className="bar-bg"><div className="bar-fill" style={{ width: b.pct, background: b.color }} /></div>
-                <span style={{ width: 56, textAlign: 'right', color: 'var(--text-muted)' }}>{b.val}</span>
+                <span className="bar-val">{b.val}</span>
               </div>
             ))}
           </div>
@@ -137,7 +137,7 @@ export default function DashboardsView() {
     <>
       <div className="db-grid">
         {TEMPLATES.map(t => (
-          <button key={t.id} className="db-card" onClick={() => setBuildingTemplate(t.id)} style={{ border: '1px solid var(--border)' }}>
+          <button key={t.id} className="db-card" onClick={() => setBuildingTemplate(t.id)}>
             <div className="db-card-head">
               <i className={`ti ${t.icon}`} aria-hidden="true" />
               <div className="db-card-title">{t.title}</div>

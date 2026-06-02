@@ -57,7 +57,7 @@ function TabROIData() {
   const [detailIdx, setDetailIdx] = useState(null);
 
   const statusColor = (s) => s === 'Stored' ? 'green' : 'amber';
-  const confColor   = (c) => parseInt(c) >= 92 ? 'green' : parseInt(c) >= 88 ? 'blue' : 'gold';
+  const confColor   = (c) => parseInt(c) >= 90 ? 'green' : parseInt(c) >= 75 ? 'amber' : 'red';
 
   return (
     <>
@@ -179,7 +179,7 @@ export default function TrackerView() {
           <strong style={{ color: 'var(--text)' }}>SME_Audit_Log</strong>,{' '}
           <strong style={{ color: 'var(--text)' }}>Source_File_Log</strong>
         </p>
-        <button className="btn small"><i className="ti ti-table-export" aria-hidden="true" /> Export .xlsx</button>
+        <button className="btn ghost small"><i className="ti ti-table-export" aria-hidden="true" /> Export .xlsx</button>
       </div>
 
       <div className="tab-bar">
