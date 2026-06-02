@@ -12,6 +12,7 @@ const STEP_DEFS = [
   { label: 'Files',        icon: 'ti-files'                  },
   { label: 'SME Validate', icon: 'ti-user-check'             },
   { label: 'Extract',      icon: 'ti-cpu'                    },
+  { label: 'Compare',      icon: 'ti-git-compare'            },
   { label: 'Store',        icon: 'ti-database'               },
   { label: 'Done',         icon: 'ti-circle-check'           },
 ];
@@ -50,41 +51,163 @@ function JourneyBar({ currentStep, onStep }) {
 
 // ─── Screen 0: Request ────────────────────────────────────────────────────────
 function ScreenRequest({ onNext }) {
-  const [client, setClient] = useState(CLIENTS[0]);
-  const [year, setYear]     = useState(YEARS[0]);
-  const [publisher, setPub] = useState(PUBLISHERS[0]);
+  const [client, setClient]   = useState(CLIENTS[0]);
+  const [year, setYear]       = useState(YEARS[0]);
+  const [publisher, setPub]   = useState(PUBLISHERS[0]);
+
+  // Upload card state
+  const [dragOver, setDragOver]   = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [docType, setDocType]     = useState('ROAR');
+  const fileInputRef              = useRef(null);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) setUploadFile(file);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) setUploadFile(file);
+  };
 
   return (
-    <div className="card">
-      <div className="card-title">
-        <i className="ti ti-adjustments-horizontal" aria-hidden="true" />
-        New Extraction Request
-      </div>
-      <div className="field-group">
-        <label className="field-label" htmlFor="req-client">Client</label>
-        <select id="req-client" value={client} onChange={e => setClient(e.target.value)}>
-          {CLIENTS.map(c => <option key={c}>{c}</option>)}
-        </select>
-      </div>
-      <div className="grid-2">
-        <div className="field-group">
-          <label className="field-label" htmlFor="req-year">Year</label>
-          <select id="req-year" value={year} onChange={e => setYear(e.target.value)}>
-            {YEARS.map(y => <option key={y}>{y}</option>)}
-          </select>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'stretch' }}>
+
+      {/* ── Card 1: SharePoint Search ── */}
+      <div className="card">
+        <div className="card-title">
+          <i className="ti ti-adjustments-horizontal" aria-hidden="true" />
+          Search SharePoint
         </div>
         <div className="field-group">
-          <label className="field-label" htmlFor="req-publisher">Publisher</label>
-          <select id="req-publisher" value={publisher} onChange={e => setPub(e.target.value)}>
-            {PUBLISHERS.map(p => <option key={p}>{p}</option>)}
+          <label className="field-label" htmlFor="req-client">Client</label>
+          <select id="req-client" value={client} onChange={e => setClient(e.target.value)}>
+            {CLIENTS.map(c => <option key={c}>{c}</option>)}
           </select>
         </div>
+        <div className="grid-2">
+          <div className="field-group">
+            <label className="field-label" htmlFor="req-year">Year</label>
+            <select id="req-year" value={year} onChange={e => setYear(e.target.value)}>
+              {YEARS.map(y => <option key={y}>{y}</option>)}
+            </select>
+          </div>
+          <div className="field-group">
+            <label className="field-label" htmlFor="req-publisher">Publisher</label>
+            <select id="req-publisher" value={publisher} onChange={e => setPub(e.target.value)}>
+              {PUBLISHERS.map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="btn-row">
+          <button className="btn primary" onClick={onNext}>
+            Find Files <i className="ti ti-arrow-right" aria-hidden="true" />
+          </button>
+        </div>
       </div>
-      <div className="btn-row">
-        <button className="btn primary" onClick={onNext}>
-          Find Files <i className="ti ti-arrow-right" aria-hidden="true" />
-        </button>
+
+      {/* ── Card 2: Manual Upload ── */}
+      <div className="card">
+        <div className="card-title">
+          <i className="ti ti-upload" aria-hidden="true" />
+          Upload a File
+        </div>
+
+        {/* Drag & drop zone */}
+        <div
+          onClick={() => fileInputRef.current.click()}
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          style={{
+            border: `2px dashed ${dragOver ? 'var(--accent)' : '#c8d4e8'}`,
+            borderRadius: 8,
+            padding: '32px 16px',
+            textAlign: 'center',
+            cursor: 'pointer',
+            background: dragOver ? 'rgba(0,82,204,0.04)' : '#f7f9fc',
+            transition: 'border-color 0.15s, background 0.15s',
+            marginBottom: 16,
+          }}
+        >
+          <i
+            className="ti ti-file-upload"
+            style={{ fontSize: 32, color: dragOver ? 'var(--accent)' : '#6b7fa3', display: 'block', marginBottom: 8 }}
+            aria-hidden="true"
+          />
+          {uploadFile ? (
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>{uploadFile.name}</div>
+              <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 4 }}>
+                {(uploadFile.size / 1024).toFixed(0)} KB · Click to change
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>
+                Drag &amp; drop your file here
+              </div>
+              <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 4 }}>
+                or click to browse · PDF, PPTX, XLSX
+              </div>
+            </div>
+          )}
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.pptx,.xlsx,.ppt"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+
+        {/* Document type */}
+        <div className="field-group">
+          <label className="field-label">Document Type</label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {['ROAR', 'ELP'].map(type => (
+              <button
+                key={type}
+                onClick={() => setDocType(type)}
+                style={{
+                  flex: 1,
+                  padding: '8px 0',
+                  borderRadius: 6,
+                  border: `1.5px solid ${docType === type ? 'var(--accent)' : '#d0d9ea'}`,
+                  background: docType === type ? 'rgba(0,82,204,0.07)' : '#fff',
+                  color: docType === type ? 'var(--accent)' : '#6b7fa3',
+                  fontWeight: docType === type ? 700 : 400,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 6 }}>
+            {docType === 'ROAR'
+              ? 'Return on Anglepoint Relationship — PDF or Excel report'
+              : 'ELP deliverable — PowerPoint / slide deck'}
+          </div>
+        </div>
+
+        <div className="btn-row">
+          <button
+            className="btn primary"
+            disabled={!uploadFile}
+            onClick={onNext}
+            style={{ opacity: uploadFile ? 1 : 0.45, cursor: uploadFile ? 'pointer' : 'not-allowed' }}
+          >
+            Use This File <i className="ti ti-arrow-right" aria-hidden="true" />
+          </button>
+        </div>
       </div>
+
     </div>
   );
 }
@@ -440,7 +563,210 @@ function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKe
   );
 }
 
-// ─── Screen 4: Store ──────────────────────────────────────────────────────────
+// ─── Screen 4: Compare ───────────────────────────────────────────────────────
+const COMPARE_FIELDS = [
+  { label: 'Identified Risk',         script: '$1,080,000',  claude: '$1,080,000'  },
+  { label: 'ID Cost Avoidance',       script: '$540,000',    claude: '$540,000'    },
+  { label: 'Acc. Cost Avoidance',     script: '$320,000',    claude: '$315,000'    },
+  { label: 'ID Cost Optimization',    script: '$210,000',    claude: '$210,000'    },
+  { label: 'Acc. Cost Optimization',  script: '$98,000',     claude: '$105,000'    },
+  { label: 'Realized Savings',        script: '$418,000',    claude: '$418,000'    },
+  { label: 'Contract Spend',          script: '$2,400,000',  claude: '$2,400,000'  },
+  { label: 'Year',                    script: '2025',        claude: '2025'        },
+  { label: 'Currency',                script: 'USD',         claude: 'USD'         },
+  { label: 'Pricing Available',       script: 'Yes',         claude: 'No'          },
+];
+
+function CompareRow({ field, onResolve }) {
+  const matches = field.script === field.claude;
+  const [checked,   setChecked]   = useState(matches);
+  const [editVal,   setEditVal]   = useState(matches ? field.claude : '');
+  const [confirmed, setConfirmed] = useState(matches);
+
+  // Notify parent whenever resolved state changes
+  useEffect(() => {
+    onResolve(field.label, confirmed ? (checked ? field.claude : editVal) : null);
+  }, [confirmed, checked, editVal]);
+
+  const rowColor   = confirmed ? 'rgba(34,197,94,0.07)'  : 'rgba(239,68,68,0.06)';
+  const borderColor= confirmed ? 'rgba(34,197,94,0.25)'  : 'rgba(239,68,68,0.22)';
+  const labelColor = confirmed ? '#15803d' : '#b91c1c';
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1.6fr 1fr 1fr 1.4fr',
+      alignItems: 'center',
+      gap: 0,
+      borderBottom: '1px solid #edf0f6',
+      padding: '11px 16px',
+      background: rowColor,
+      borderLeft: `3px solid ${borderColor}`,
+      transition: 'background 0.2s, border-color 0.2s',
+    }}>
+      {/* Field name */}
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>
+        {field.label}
+      </span>
+
+      {/* Script value */}
+      <span style={{ fontSize: 13, color: '#374151', fontFamily: 'monospace' }}>
+        {field.script}
+      </span>
+
+      {/* Claude value */}
+      <span style={{
+        fontSize: 13, fontFamily: 'monospace',
+        color: matches ? '#374151' : '#b91c1c', fontWeight: matches ? 400 : 600,
+      }}>
+        {field.claude}
+        {!matches && (
+          <i className="ti ti-alert-triangle" style={{ marginLeft: 5, fontSize: 11 }} aria-hidden="true" />
+        )}
+      </span>
+
+      {/* Final / resolve column */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {confirmed ? (
+          // Confirmed → green checkmark (click to uncheck/edit)
+          <button
+            onClick={() => { setConfirmed(false); setChecked(false); }}
+            title="Click to edit"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#15803d', fontSize: 13, fontWeight: 600, padding: 0,
+            }}
+          >
+            <span style={{
+              width: 22, height: 22, borderRadius: 6,
+              background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <i className="ti ti-check" style={{ fontSize: 13, color: '#fff' }} aria-hidden="true" />
+            </span>
+            {editVal || field.claude}
+          </button>
+        ) : (
+          // Not confirmed → input + Done button
+          <div style={{ display: 'flex', gap: 6, width: '100%' }}>
+            <input
+              type="text"
+              value={editVal}
+              onChange={e => setEditVal(e.target.value)}
+              placeholder="Enter correct value…"
+              style={{
+                flex: 1, fontSize: 13, padding: '4px 8px',
+                border: '1.5px solid #fca5a5', borderRadius: 6,
+                outline: 'none', background: '#fff',
+                fontFamily: 'inherit',
+              }}
+              onFocus={e => e.target.style.borderColor = '#ef4444'}
+              onBlur={e => e.target.style.borderColor = '#fca5a5'}
+            />
+            <button
+              disabled={!editVal.trim()}
+              onClick={() => { if (editVal.trim()) setConfirmed(true); }}
+              style={{
+                padding: '4px 10px', fontSize: 12, fontWeight: 700,
+                background: editVal.trim() ? '#22c55e' : '#d1fae5',
+                color: '#fff', border: 'none', borderRadius: 6,
+                cursor: editVal.trim() ? 'pointer' : 'not-allowed',
+                transition: 'background 0.15s',
+              }}
+            >
+              Done
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ScreenCompare({ onNext, onBack }) {
+  const [resolved, setResolved] = useState({});
+
+  const handleResolve = (label, val) => {
+    setResolved(prev => ({ ...prev, [label]: val }));
+  };
+
+  const allDone = COMPARE_FIELDS.every(f => resolved[f.label] !== null && resolved[f.label] !== undefined);
+  const matchCount    = COMPARE_FIELDS.filter(f => f.script === f.claude).length;
+  const mismatchCount = COMPARE_FIELDS.length - matchCount;
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+
+      {/* Header */}
+      <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #edf0f6' }}>
+        <div className="card-title" style={{ marginBottom: 6 }}>
+          <i className="ti ti-git-compare" aria-hidden="true" />
+          Script vs. Claude AI — Field Comparison
+        </div>
+        <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
+          <span style={{ color: '#15803d', fontWeight: 600 }}>
+            <i className="ti ti-circle-check" style={{ marginRight: 4 }} aria-hidden="true" />
+            {matchCount} match{matchCount !== 1 ? 'es' : ''}
+          </span>
+          <span style={{ color: '#b91c1c', fontWeight: 600 }}>
+            <i className="ti ti-alert-triangle" style={{ marginRight: 4 }} aria-hidden="true" />
+            {mismatchCount} mismatch{mismatchCount !== 1 ? 'es' : ''} — review required
+          </span>
+        </div>
+      </div>
+
+      {/* Column headers */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1.6fr 1fr 1fr 1.4fr',
+        padding: '8px 16px',
+        background: '#f7f9fc',
+        borderBottom: '1px solid #edf0f6',
+        fontSize: 11,
+        fontWeight: 700,
+        color: '#6b7fa3',
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+      }}>
+        <span>Field</span>
+        <span>Script</span>
+        <span>Claude AI</span>
+        <span>Final Value</span>
+      </div>
+
+      {/* Rows */}
+      <div>
+        {COMPARE_FIELDS.map(f => (
+          <CompareRow key={f.label} field={f} onResolve={handleResolve} />
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{ padding: '16px 20px', borderTop: '1px solid #edf0f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button className="btn ghost" onClick={onBack}>
+          <i className="ti ti-arrow-left" aria-hidden="true" /> Back
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {!allDone && (
+            <span style={{ fontSize: 12, color: '#b91c1c' }}>
+              Resolve all red fields to continue
+            </span>
+          )}
+          <button
+            className="btn primary"
+            disabled={!allDone}
+            onClick={() => onNext(resolved)}
+            style={{ opacity: allDone ? 1 : 0.45, cursor: allDone ? 'pointer' : 'not-allowed' }}
+          >
+            Confirm &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Screen 5: Store ──────────────────────────────────────────────────────────
 function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
   const [editValues, setEditValues] = useState(
     () => Object.fromEntries(EXTRACTED_FIELDS.map(f => [f.label, f.value]))
@@ -597,15 +923,16 @@ export default function ExtractionView({ onNav }) {
 
   const handleFileSelect = file              => { setFile(file);    setStep(2); };
   const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n);    setStep(3); };
-  const handleStore      = fields            => { setFinalFields(fields); setStep(5); };
+  const handleStore      = fields            => { setFinalFields(fields); setStep(6); };
 
   const screens = [
     <ScreenRequest  key={0} onNext={() => setStep(1)} />,
-    <ScreenFiles    key={1} onSelect={handleFileSelect}  onBack={() => setStep(0)} />,
-    <ScreenValidate key={2} selectedFile={selectedFile}  onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
-    <ScreenExtract  key={3} selectedFile={selectedFile}  onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
-    <ScreenStore    key={4} selectedFile={selectedFile}  smeName={smeName} onNext={handleStore} onBack={() => setStep(3)} />,
-    <ScreenDone     key={5} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
+    <ScreenFiles    key={1} onSelect={handleFileSelect}   onBack={() => setStep(0)} />,
+    <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
+    <ScreenExtract  key={3} selectedFile={selectedFile}   onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
+    <ScreenCompare  key={4} onNext={(resolved) => { setFinalFields(resolved); setStep(5); }} onBack={() => setStep(3)} />,
+    <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} onNext={handleStore} onBack={() => setStep(4)} />,
+    <ScreenDone     key={6} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
 
   return (
