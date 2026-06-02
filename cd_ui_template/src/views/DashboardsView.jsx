@@ -3,10 +3,10 @@ import Badge from '../components/Badge';
 import { CLIENTS, PUBLISHERS, YEARS, SAVED_DASHBOARDS } from '../data';
 
 const TEMPLATES = [
-  { id: 'client-all-pub', icon: 'ti-building',      title: 'Client — all publishers', sub: 'All publisher ROI for one client in a given year',     tags: ['1 client','All publishers','1 year'] },
-  { id: 'pub-all-years',  icon: 'ti-calendar-stats', title: 'Publisher — all years',   sub: 'ROI trend for one publisher across all available years', tags: ['1 client','1 publisher','All years'] },
-  { id: 'full',           icon: 'ti-chart-line',     title: 'Full client history',     sub: 'All publishers × all years for one client',             tags: ['1 client','All publishers','All years'] },
-  { id: 'custom',         icon: 'ti-sliders',        title: 'Custom filters',          sub: 'Any combination of clients, publishers, and years',      tags: ['Flexible'], tagColor: 'gold' },
+  { id: 'client-all-pub', icon: 'ti-building',       title: 'Client — all publishers', sub: 'All publisher ROI for one client in a given year',     tags: ['1 client', 'All publishers', '1 year']         },
+  { id: 'pub-all-years',  icon: 'ti-calendar-stats',  title: 'Publisher — all years',   sub: 'ROI trend for one publisher across all available years', tags: ['1 client', '1 publisher', 'All years']         },
+  { id: 'full',           icon: 'ti-chart-line',      title: 'Full client history',     sub: 'All publishers × all years for one client',             tags: ['1 client', 'All publishers', 'All years']      },
+  { id: 'custom',         icon: 'ti-sliders',         title: 'Custom filters',          sub: 'Any combination of clients, publishers, and years',      tags: ['Flexible'], tagColor: 'gold' },
 ];
 
 function ToggleGroup({ options, value, onChange }) {
@@ -34,29 +34,41 @@ function SegGroup({ options, selected, onToggle }) {
 }
 
 function DashboardBuilder({ templateId, onClose }) {
-  const titles = { 'client-all-pub': 'Client — All Publishers', 'pub-all-years': 'Publisher — All Years', 'full': 'Full Client History', 'custom': 'Custom Filters' };
+  const titles = {
+    'client-all-pub': 'Client — All Publishers',
+    'pub-all-years':  'Publisher — All Years',
+    'full':           'Full Client History',
+    'custom':         'Custom Filters',
+  };
 
   const [pubMode, setPubMode]       = useState('All publishers');
   const [yrMode, setYrMode]         = useState('All years');
   const [selPubs, setSelPubs]       = useState([...PUBLISHERS]);
   const [selYears, setSelYears]     = useState([...YEARS]);
-  const [selMetrics, setSelMetrics] = useState(['Total savings','Net ROI','License spend']);
+  const [selMetrics, setSelMetrics] = useState(['Total savings', 'Net ROI', 'License spend']);
   const [showPreview, setPreview]   = useState(false);
 
   const toggleItem = (arr, setArr, item) =>
     setArr(arr.includes(item) ? arr.filter(x => x !== item) : [...arr, item]);
 
-  const METRICS = ['Total savings','Net ROI','License spend','Compliance risk','Support reduction'];
+  const METRICS = ['Total savings', 'Net ROI', 'License spend', 'Compliance risk', 'Support reduction'];
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <button className="btn small" onClick={onClose}><i className="ti ti-arrow-left" aria-hidden="true" /> All dashboards</button>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Build: {titles[templateId]}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <button className="btn ghost small" onClick={onClose}>
+          <i className="ti ti-arrow-left" aria-hidden="true" /> All dashboards
+        </button>
+        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--navy)' }}>
+          Build: {titles[templateId]}
+        </span>
       </div>
 
       <div className="card">
-        <div className="card-title"><i className="ti ti-sliders" aria-hidden="true" /> Configure Filters</div>
+        <div className="card-title">
+          <i className="ti ti-sliders" aria-hidden="true" />
+          Configure Filters
+        </div>
 
         <div className="field-group">
           <label className="field-label">Dashboard name</label>
@@ -69,7 +81,7 @@ function DashboardBuilder({ templateId, onClose }) {
 
         <div className="field-group">
           <label className="field-label">Publisher</label>
-          <ToggleGroup options={['All publishers','Select specific']} value={pubMode} onChange={setPubMode} />
+          <ToggleGroup options={['All publishers', 'Select specific']} value={pubMode} onChange={setPubMode} />
           {pubMode === 'Select specific' && (
             <SegGroup options={PUBLISHERS} selected={selPubs} onToggle={item => toggleItem(selPubs, setSelPubs, item)} />
           )}
@@ -77,7 +89,7 @@ function DashboardBuilder({ templateId, onClose }) {
 
         <div className="field-group">
           <label className="field-label">Year</label>
-          <ToggleGroup options={['All years','Select specific']} value={yrMode} onChange={setYrMode} />
+          <ToggleGroup options={['All years', 'Select specific']} value={yrMode} onChange={setYrMode} />
           {yrMode === 'Select specific' && (
             <SegGroup options={YEARS} selected={selYears} onToggle={item => toggleItem(selYears, setSelYears, item)} />
           )}
@@ -89,7 +101,7 @@ function DashboardBuilder({ templateId, onClose }) {
         </div>
 
         <div className="btn-row">
-          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
           <button className="btn primary" onClick={() => setPreview(true)}>
             Preview Dashboard <i className="ti ti-arrow-right" aria-hidden="true" />
           </button>
@@ -98,14 +110,31 @@ function DashboardBuilder({ templateId, onClose }) {
 
       {showPreview && (
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Dashboard Preview</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--navy)', marginBottom: 14 }}>
+            Dashboard Preview
+          </div>
           <div className="metric-grid">
-            <div className="metric-card"><div className="metric-label">Avg Total Savings</div><div className="metric-value">$2.1M</div><div className="metric-delta">across 4 publishers</div></div>
-            <div className="metric-card"><div className="metric-label">Best Net ROI</div><div className="metric-value">$1.53M</div><div className="metric-delta muted">Oracle · 2025</div></div>
-            <div className="metric-card"><div className="metric-label">Records</div><div className="metric-value">12</div><div className="metric-delta muted">matched rows</div></div>
+            <div className="metric-card">
+              <div className="metric-label">Avg Total Savings</div>
+              <div className="metric-value">$2.1M</div>
+              <div className="metric-delta">across 4 publishers</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Best Net ROI</div>
+              <div className="metric-value">$1.53M</div>
+              <div className="metric-delta muted">Oracle · 2025</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Records</div>
+              <div className="metric-value">12</div>
+              <div className="metric-delta muted">matched rows</div>
+            </div>
           </div>
           <div className="card">
-            <div className="card-title"><i className="ti ti-chart-bar" aria-hidden="true" /> Total Savings by Publisher — 2025</div>
+            <div className="card-title">
+              <i className="ti ti-chart-bar" aria-hidden="true" />
+              Total Savings by Publisher — 2025
+            </div>
             {[
               { label: 'Oracle',    pct: '80%', color: 'var(--navy)',       val: '$2.4M' },
               { label: 'Microsoft', pct: '55%', color: 'var(--blue)',       val: '$1.7M' },
@@ -113,13 +142,17 @@ function DashboardBuilder({ templateId, onClose }) {
               { label: 'IBM',       pct: '25%', color: 'var(--gold)',       val: '$740K' },
             ].map(b => (
               <div className="bar-row" key={b.label}>
-                <span style={{ width: 100 }}>{b.label}</span>
-                <div className="bar-bg"><div className="bar-fill" style={{ width: b.pct, background: b.color }} /></div>
-                <span style={{ width: 56, textAlign: 'right', color: 'var(--text-muted)' }}>{b.val}</span>
+                <span className="bar-label">{b.label}</span>
+                <div className="bar-bg">
+                  <div className="bar-fill" style={{ width: b.pct, background: b.color }} />
+                </div>
+                <span className="bar-val">{b.val}</span>
               </div>
             ))}
           </div>
-          <button className="btn primary">Save Dashboard <i className="ti ti-device-floppy" aria-hidden="true" /></button>
+          <button className="btn primary">
+            Save Dashboard <i className="ti ti-device-floppy" aria-hidden="true" />
+          </button>
         </div>
       )}
     </div>
@@ -137,7 +170,7 @@ export default function DashboardsView() {
     <>
       <div className="db-grid">
         {TEMPLATES.map(t => (
-          <button key={t.id} className="db-card" onClick={() => setBuildingTemplate(t.id)} style={{ border: '1px solid var(--border)' }}>
+          <button key={t.id} className="db-card" onClick={() => setBuildingTemplate(t.id)}>
             <div className="db-card-head">
               <i className={`ti ${t.icon}`} aria-hidden="true" />
               <div className="db-card-title">{t.title}</div>
@@ -150,13 +183,15 @@ export default function DashboardsView() {
         ))}
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Saved Dashboards</div>
-      <div className="card" style={{ padding: 14 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--navy)', marginBottom: 14 }}>
+        Saved Dashboards
+      </div>
+      <div className="card" style={{ padding: '8px 28px' }}>
         {SAVED_DASHBOARDS.map(d => (
           <div className="list-row" key={d.name}>
             <div>
-              <div style={{ fontWeight: 500 }}>{d.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{d.sub}</div>
+              <div style={{ fontWeight: 600 }}>{d.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{d.sub}</div>
             </div>
             <Badge color={d.badgeColor}>{d.badge}</Badge>
           </div>

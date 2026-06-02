@@ -10,16 +10,21 @@ const CLIENTS = [
 export default function ClientsView() {
   return (
     <div className="card">
-      <div className="card-title"><i className="ti ti-users" aria-hidden="true" /> Active Clients</div>
-      {CLIENTS.map(c => (
-        <div className="list-row" key={c.name}>
-          <div>
-            <div style={{ fontWeight: 500 }}>{c.name}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.sub}</div>
+      <div className="card-title">
+        <i className="ti ti-users" aria-hidden="true" />
+        Active Clients
+      </div>
+      <div className="client-cards">
+        {CLIENTS.map(c => (
+          <div className="client-card" key={c.name}>
+            <div>
+              <div className="client-card-name">{c.name}</div>
+              <div className="client-card-sub">{c.sub}</div>
+            </div>
+            <Badge color={c.color}>{c.status}</Badge>
           </div>
-          <Badge color={c.color}>{c.status}</Badge>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
