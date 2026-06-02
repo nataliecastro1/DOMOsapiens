@@ -18,7 +18,7 @@ export default function TopBar({ ctxLabel, onLogout }) {
   return (
     <div className="topbar">
       <a className="topbar-logo" href="#">
-        <img src="/anglepoint-logo.png" alt="Anglepoint" style={{ height: 28 }} />
+        <img src="/anglepoint-logo.png" alt="Anglepoint" style={{ height: 30 }} />
       </a>
       <span className="topbar-ctx">{ctxLabel}</span>
 

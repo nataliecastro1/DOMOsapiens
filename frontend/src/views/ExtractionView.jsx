@@ -6,24 +6,42 @@ import {
   SAMPLE_FILES, EXTRACTED_FIELDS, EXTRACTION_STEPS,
 } from '../data';
 
-// ─── Step Bar ──────────────────────────────────────────────────────────────────
-function StepBar({ currentStep, onStep }) {
-  const labels = ['Request', 'Files', 'SME Validate', 'Extract', 'Store', 'Done'];
+// ─── Journey Bar ──────────────────────────────────────────────────────────────
+const STEP_DEFS = [
+  { label: 'Request',      icon: 'ti-adjustments-horizontal' },
+  { label: 'Files',        icon: 'ti-files'                  },
+  { label: 'SME Validate', icon: 'ti-user-check'             },
+  { label: 'Extract',      icon: 'ti-cpu'                    },
+  { label: 'Store',        icon: 'ti-database'               },
+  { label: 'Done',         icon: 'ti-circle-check'           },
+];
+
+function JourneyBar({ currentStep, onStep }) {
   return (
-    <div className="step-bar" role="list" aria-label="Extraction steps">
-      {labels.map((label, i) => {
+    <div className="journey-bar" role="list" aria-label="Extraction pipeline">
+      {STEP_DEFS.map((step, i) => {
         const isDone   = i < currentStep;
         const isActive = i === currentStep;
         return (
-          <button
-            key={i}
-            className={`step-item ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`}
-            onClick={() => onStep(i)}
-            role="listitem"
-          >
-            <span className="step-num">{isDone ? '✓' : i + 1}</span>
-            <span>{label}</span>
-          </button>
+          <React.Fragment key={i}>
+            <button
+              className={`journey-step ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`}
+              onClick={() => onStep(i)}
+              role="listitem"
+              aria-current={isActive ? 'step' : undefined}
+            >
+              <div className="journey-step-icon">
+                {isDone
+                  ? <i className="ti ti-check" aria-hidden="true" />
+                  : <i className={`ti ${step.icon}`} aria-hidden="true" />
+                }
+              </div>
+              <div className="journey-step-label">{step.label}</div>
+            </button>
+            {i < STEP_DEFS.length - 1 && (
+              <div className={`journey-connector ${isDone ? 'done' : ''}`} aria-hidden="true" />
+            )}
+          </React.Fragment>
         );
       })}
     </div>
@@ -32,29 +50,32 @@ function StepBar({ currentStep, onStep }) {
 
 // ─── Screen 0: Request ────────────────────────────────────────────────────────
 function ScreenRequest({ onNext }) {
-  const [client, setClient]   = useState(CLIENTS[0]);
-  const [year, setYear]       = useState(YEARS[0]);
-  const [publisher, setPub]   = useState(PUBLISHERS[0]);
+  const [client, setClient] = useState(CLIENTS[0]);
+  const [year, setYear]     = useState(YEARS[0]);
+  const [publisher, setPub] = useState(PUBLISHERS[0]);
 
   return (
     <div className="card">
-      <div className="card-title"><i className="ti ti-adjustments-horizontal" aria-hidden="true" /> Request Parameters</div>
+      <div className="card-title">
+        <i className="ti ti-adjustments-horizontal" aria-hidden="true" />
+        New Extraction Request
+      </div>
       <div className="field-group">
-        <label className="field-label">Client</label>
-        <select value={client} onChange={e => setClient(e.target.value)}>
+        <label className="field-label" htmlFor="req-client">Client</label>
+        <select id="req-client" value={client} onChange={e => setClient(e.target.value)}>
           {CLIENTS.map(c => <option key={c}>{c}</option>)}
         </select>
       </div>
       <div className="grid-2">
         <div className="field-group">
-          <label className="field-label">Year</label>
-          <select value={year} onChange={e => setYear(e.target.value)}>
+          <label className="field-label" htmlFor="req-year">Year</label>
+          <select id="req-year" value={year} onChange={e => setYear(e.target.value)}>
             {YEARS.map(y => <option key={y}>{y}</option>)}
           </select>
         </div>
         <div className="field-group">
-          <label className="field-label">Publisher</label>
-          <select value={publisher} onChange={e => setPub(e.target.value)}>
+          <label className="field-label" htmlFor="req-publisher">Publisher</label>
+          <select id="req-publisher" value={publisher} onChange={e => setPub(e.target.value)}>
             {PUBLISHERS.map(p => <option key={p}>{p}</option>)}
           </select>
         </div>
@@ -72,24 +93,32 @@ function ScreenRequest({ onNext }) {
 function ScreenFiles({ onSelect, onBack }) {
   return (
     <div className="card">
-      <div className="card-title"><i className="ti ti-files" aria-hidden="true" /> Matched Files</div>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
-        3 files found for <strong>Encova / Oracle / 2025</strong>. Select one to route for SME validation.
+      <div className="card-title">
+        <i className="ti ti-files" aria-hidden="true" />
+        Matched Files
+      </div>
+      <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 20 }}>
+        3 files found for{' '}
+        <strong style={{ color: 'var(--navy)' }}>Encova / Oracle / 2025</strong>.
+        Select one to route for SME validation.
       </p>
       {SAMPLE_FILES.map(f => (
-        <div className="file-row" key={f.name}>
-          <div>
-            <div className="file-name">
-              <i className="ti ti-file-spreadsheet" aria-hidden="true" />
-              {f.name}
-            </div>
-            <div className="file-meta">
-              {f.modified} · {f.size}
-              <Badge color={f.tagColor} style={{ marginLeft: 8 }}>{f.tag}</Badge>
+        <div className={`file-card ${f.tag === 'Latest' ? 'featured' : ''}`} key={f.name}>
+          <i
+            className={`ti ti-file-spreadsheet file-card-icon ${f.tag === 'Latest' ? 'featured' : ''}`}
+            aria-hidden="true"
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="file-card-name">{f.name}</div>
+            <div className="file-card-meta">
+              <span>{f.modified}</span>
+              <span>·</span>
+              <span>{f.size}</span>
+              <Badge color={f.tagColor}>{f.tag}</Badge>
             </div>
           </div>
           <button
-            className={`btn small ${f.tag === 'Latest' ? 'primary' : ''}`}
+            className={`btn small ${f.tag === 'Latest' ? 'primary' : 'ghost'}`}
             onClick={() => onSelect(f)}
           >
             Select
@@ -97,7 +126,7 @@ function ScreenFiles({ onSelect, onBack }) {
         </div>
       ))}
       <div className="btn-row">
-        <button className="btn" onClick={onBack}>
+        <button className="btn ghost" onClick={onBack}>
           <i className="ti ti-arrow-left" aria-hidden="true" /> Back
         </button>
       </div>
@@ -118,59 +147,123 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
   };
 
   const OPTIONS = [
-    { id: 'approve', icon: 'ti-circle-check', iconColor: 'var(--green)', title: 'Approve — correct file, proceed',         sub: 'Decision + timestamp stored in audit log' },
-    { id: 'flag',    icon: 'ti-alert-triangle',iconColor: 'var(--amber-border)', title: 'Flag — wrong file, return to selection', sub: 'Flagged decision is still recorded' },
-    { id: 'note',    icon: 'ti-edit',          iconColor: 'var(--blue)', title: 'Approve with notes',                      sub: 'Notes attached to the audit record' },
+    {
+      id: 'approve', iconColor: '#4ade80',
+      icon: 'ti-circle-check',
+      title: 'Approve — correct file, proceed',
+      sub: 'Decision + timestamp stored in audit log',
+    },
+    {
+      id: 'flag', iconColor: '#fbbf24',
+      icon: 'ti-alert-triangle',
+      title: 'Flag — wrong file, return to selection',
+      sub: 'Flagged decision is still recorded',
+    },
+    {
+      id: 'note', iconColor: '#60a5fa',
+      icon: 'ti-edit',
+      title: 'Approve with notes',
+      sub: 'Notes attached to the audit record',
+    },
   ];
 
   return (
-    <div className="card">
-      <div className="card-title"><i className="ti ti-user-check" aria-hidden="true" /> SME Validation — Checkpoint</div>
-      <div className="info-box" style={{ marginBottom: 16 }}>
-        <div className="info-row"><span className="info-key">File</span>                   <span className="info-val">{selectedFile?.name || '—'}</span></div>
-        <div className="info-row"><span className="info-key">Version</span>                <span className="info-val">{selectedFile?.version || '—'}</span></div>
-        <div className="info-row"><span className="info-key">Client / Publisher / Year</span><span className="info-val">Encova · Oracle · 2025</span></div>
-        <div className="info-row"><span className="info-key">Timestamp</span>              <span className="info-val">{timestamp.current}</span></div>
-      </div>
-
-      <label className="field-label" style={{ marginBottom: 10 }}>
-        SME Decision{' '}
-        <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}>(recorded to audit log)</span>
-      </label>
-
-      {OPTIONS.map(opt => (
-        <button
-          key={opt.id}
-          className={`radio-card ${decision === opt.id ? 'selected' : ''}`}
-          onClick={() => setDecision(opt.id)}
-        >
-          <i className={`ti ${opt.icon}`} style={{ fontSize: 20, color: opt.iconColor, marginTop: 1 }} aria-hidden="true" />
-          <div>
-            <div className="radio-card-title">{opt.title}</div>
-            <div className="radio-card-sub">{opt.sub}</div>
-          </div>
-        </button>
-      ))}
-
-      <div className="field-group" style={{ marginTop: 12 }}>
-        <label className="field-label" htmlFor="sme-name">SME name / initials</label>
-        <input id="sme-name" type="text" placeholder="e.g. J. Rivera" value={smeName} onChange={e => setSmeName(e.target.value)} />
-      </div>
-
-      {decision === 'note' && (
-        <div className="field-group">
-          <label className="field-label" htmlFor="sme-notes">Notes</label>
-          <textarea id="sme-notes" style={{ height: 56 }} placeholder="Add context for the record…" value={smeNotes} onChange={e => setSmeNotes(e.target.value)} />
+    <div className="sme-gate">
+      <div className="sme-gate-header">
+        <span className="sme-gate-badge">SME Checkpoint</span>
+        <div>
+          <div className="sme-gate-title">Subject Matter Expert Validation</div>
+          <div className="sme-gate-sub">Review the file before extraction proceeds</div>
         </div>
-      )}
+      </div>
 
-      <div className="btn-row">
-        <button className="btn" onClick={onBack}>
-          <i className="ti ti-arrow-left" aria-hidden="true" /> Back
-        </button>
-        <button className="btn primary" onClick={handleConfirm}>
-          {decision === 'flag' ? 'Return to Files' : <>Confirm &amp; Extract <i className="ti ti-arrow-right" aria-hidden="true" /></>}
-        </button>
+      <div className="sme-two-col">
+        <div className="sme-col-left">
+          <div className="sme-info-box">
+            <div className="sme-info-row">
+              <span className="sme-info-key">File</span>
+              <span className="sme-info-val">{selectedFile?.name || '—'}</span>
+            </div>
+            <div className="sme-info-row">
+              <span className="sme-info-key">Version</span>
+              <span className="sme-info-val">{selectedFile?.version || '—'}</span>
+            </div>
+            <div className="sme-info-row">
+              <span className="sme-info-key">Client / Publisher / Year</span>
+              <span className="sme-info-val">Encova · Oracle · 2025</span>
+            </div>
+            <div className="sme-info-row">
+              <span className="sme-info-key">Timestamp</span>
+              <span className="sme-info-val">{timestamp.current}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="sme-col-right">
+          <div className="sme-decision-label">SME Decision — recorded to audit log</div>
+
+          {OPTIONS.map(opt => (
+            <button
+              key={opt.id}
+              className={`sme-option ${decision === opt.id ? 'selected' : ''}`}
+              onClick={() => setDecision(opt.id)}
+            >
+              <i
+                className={`ti ${opt.icon} sme-option-icon`}
+                style={{ color: opt.iconColor }}
+                aria-hidden="true"
+              />
+              <div>
+                <div className="sme-option-title">{opt.title}</div>
+                <div className="sme-option-sub">{opt.sub}</div>
+              </div>
+            </button>
+          ))}
+
+          <div className="field-group" style={{ marginTop: 20 }}>
+            <label className="field-label sme-field-label" htmlFor="sme-name">
+              SME name / initials
+            </label>
+            <input
+              id="sme-name"
+              type="text"
+              className="sme-input"
+              placeholder="e.g. J. Rivera"
+              value={smeName}
+              onChange={e => setSmeName(e.target.value)}
+            />
+          </div>
+
+          {decision === 'note' && (
+            <div className="field-group">
+              <label className="field-label sme-field-label" htmlFor="sme-notes">Notes</label>
+              <textarea
+                id="sme-notes"
+                className="sme-input"
+                style={{ height: 80 }}
+                placeholder="Add context for the record…"
+                value={smeNotes}
+                onChange={e => setSmeNotes(e.target.value)}
+              />
+            </div>
+          )}
+
+          <div className="sme-btn-row">
+            <button
+              className="btn"
+              style={{ background: 'rgba(255,255,255,0.07)', borderColor: 'rgba(255,255,255,0.18)', color: '#fff' }}
+              onClick={onBack}
+            >
+              <i className="ti ti-arrow-left" aria-hidden="true" /> Back
+            </button>
+            <button className="btn primary sme-confirm-btn" onClick={handleConfirm}>
+              {decision === 'flag'
+                ? 'Return to Files'
+                : <><i className="ti ti-lock-open" aria-hidden="true" /> Confirm &amp; Extract</>
+              }
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -186,18 +279,15 @@ function ScreenExtract({ selectedFile, onNext }) {
     let cancelled = false;
 
     async function runExtraction() {
-      // Animate steps while calling backend
       for (let i = 0; i < EXTRACTION_STEPS.length; i++) {
         if (cancelled) return;
         setStepStatuses(prev => prev.map((s, idx) => idx === i ? 'running' : s));
 
-        // On the last step, actually call the backend
         if (i === EXTRACTION_STEPS.length - 1) {
           try {
             const documentText = selectedFile
               ? `Document: ${selectedFile.name}\nVersion: ${selectedFile.version}\nClient: Encova Insurance | Publisher: Oracle | Year: 2025`
               : 'Sample ROI document for Encova Insurance Oracle 2025';
-
             const result = await extractROI(documentText);
             if (!cancelled) setExtractedData(result);
           } catch (err) {
@@ -218,15 +308,8 @@ function ScreenExtract({ selectedFile, onNext }) {
     return () => { cancelled = true; };
   }, []);
 
-  const statusBadge = (s) => {
-    if (s === 'done')    return <Badge color="green"><i className="ti ti-check" aria-hidden="true" /> Done</Badge>;
-    if (s === 'running') return <Badge color="blue">Running…</Badge>;
-    return <Badge color="navy">Pending</Badge>;
-  };
-
   const isDone = stepStatuses.every(s => s === 'done');
 
-  // Convert backend response to display fields
   const displayFields = extractedData ? [
     { label: 'Total Savings',           value: extractedData.total_savings           || '—', variant: 'green' },
     { label: 'License Spend',           value: extractedData.license_spend           || '—', variant: 'green' },
@@ -236,34 +319,66 @@ function ScreenExtract({ selectedFile, onNext }) {
   ] : EXTRACTED_FIELDS;
 
   const confidence = extractedData?.confidence ?? 94;
+  const confClass = c => c >= 90 ? 'conf-high' : c >= 75 ? 'conf-mid' : 'conf-low';
 
   return (
     <div className="card">
-      <div className="card-title"><i className="ti ti-cpu" aria-hidden="true" /> ROI Extraction</div>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>Processing validated file against extraction schema…</p>
+      <div className="card-title">
+        <i className="ti ti-cpu" aria-hidden="true" />
+        ROI Extraction
+      </div>
+      <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 20 }}>
+        Processing validated file against extraction schema…
+      </p>
 
-      {EXTRACTION_STEPS.map((step, i) => (
-        <div className="progress-row" key={i} style={{ color: stepStatuses[i] === 'pending' ? 'var(--text-faint)' : 'var(--text)' }}>
-          <span>{step}</span>
-          {statusBadge(stepStatuses[i])}
-        </div>
-      ))}
+      <div className="extract-steps">
+        {EXTRACTION_STEPS.map((step, i) => {
+          const status = stepStatuses[i];
+          return (
+            <div className={`extract-step ${status}`} key={i}>
+              <div className="extract-step-icon">
+                {status === 'done'    && <i className="ti ti-check" aria-hidden="true" />}
+                {status === 'running' && (
+                  <i
+                    className="ti ti-loader-2"
+                    style={{ animation: 'spin 0.8s linear infinite' }}
+                    aria-hidden="true"
+                  />
+                )}
+                {status === 'pending' && <i className="ti ti-circle" aria-hidden="true" />}
+              </div>
+              <span className="extract-step-label">{step}</span>
+              {status === 'done'    && <Badge color="green"><i className="ti ti-check" /> Done</Badge>}
+              {status === 'running' && <Badge color="blue">Running…</Badge>}
+              {status === 'pending' && <Badge color="navy">Pending</Badge>}
+            </div>
+          );
+        })}
+      </div>
 
       {error && (
-        <div style={{ marginTop: 14, padding: 12, background: 'var(--red-pale)', borderRadius: 6, fontSize: 12, color: 'var(--red-text)' }}>
+        <div style={{
+          marginTop: 16, padding: 14,
+          background: 'var(--red-pale)', borderRadius: 'var(--radius-sm)',
+          fontSize: 13, color: 'var(--red-text)',
+        }}>
           <strong>Backend unavailable:</strong> showing preview data. ({error})
         </div>
       )}
 
       {isDone && (
-        <>
-          <div style={{ marginTop: 14 }}>
-            <label className="field-label">Extracted Fields</label>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-              {displayFields.map(f => (
-                <Badge key={f.label} color={f.variant}>{f.label.split(' ')[0]}: {f.value}</Badge>
-              ))}
-              <Badge color="gold">Confidence: {confidence}%</Badge>
+        <div className="extract-results">
+          <div className="extract-results-title">Extracted Fields</div>
+          <div className="extract-chips">
+            {displayFields.map(f => (
+              <div className="extract-chip" key={f.label}>
+                <span style={{ color: 'var(--text-muted)' }}>{f.label.split(' ')[0]}:</span>
+                <strong>{f.value}</strong>
+              </div>
+            ))}
+            <div className="extract-chip">
+              <span style={{ color: 'var(--text-muted)' }}>Confidence:</span>
+              <strong className={confClass(confidence)}>{confidence}%</strong>
             </div>
           </div>
           <div className="btn-row">
@@ -271,7 +386,55 @@ function ScreenExtract({ selectedFile, onNext }) {
               Review &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
             </button>
           </div>
-        </>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Field Card with View Source ──────────────────────────────────────────────
+function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKeyDown }) {
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const isEdited  = currentValue !== field.value;
+  const confClass = field.confidence >= 90 ? 'conf-high' : field.confidence >= 75 ? 'conf-mid' : 'conf-low';
+  const dotClass  = field.confidence >= 90 ? 'high'      : field.confidence >= 75 ? 'mid'      : 'low';
+
+  return (
+    <div className="field-card">
+      <div className="field-card-name">{field.label}</div>
+      {isEditing ? (
+        <input
+          autoFocus
+          defaultValue={currentValue}
+          onBlur={e => onCommit(field.label, e.target.value)}
+          onKeyDown={e => onKeyDown(e, field.label)}
+          style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}
+        />
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span className="field-card-value">{currentValue}</span>
+          {isEdited && <Badge color="amber">edited</Badge>}
+          <button
+            className="field-edit-btn"
+            onClick={() => onStartEdit(field.label)}
+            aria-label={`Edit ${field.label}`}
+          >
+            <i className="ti ti-pencil" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+      <div className="field-card-meta">
+        <span className={confClass} style={{ fontSize: 13 }}>
+          <span className={`conf-dot ${dotClass}`} />
+          {field.confidence}%
+        </span>
+        <button className="view-source-btn" onClick={() => setSourceOpen(s => !s)}>
+          <i className={`ti ti-${sourceOpen ? 'chevron-up' : 'link'}`} aria-hidden="true" />
+          {sourceOpen ? 'Hide' : 'View Source'}
+        </button>
+      </div>
+      {sourceOpen && (
+        <div className="source-citation">{field.source}</div>
       )}
     </div>
   );
@@ -290,76 +453,40 @@ function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
   };
 
   const handleKeyDown = (e, label) => {
-    if (e.key === 'Enter') commitEdit(label, e.target.value);
+    if (e.key === 'Enter')  commitEdit(label, e.target.value);
     if (e.key === 'Escape') setEditingLabel(null);
   };
 
   const handleSave = () => {
-    const finalFields = EXTRACTED_FIELDS.map(f => ({ ...f, value: editValues[f.label] }));
-    onNext(finalFields);
+    onNext(EXTRACTED_FIELDS.map(f => ({ ...f, value: editValues[f.label] })));
   };
 
   return (
     <div className="card">
-      <div className="card-title"><i className="ti ti-database" aria-hidden="true" /> Store Results</div>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
-        Review extracted values before writing to the ROI Tracker. Click the pencil to correct a value.
+      <div className="card-title">
+        <i className="ti ti-database" aria-hidden="true" />
+        Store Results
+      </div>
+      <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>
+        Review extracted values before writing to the ROI Tracker. Click the pencil icon to correct
+        a value, and expand <strong>View Source</strong> to see the exact cell reference.
       </p>
 
-      <div className="table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Field</th>
-              <th>Value</th>
-              <th>Conf.</th>
-              <th>Source</th>
-            </tr>
-          </thead>
-          <tbody>
-            {EXTRACTED_FIELDS.map(f => {
-              const current = editValues[f.label];
-              const isEdited = current !== f.value;
-              const isEditing = editingLabel === f.label;
-              return (
-                <tr key={f.label}>
-                  <td>{f.label}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {isEditing ? (
-                        <input
-                          autoFocus
-                          defaultValue={current}
-                          onBlur={e => commitEdit(f.label, e.target.value)}
-                          onKeyDown={e => handleKeyDown(e, f.label)}
-                          style={{ width: 120, padding: '3px 6px', fontSize: 12 }}
-                        />
-                      ) : (
-                        <>
-                          <span style={{ fontWeight: 600 }}>{current}</span>
-                          {isEdited && <Badge color="amber">edited</Badge>}
-                          <button
-                            className="btn small"
-                            style={{ padding: '2px 6px', border: 'none', background: 'transparent', color: 'var(--text-muted)' }}
-                            onClick={() => setEditingLabel(f.label)}
-                            aria-label={`Edit ${f.label}`}
-                          >
-                            <i className="ti ti-pencil" style={{ fontSize: 12 }} aria-hidden="true" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                  <td><Badge color={f.variant}>{f.confidence}%</Badge></td>
-                  <td style={{ color: 'var(--text-muted)', fontSize: 11 }}>{f.source}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="field-cards">
+        {EXTRACTED_FIELDS.map(f => (
+          <FieldCard
+            key={f.label}
+            field={f}
+            currentValue={editValues[f.label]}
+            isEditing={editingLabel === f.label}
+            onStartEdit={setEditingLabel}
+            onCommit={commitEdit}
+            onKeyDown={handleKeyDown}
+          />
+        ))}
       </div>
 
-      <label className="field-label" style={{ marginTop: 16, marginBottom: 10 }}>What gets stored</label>
+      <label className="field-label" style={{ marginBottom: 12 }}>What gets stored</label>
       <div className="store-grid">
         {[
           { icon: 'ti-table',            title: 'ROI values',      sub: 'Client_ROI_Tracker.xlsx · sheet: All_ROI_Data' },
@@ -368,18 +495,22 @@ function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
           { icon: 'ti-user-check',       title: 'SME checkpoint',  sub: `Approved · ${smeName || '—'}` },
         ].map(t => (
           <div className="store-tile" key={t.title}>
-            <div className="store-tile-title">
-              <i className={`ti ${t.icon}`} style={{ fontSize: 13, verticalAlign: -2, color: 'var(--blue)', marginRight: 4 }} aria-hidden="true" />
-              {t.title}
+            <i className={`ti ${t.icon} store-tile-icon`} aria-hidden="true" />
+            <div>
+              <div className="store-tile-title">{t.title}</div>
+              <div className="store-tile-sub">{t.sub}</div>
             </div>
-            <div className="store-tile-sub">{t.sub}</div>
           </div>
         ))}
       </div>
 
       <div className="btn-row">
-        <button className="btn" onClick={onBack}><i className="ti ti-arrow-left" aria-hidden="true" /> Back</button>
-        <button className="btn primary" onClick={handleSave}>Save All &amp; Done <i className="ti ti-arrow-right" aria-hidden="true" /></button>
+        <button className="btn ghost" onClick={onBack}>
+          <i className="ti ti-arrow-left" aria-hidden="true" /> Back
+        </button>
+        <button className="btn primary" onClick={handleSave}>
+          Save All &amp; Done <i className="ti ti-arrow-right" aria-hidden="true" />
+        </button>
       </div>
     </div>
   );
@@ -389,39 +520,69 @@ function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
 function ScreenDone({ onNewExtraction, onTracker, onDashboards }) {
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>Extraction Complete</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Encova · Oracle · 2025</div>
+      <div className="done-hero">
+        <div className="done-check">
+          <i className="ti ti-check" aria-hidden="true" />
         </div>
-        <Badge color="green"><i className="ti ti-circle-check" aria-hidden="true" /> All records stored</Badge>
+        <div>
+          <div className="done-title">Extraction Complete</div>
+          <div className="done-sub">Encova · Oracle · 2025 — All records stored successfully</div>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <Badge color="green">
+            <i className="ti ti-circle-check" aria-hidden="true" /> All records stored
+          </Badge>
+        </div>
       </div>
 
       <div className="metric-grid">
-        <div className="metric-card"><div className="metric-label">Total Savings</div><div className="metric-value">$2.4M</div><div className="metric-delta">↑ +12% vs 2024</div></div>
-        <div className="metric-card"><div className="metric-label">Net ROI</div><div className="metric-value">$1.53M</div><div className="metric-delta">↑ +8% vs 2024</div></div>
-        <div className="metric-card"><div className="metric-label">Avg Confidence</div><div className="metric-value">93%</div><div className="metric-delta muted">all fields</div></div>
+        <div className="metric-card">
+          <div className="metric-label">Total Savings</div>
+          <div className="metric-value">$2.4M</div>
+          <div className="metric-delta">↑ +12% vs 2024</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Net ROI</div>
+          <div className="metric-value">$1.53M</div>
+          <div className="metric-delta">↑ +8% vs 2024</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Avg Confidence</div>
+          <div className="metric-value">93%</div>
+          <div className="metric-delta muted">across all fields</div>
+        </div>
       </div>
 
       <div className="card">
-        <div className="card-title"><i className="ti ti-chart-bar" aria-hidden="true" /> Savings Breakdown</div>
+        <div className="card-title">
+          <i className="ti ti-chart-bar" aria-hidden="true" />
+          Savings Breakdown
+        </div>
         {[
           { label: 'License spend',     pct: '62%', color: 'var(--blue)',       val: '$870K' },
           { label: 'Compliance risk',   pct: '24%', color: 'var(--blue-light)', val: '$340K' },
           { label: 'Support reduction', pct: '14%', color: 'var(--gold)',       val: '18%'   },
         ].map(b => (
           <div className="bar-row" key={b.label}>
-            <span style={{ width: 160 }}>{b.label}</span>
-            <div className="bar-bg"><div className="bar-fill" style={{ width: b.pct, background: b.color }} /></div>
-            <span style={{ width: 60, textAlign: 'right', color: 'var(--text-muted)' }}>{b.val}</span>
+            <span className="bar-label">{b.label}</span>
+            <div className="bar-bg">
+              <div className="bar-fill" style={{ width: b.pct, background: b.color }} />
+            </div>
+            <span className="bar-val">{b.val}</span>
           </div>
         ))}
       </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button className="btn primary" onClick={onNewExtraction}><i className="ti ti-plus" aria-hidden="true" /> New Extraction</button>
-        <button className="btn" onClick={onTracker}><i className="ti ti-table" aria-hidden="true" /> View Tracker &amp; Audit Log</button>
-        <button className="btn" onClick={onDashboards}><i className="ti ti-layout-dashboard" aria-hidden="true" /> Build Dashboard</button>
+        <button className="btn primary" onClick={onNewExtraction}>
+          <i className="ti ti-plus" aria-hidden="true" /> New Extraction
+        </button>
+        <button className="btn ghost" onClick={onTracker}>
+          <i className="ti ti-table" aria-hidden="true" /> View Tracker &amp; Audit Log
+        </button>
+        <button className="btn ghost" onClick={onDashboards}>
+          <i className="ti ti-layout-dashboard" aria-hidden="true" /> Build Dashboard
+        </button>
       </div>
     </>
   );
@@ -429,27 +590,27 @@ function ScreenDone({ onNewExtraction, onTracker, onDashboards }) {
 
 // ─── ExtractionView ───────────────────────────────────────────────────────────
 export default function ExtractionView({ onNav }) {
-  const [step, setStep]           = useState(1);
-  const [selectedFile, setFile]   = useState(null);
-  const [smeName, setSmeName]     = useState('');
+  const [step, setStep]               = useState(0);
+  const [selectedFile, setFile]       = useState(null);
+  const [smeName, setSmeName]         = useState('');
   const [finalFields, setFinalFields] = useState(null);
 
-  const handleFileSelect = (file) => { setFile(file); setStep(2); };
-  const handleSMEConfirm = ({ smeName: name }) => { setSmeName(name); setStep(3); };
-  const handleStore = (fields) => { setFinalFields(fields); setStep(5); };
+  const handleFileSelect = file              => { setFile(file);    setStep(2); };
+  const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n);    setStep(3); };
+  const handleStore      = fields            => { setFinalFields(fields); setStep(5); };
 
   const screens = [
-    <ScreenRequest key={0} onNext={() => setStep(1)} />,
-    <ScreenFiles   key={1} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
-    <ScreenValidate key={2} selectedFile={selectedFile} onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
-    <ScreenExtract key={3} selectedFile={selectedFile} onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
-    <ScreenStore   key={4} selectedFile={selectedFile} smeName={smeName} onNext={handleStore} onBack={() => setStep(3)} />,
-    <ScreenDone    key={5} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
+    <ScreenRequest  key={0} onNext={() => setStep(1)} />,
+    <ScreenFiles    key={1} onSelect={handleFileSelect}  onBack={() => setStep(0)} />,
+    <ScreenValidate key={2} selectedFile={selectedFile}  onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
+    <ScreenExtract  key={3} selectedFile={selectedFile}  onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
+    <ScreenStore    key={4} selectedFile={selectedFile}  smeName={smeName} onNext={handleStore} onBack={() => setStep(3)} />,
+    <ScreenDone     key={5} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
 
   return (
     <>
-      <StepBar currentStep={step} onStep={setStep} />
+      <JourneyBar currentStep={step} onStep={setStep} />
       {screens[step]}
     </>
   );
