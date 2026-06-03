@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Badge from '../components/Badge';
-import { extractROI } from '../services/api';
+import ClientSelect from '../components/ClientSelect';
+import { extractROI, uploadFile } from '../services/api';
 import {
-  CLIENTS, PUBLISHERS, YEARS,
+  PUBLISHERS, YEARS,
   SAMPLE_FILES, EXTRACTED_FIELDS, EXTRACTION_STEPS,
 } from '../data';
 
@@ -50,27 +51,57 @@ function JourneyBar({ currentStep, onStep }) {
 }
 
 // ─── Screen 0: Request ────────────────────────────────────────────────────────
-function ScreenRequest({ onNext }) {
-  const [client, setClient]   = useState(CLIENTS[0]);
+function ScreenRequest({ onNext, onUploaded }) {
+  const [client, setClient]   = useState('');
   const [year, setYear]       = useState(YEARS[0]);
   const [publisher, setPub]   = useState(PUBLISHERS[0]);
 
   // Upload card state
-  const [dragOver, setDragOver]   = useState(false);
-  const [uploadFile, setUploadFile] = useState(null);
-  const [docType, setDocType]     = useState('ROAR');
-  const fileInputRef              = useRef(null);
+  const [dragOver, setDragOver]     = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [docType, setDocType]       = useState('ROAR');
+  const [uploading, setUploading]   = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const fileInputRef                = useRef(null);
+
+  // Client / Publisher / Year for the manual-upload path (independent of the
+  // SharePoint search card above).
+  const [upClient, setUpClient]       = useState('');
+  const [upYear, setUpYear]           = useState(YEARS[0]);
+  const [upPublisher, setUpPublisher] = useState(PUBLISHERS[0]);
 
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file) setUploadFile(file);
+    if (file) { setSelectedFile(file); setUploadError(null); }
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file) setUploadFile(file);
+    if (file) { setSelectedFile(file); setUploadError(null); }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const meta = await uploadFile(selectedFile);
+      onUploaded({
+        ...meta,
+        name: meta.filename,
+        version: 'Uploaded',
+        docType,
+        client: upClient,
+        publisher: upPublisher,
+        year: upYear,
+      });
+    } catch (err) {
+      setUploadError(err.message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -84,9 +115,7 @@ function ScreenRequest({ onNext }) {
         </div>
         <div className="field-group">
           <label className="field-label" htmlFor="req-client">Client</label>
-          <select id="req-client" value={client} onChange={e => setClient(e.target.value)}>
-            {CLIENTS.map(c => <option key={c}>{c}</option>)}
-          </select>
+          <ClientSelect value={client} onChange={setClient} />
         </div>
         <div className="grid-2">
           <div className="field-group">
@@ -138,11 +167,11 @@ function ScreenRequest({ onNext }) {
             style={{ fontSize: 32, color: dragOver ? 'var(--accent)' : '#6b7fa3', display: 'block', marginBottom: 8 }}
             aria-hidden="true"
           />
-          {uploadFile ? (
+          {selectedFile ? (
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>{uploadFile.name}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>{selectedFile.name}</div>
               <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 4 }}>
-                {(uploadFile.size / 1024).toFixed(0)} KB · Click to change
+                {(selectedFile.size / 1024).toFixed(0)} KB · Click to change
               </div>
             </div>
           ) : (
@@ -151,7 +180,7 @@ function ScreenRequest({ onNext }) {
                 Drag &amp; drop your file here
               </div>
               <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 4 }}>
-                or click to browse · PDF, PPTX, XLSX
+                or click to browse · PPTX, PDF, XLSX
               </div>
             </div>
           )}
@@ -196,14 +225,48 @@ function ScreenRequest({ onNext }) {
           </div>
         </div>
 
+        {/* Client / Publisher / Year — manually set for this upload */}
+        <div className="field-group">
+          <label className="field-label">Client</label>
+          <ClientSelect value={upClient} onChange={setUpClient} />
+        </div>
+        <div className="grid-2">
+          <div className="field-group">
+            <label className="field-label">Year</label>
+            <select value={upYear} onChange={e => setUpYear(e.target.value)}>
+              {YEARS.map(y => <option key={y}>{y}</option>)}
+            </select>
+          </div>
+          <div className="field-group">
+            <label className="field-label">Publisher</label>
+            <select value={upPublisher} onChange={e => setUpPublisher(e.target.value)}>
+              {PUBLISHERS.map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {uploadError && (
+          <div style={{
+            marginBottom: 12, padding: 10,
+            background: 'var(--red-pale)', borderRadius: 'var(--radius-sm)',
+            fontSize: 12, color: 'var(--red-text)',
+          }}>
+            <i className="ti ti-alert-triangle" style={{ marginRight: 6 }} aria-hidden="true" />
+            {uploadError}
+          </div>
+        )}
+
         <div className="btn-row">
           <button
             className="btn primary"
-            disabled={!uploadFile}
-            onClick={onNext}
-            style={{ opacity: uploadFile ? 1 : 0.45, cursor: uploadFile ? 'pointer' : 'not-allowed' }}
+            disabled={!selectedFile || uploading}
+            onClick={handleUpload}
+            style={{ opacity: (selectedFile && !uploading) ? 1 : 0.45, cursor: (selectedFile && !uploading) ? 'pointer' : 'not-allowed' }}
           >
-            Use This File <i className="ti ti-arrow-right" aria-hidden="true" />
+            {uploading
+              ? <><i className="ti ti-loader-2" style={{ animation: 'spin 0.8s linear infinite' }} aria-hidden="true" /> Uploading…</>
+              : <>Upload &amp; Use This File <i className="ti ti-arrow-right" aria-hidden="true" /></>
+            }
           </button>
         </div>
       </div>
@@ -313,7 +376,11 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
             </div>
             <div className="sme-info-row">
               <span className="sme-info-key">Client / Publisher / Year</span>
-              <span className="sme-info-val">Encova · Oracle · 2025</span>
+              <span className="sme-info-val">
+                {(selectedFile?.client || selectedFile?.publisher || selectedFile?.year)
+                  ? [selectedFile?.client, selectedFile?.publisher, selectedFile?.year].map(v => v || '—').join(' · ')
+                  : 'Encova · Oracle · 2025'}
+              </span>
             </div>
             <div className="sme-info-row">
               <span className="sme-info-key">Timestamp</span>
@@ -1421,7 +1488,7 @@ export default function ExtractionView({ onNav }) {
   const handleStore      = fields            => { setFinalFields(fields); setStep(6); };
 
   const screens = [
-    <ScreenRequest  key={0} onNext={() => setStep(1)} />,
+    <ScreenRequest  key={0} onNext={() => setStep(1)} onUploaded={handleFileSelect} />,
     <ScreenFiles    key={1} onSelect={handleFileSelect}   onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
     <ScreenExtract  key={3} selectedFile={selectedFile}   onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
