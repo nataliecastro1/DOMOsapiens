@@ -96,6 +96,7 @@ function ScreenRequest({ onNext, onUploaded }) {
         client: upClient,
         publisher: upPublisher,
         year: upYear,
+        source: 'uploaded',
       });
     } catch (err) {
       setUploadError(err.message);
@@ -305,7 +306,7 @@ function ScreenFiles({ onSelect, onBack }) {
           </div>
           <button
             className={`btn small ${f.tag === 'Latest' ? 'primary' : 'ghost'}`}
-            onClick={() => onSelect(f)}
+            onClick={() => onSelect({ ...f, source: 'sharepoint' })}
           >
             Select
           </button>
