@@ -64,6 +64,12 @@ function ScreenRequest({ onNext, onUploaded }) {
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef                = useRef(null);
 
+  // Client / Publisher / Year for the manual-upload path (independent of the
+  // SharePoint search card above).
+  const [upClient, setUpClient]       = useState('');
+  const [upYear, setUpYear]           = useState(YEARS[0]);
+  const [upPublisher, setUpPublisher] = useState(PUBLISHERS[0]);
+
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
@@ -82,7 +88,15 @@ function ScreenRequest({ onNext, onUploaded }) {
     setUploadError(null);
     try {
       const meta = await uploadFile(selectedFile);
-      onUploaded({ ...meta, name: meta.filename, version: 'Uploaded', docType });
+      onUploaded({
+        ...meta,
+        name: meta.filename,
+        version: 'Uploaded',
+        docType,
+        client: upClient,
+        publisher: upPublisher,
+        year: upYear,
+      });
     } catch (err) {
       setUploadError(err.message);
     } finally {
@@ -208,6 +222,26 @@ function ScreenRequest({ onNext, onUploaded }) {
             {docType === 'ROAR'
               ? 'Return on Anglepoint Relationship — PDF or Excel report'
               : 'ELP deliverable — PowerPoint / slide deck'}
+          </div>
+        </div>
+
+        {/* Client / Publisher / Year — manually set for this upload */}
+        <div className="field-group">
+          <label className="field-label">Client</label>
+          <ClientSelect value={upClient} onChange={setUpClient} />
+        </div>
+        <div className="grid-2">
+          <div className="field-group">
+            <label className="field-label">Year</label>
+            <select value={upYear} onChange={e => setUpYear(e.target.value)}>
+              {YEARS.map(y => <option key={y}>{y}</option>)}
+            </select>
+          </div>
+          <div className="field-group">
+            <label className="field-label">Publisher</label>
+            <select value={upPublisher} onChange={e => setUpPublisher(e.target.value)}>
+              {PUBLISHERS.map(p => <option key={p}>{p}</option>)}
+            </select>
           </div>
         </div>
 
@@ -342,7 +376,11 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
             </div>
             <div className="sme-info-row">
               <span className="sme-info-key">Client / Publisher / Year</span>
-              <span className="sme-info-val">Encova · Oracle · 2025</span>
+              <span className="sme-info-val">
+                {(selectedFile?.client || selectedFile?.publisher || selectedFile?.year)
+                  ? [selectedFile?.client, selectedFile?.publisher, selectedFile?.year].map(v => v || '—').join(' · ')
+                  : 'Encova · Oracle · 2025'}
+              </span>
             </div>
             <div className="sme-info-row">
               <span className="sme-info-key">Timestamp</span>
