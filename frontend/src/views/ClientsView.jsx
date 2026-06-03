@@ -11,8 +11,7 @@ export default function ClientsView() {
   return (
     <div className="card">
       <div className="card-title">
-        <i className="ti ti-users" aria-hidden="true" />
-        Active Clients
+        <i className="ti ti-users" aria-hidden="true" /> Active Clients
       </div>
       <div className="client-cards">
         {CLIENTS.map(c => (

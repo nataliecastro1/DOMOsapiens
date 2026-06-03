@@ -48,7 +48,7 @@ body {
   --radius-card:   20px;
   --radius-sm:     10px;
   --radius-xs:     6px;
-  /* legacy aliases used in JSX inline styles */
+  /* legacy aliases */
   --radius-md:     20px;
   --radius-lg:     20px;
 }
@@ -304,7 +304,7 @@ textarea { resize: vertical; }
 }
 .file-card.featured { border-color: var(--gold); background: var(--gold-pale); }
 .file-card:not(.featured):hover { border-color: var(--blue-light); }
-.file-card-icon { font-size: 28px; color: var(--blue); flex-shrink: 0; margin-right: 14px; }
+.file-card-icon { font-size: 28px; color: var(--blue); flex-shrink: 0; }
 .file-card-icon.featured { color: var(--gold-text); }
 .file-card-name { font-size: 17px; font-weight: 700; color: var(--navy); margin-bottom: 5px; }
 .file-card-meta { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
@@ -332,7 +332,7 @@ textarea { resize: vertical; }
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.10);
   border-radius: var(--radius-sm);
-  padding: 16px 20px; margin-bottom: 24px;
+  padding: 16px 20px; margin-bottom: 0;
 }
 .sme-info-row {
   display: flex; flex-direction: column; gap: 3px;
@@ -680,9 +680,27 @@ textarea { resize: vertical; }
 .client-card-name { font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 3px; }
 .client-card-sub { font-size: 13px; color: var(--text-muted); }
 
-/* ─── Store Tiles sub (legacy) ─────────────── */
-.store-tile-title { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 3px; }
-.store-tile-sub { font-size: 12px; color: var(--text-muted); }
+/* ─── Login Screen ─────────────────────────── */
+.login-wrap {
+  min-height: 100vh; display: flex; align-items: center;
+  justify-content: center; background: var(--navy);
+}
+.login-card {
+  background: var(--surface); border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.22); width: 400px; padding: 48px;
+}
+.login-title { font-size: 26px; font-weight: 800; color: var(--navy); margin-bottom: 4px; }
+.login-sub { font-size: 14px; color: var(--text-muted); margin-bottom: 36px; }
+.login-error {
+  background: var(--red-pale); border: 1px solid var(--red);
+  border-radius: var(--radius-xs); padding: 10px 14px;
+  font-size: 13px; color: var(--red-text); margin-bottom: 16px;
+}
+.login-submit {
+  width: 100%; justify-content: center;
+  padding: 13px 22px; font-size: 15px; margin-top: 8px;
+}
 
 /* ─── Responsive ───────────────────────────── */
 @media (max-width: 900px) {
@@ -694,6 +712,7 @@ textarea { resize: vertical; }
   .db-grid { grid-template-columns: 1fr; }
   .store-grid { grid-template-columns: 1fr; }
   .field-cards { grid-template-columns: 1fr; }
+  .sme-two-col { grid-template-columns: 1fr; }
   .content { padding: 20px 16px; }
 }
 @media (max-width: 600px) {
@@ -714,21 +733,9 @@ textarea { resize: vertical; }
 }
 @font-face {
   font-family: "TT Norms Pro";
-  font-style: italic; font-weight: 300; font-stretch: normal;
-  src: url('/assets/fonts/TTNormsProLightItalic/font.woff2') format('woff2'),
-       url('/assets/fonts/TTNormsProLightItalic/font.woff') format('woff');
-}
-@font-face {
-  font-family: "TT Norms Pro";
   font-style: normal; font-weight: 400; font-stretch: normal;
   src: url('/assets/fonts/TTNormsPro/normal_normal_normal.woff2') format('woff2'),
        url('/assets/fonts/TTNormsPro/normal_normal_normal.woff') format('woff');
-}
-@font-face {
-  font-family: "TT Norms Pro";
-  font-style: italic; font-weight: 400; font-stretch: normal;
-  src: url('/assets/fonts/TTNormsPro/italic_normal_normal.woff2') format('woff2'),
-       url('/assets/fonts/TTNormsPro/italic_normal_normal.woff') format('woff');
 }
 @font-face {
   font-family: "TT Norms Pro";
@@ -738,33 +745,9 @@ textarea { resize: vertical; }
 }
 @font-face {
   font-family: "TT Norms Pro";
-  font-style: italic; font-weight: 500; font-stretch: normal;
-  src: url('/assets/fonts/TTNormsProMediumItalic/font.woff2') format('woff2'),
-       url('/assets/fonts/TTNormsProMediumItalic/font.woff') format('woff');
-}
-@font-face {
-  font-family: "TT Norms Pro";
-  font-style: normal; font-weight: 600; font-stretch: normal;
-  src: url('/assets/fonts/TTNormsProDemiBold/font.woff2') format('woff2'),
-       url('/assets/fonts/TTNormsProDemiBold/font.woff') format('woff');
-}
-@font-face {
-  font-family: "TT Norms Pro";
-  font-style: italic; font-weight: 600; font-stretch: normal;
-  src: url('/assets/fonts/TTNormsProDemiBoldItalic/font.woff2') format('woff2'),
-       url('/assets/fonts/TTNormsProDemiBoldItalic/font.woff') format('woff');
-}
-@font-face {
-  font-family: "TT Norms Pro";
   font-style: normal; font-weight: 700; font-stretch: normal;
   src: url('/assets/fonts/TTNormsPro/normal_normal_bold.woff2') format('woff2'),
        url('/assets/fonts/TTNormsPro/normal_normal_bold.woff') format('woff');
-}
-@font-face {
-  font-family: "TT Norms Pro";
-  font-style: italic; font-weight: 700; font-stretch: normal;
-  src: url('/assets/fonts/TTNormsPro/italic_normal_bold.woff2') format('woff2'),
-       url('/assets/fonts/TTNormsPro/italic_normal_bold.woff') format('woff');
 }
 @font-face {
   font-family: "TT Norms Pro";

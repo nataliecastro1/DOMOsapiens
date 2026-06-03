@@ -27,15 +27,10 @@ export default function HelpView() {
   return (
     <>
       <div className="card">
-        <div className="card-title">
-          <i className="ti ti-help-circle" aria-hidden="true" />
-          Quick Reference
-        </div>
+        <div className="card-title"><i className="ti ti-help-circle" aria-hidden="true" /> Quick Reference</div>
         {ITEMS.map(item => (
           <div className="help-item" key={item.title}>
-            <div className="help-icon">
-              <i className={`ti ${item.icon}`} aria-hidden="true" />
-            </div>
+            <div className="help-icon"><i className={`ti ${item.icon}`} aria-hidden="true" /></div>
             <div>
               <div className="help-title">{item.title}</div>
               <div className="help-sub">{item.sub}</div>
@@ -43,7 +38,7 @@ export default function HelpView() {
           </div>
         ))}
       </div>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
         For full technical documentation, open a chat and ask:{' '}
         <em>"Generate the technical documentation for the ROI Extraction app as a Word document."</em>
       </p>
