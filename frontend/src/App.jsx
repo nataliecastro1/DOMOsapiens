@@ -19,9 +19,10 @@ const VIEW_META = {
 };
 
 export default function App() {
-  const [loggedIn, setLoggedIn]     = useState(false);
-  const [activeView, setActiveView] = useState('extract');
+  const [loggedIn, setLoggedIn]         = useState(false);
+  const [activeView, setActiveView]     = useState('extract');
   const [showTutorial, setShowTutorial] = useState(false);
+  const [extractionKey, setExtractionKey] = useState(0);
   const meta = VIEW_META[activeView] || VIEW_META.extract;
 
   const handleLogin = () => {
@@ -35,7 +36,7 @@ export default function App() {
 
   const renderView = () => {
     switch (activeView) {
-      case 'extract':    return <ExtractionView onNav={setActiveView} />;
+      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} />;
       case 'dashboards': return <DashboardsView />;
       case 'tracker':    return <TrackerView />;
       case 'clients':    return <ClientsView />;
@@ -57,7 +58,7 @@ export default function App() {
               <div className="page-sub">{meta.sub}</div>
             </div>
             {activeView === 'extract' && (
-              <button className="btn primary" onClick={() => setActiveView('extract')}>
+              <button className="btn primary" onClick={() => setExtractionKey(k => k + 1)}>
                 <i className="ti ti-plus" aria-hidden="true" /> New Extraction
               </button>
             )}

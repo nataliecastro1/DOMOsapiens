@@ -6,6 +6,9 @@ node_modules/
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
+backend/__pycache__/
+backend/**/__pycache__/
+**/*.pyc
 
 # ---- Build output ----
 dist/
