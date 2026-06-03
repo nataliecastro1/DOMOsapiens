@@ -392,7 +392,23 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
   );
 }
 
-// ─── ROI Field Metadata (definitions, questions, formulas) ───────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Strip currency formatting and return a float (or NaN)
+function parseDollar(str) {
+  if (!str) return NaN;
+  return parseFloat(String(str).replace(/[$,\s]/g, ''));
+}
+
+// Format a number as a dollar string, e.g. 42000 → "$42,000"
+// Negative results are shown as "-$42,000"
+function formatDollar(n) {
+  if (isNaN(n) || n === 0) return null;
+  const abs = Math.abs(n);
+  const formatted = abs.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return (n < 0 ? '-' : '') + '$' + formatted;
+}
+
+// ─── ROI Field Metadata (definitions, questions, types, formulas) ─────────────
 const ROI_FIELD_META = {
   'Identified Risk': {
     definition: 'Quantified financial exposure due to non-compliance with software licensing or contractual terms.',
@@ -403,7 +419,17 @@ const ROI_FIELD_META = {
       'How many licenses are currently deployed or in use?',
       'What contract period or date does this exposure apply to?',
     ],
+    // 'text' | 'currency' | 'number' | 'date'
+    questionTypes: ['text', 'currency', 'number', 'number', 'date'],
     formula: 'Calculated as: (Deployed Licenses − Entitled Licenses) × Unit Cost',
+    // answers[1]=unitCost  answers[2]=entitled  answers[3]=deployed
+    compute(answers) {
+      const unitCost  = parseDollar(answers[1]);
+      const entitled  = parseFloat(answers[2]);
+      const deployed  = parseFloat(answers[3]);
+      if (isNaN(unitCost) || isNaN(entitled) || isNaN(deployed)) return null;
+      return formatDollar((deployed - entitled) * unitCost);
+    },
   },
   'Identified Cost Avoidance': {
     definition: 'Potential unbudgeted costs that can be prevented through proactive compliance. Measurable in avoided liabilities. Client has NOT yet acted.',
@@ -413,7 +439,15 @@ const ROI_FIELD_META = {
       'What is the unit cost of those licenses?',
       'Can the client remediate this within their current contract terms?',
     ],
+    questionTypes: ['text', 'number', 'currency', 'text'],
     formula: 'Calculated as: Excess Licenses × Unit Cost',
+    // answers[1]=excessLicenses  answers[2]=unitCost
+    compute(answers) {
+      const excess    = parseFloat(answers[1]);
+      const unitCost  = parseDollar(answers[2]);
+      if (isNaN(excess) || isNaN(unitCost)) return null;
+      return formatDollar(excess * unitCost);
+    },
   },
   'Accomplished Cost Avoidance': {
     definition: 'The quantified result of actions taken to prevent unbudgeted costs. Requires client action to accomplish.',
@@ -423,7 +457,15 @@ const ROI_FIELD_META = {
       'What is the unit cost of those licenses?',
       'What is the confirmation or evidence of the action taken?',
     ],
+    questionTypes: ['text', 'number', 'currency', 'text'],
     formula: 'Calculated as: Remediated Licenses × Unit Cost',
+    // answers[1]=remediatedLicenses  answers[2]=unitCost
+    compute(answers) {
+      const remediated = parseFloat(answers[1]);
+      const unitCost   = parseDollar(answers[2]);
+      if (isNaN(remediated) || isNaN(unitCost)) return null;
+      return formatDollar(remediated * unitCost);
+    },
   },
   'Identified Cost Optimization': {
     definition: 'Opportunities to reduce software, hardware, or cloud expenses through license optimization, contract negotiations, or strategic adjustments. Client has NOT yet acted.',
@@ -433,7 +475,15 @@ const ROI_FIELD_META = {
       'What is the unit cost or annual contract value of those licenses?',
       'Is a contract mechanism available to right-size (e.g. true-down clause, renewal timing)?',
     ],
+    questionTypes: ['text', 'number', 'currency', 'text'],
     formula: 'Calculated as: Surplus Licenses × Unit Cost, or estimated contract delta',
+    // answers[1]=surplusLicenses  answers[2]=unitCost
+    compute(answers) {
+      const surplus   = parseFloat(answers[1]);
+      const unitCost  = parseDollar(answers[2]);
+      if (isNaN(surplus) || isNaN(unitCost)) return null;
+      return formatDollar(surplus * unitCost);
+    },
   },
   'Accomplished Cost Optimization': {
     definition: 'Verified cost reductions through renegotiations, contract adjustments, or technology shifts. Requires client action to accomplish.',
@@ -443,7 +493,15 @@ const ROI_FIELD_META = {
       'What is the new license count or contract value after the change?',
       'What is the effective date of the change?',
     ],
+    questionTypes: ['text', 'currency', 'currency', 'date'],
     formula: 'Calculated as: (Original Value − New Value) for the period',
+    // answers[1]=originalValue  answers[2]=newValue
+    compute(answers) {
+      const original = parseDollar(answers[1]);
+      const newVal   = parseDollar(answers[2]);
+      if (isNaN(original) || isNaN(newVal)) return null;
+      return formatDollar(original - newVal);
+    },
   },
   'Identified Cost Savings': {
     definition: 'A hard-dollar reduction opportunity has been identified but not yet realized.',
@@ -452,7 +510,15 @@ const ROI_FIELD_META = {
       'What specific mechanism would generate savings?',
       'What is the projected reduced spend if the opportunity is acted upon?',
     ],
+    questionTypes: ['currency', 'text', 'currency'],
     formula: 'Calculated as: Current Spend − Projected Spend',
+    // answers[0]=currentSpend  answers[2]=projectedSpend
+    compute(answers) {
+      const current   = parseDollar(answers[0]);
+      const projected = parseDollar(answers[2]);
+      if (isNaN(current) || isNaN(projected)) return null;
+      return formatDollar(current - projected);
+    },
   },
   'Realized Cost Savings': {
     definition: 'Hard-dollar savings reflected in budgets or financial statements due to negotiated reductions or decreased expenses.',
@@ -462,7 +528,15 @@ const ROI_FIELD_META = {
       'What drove the reduction?',
       'Is this reflected in an invoice, PO, or budget document?',
     ],
+    questionTypes: ['currency', 'currency', 'text', 'text'],
     formula: 'Calculated as: Prior Period Spend − Current Period Spend',
+    // answers[0]=priorSpend  answers[1]=currentSpend
+    compute(answers) {
+      const prior   = parseDollar(answers[0]);
+      const current = parseDollar(answers[1]);
+      if (isNaN(prior) || isNaN(current)) return null;
+      return formatDollar(prior - current);
+    },
   },
 };
 
@@ -570,12 +644,13 @@ function ScreenExtract({ selectedFile, onNext }) {
   };
 
   const handleFallbackNext = () => {
-    const field = missingFields[fallbackIndex];
+    const field   = missingFields[fallbackIndex];
     const answers = fallbackAnswers[field.label] || [];
-    const combinedValue = answers.filter(Boolean).join(' / ') || null;
+    const meta    = ROI_FIELD_META[field.label];
+    const computed = meta?.compute ? meta.compute(answers) : null;
     const updated = (mergedFields || displayFields).map(f =>
       f.label === field.label
-        ? { ...f, value: combinedValue, entryMode: combinedValue ? 'manual' : null, flag: combinedValue ? null : 'SME skipped — data not available' }
+        ? { ...f, value: computed, entryMode: computed ? 'manual' : null, flag: computed ? null : 'SME skipped — data not available' }
         : f
     );
     advanceFallback(updated);
@@ -603,8 +678,10 @@ function ScreenExtract({ selectedFile, onNext }) {
   // ── Render: fallback form ──
   if (fallbackMode) {
     const field   = missingFields[fallbackIndex];
-    const meta    = ROI_FIELD_META[field.label] || { definition: '', questions: [], formula: '' };
+    const meta    = ROI_FIELD_META[field.label] || { definition: '', questions: [], questionTypes: [], formula: '' };
     const answers = fallbackAnswers[field.label] || [];
+    const liveComputed = meta.compute ? meta.compute(answers) : null;
+
     return (
       <div className="card">
         <div className="fallback-progress">
@@ -615,21 +692,64 @@ function ScreenExtract({ selectedFile, onNext }) {
         <p className="fallback-field-def">{meta.definition}</p>
 
         <div className="fallback-questions">
-          {meta.questions.map((q, qi) => (
-            <div className="fallback-question" key={qi}>
-              <label className="field-label" htmlFor={`fb-q-${qi}`}>{q}</label>
-              <input
-                id={`fb-q-${qi}`}
-                type="text"
-                placeholder="Optional — leave blank to skip"
-                value={answers[qi] || ''}
-                onChange={e => updateAnswer(qi, e.target.value)}
-              />
-            </div>
-          ))}
+          {meta.questions.map((q, qi) => {
+            const qType = (meta.questionTypes && meta.questionTypes[qi]) || 'text';
+            const val   = answers[qi] || '';
+            return (
+              <div className="fallback-question" key={qi}>
+                <label className="field-label" htmlFor={`fb-q-${qi}`}>{q}</label>
+                {qType === 'currency' ? (
+                  <div className="input-prefix-group">
+                    <span className="input-prefix">$</span>
+                    <input
+                      id={`fb-q-${qi}`}
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="0"
+                      value={val}
+                      onChange={e => updateAnswer(qi, e.target.value)}
+                    />
+                  </div>
+                ) : qType === 'date' ? (
+                  <input
+                    id={`fb-q-${qi}`}
+                    type="date"
+                    value={val}
+                    onChange={e => updateAnswer(qi, e.target.value)}
+                  />
+                ) : qType === 'number' ? (
+                  <input
+                    id={`fb-q-${qi}`}
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="0"
+                    value={val}
+                    onChange={e => updateAnswer(qi, e.target.value)}
+                  />
+                ) : (
+                  <input
+                    id={`fb-q-${qi}`}
+                    type="text"
+                    placeholder="Optional — leave blank to skip"
+                    value={val}
+                    onChange={e => updateAnswer(qi, e.target.value)}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <div className="fallback-formula">{meta.formula}</div>
+
+        {liveComputed && (
+          <div className="fallback-computed-preview">
+            <i className="ti ti-calculator" aria-hidden="true" />
+            Calculated value: <strong>{liveComputed}</strong>
+          </div>
+        )}
 
         <div className="btn-row">
           <button className="btn ghost" onClick={handleFallbackSkip}>
@@ -813,13 +933,7 @@ function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKe
   );
 }
 
-<<<<<<< HEAD
-// ─── Screen 4: Store ──────────────────────────────────────────────────────────
-function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
-  // Fall back to EXTRACTED_FIELDS if no fields were passed (e.g. direct step navigation)
-  const sourceFields = fields && fields.length > 0 ? fields : EXTRACTED_FIELDS;
 
-=======
 // ─── Screen 4: Compare ───────────────────────────────────────────────────────
 const COMPARE_FIELDS = [
   { label: 'Identified Risk',         script: '$1,080,000',  claude: '$1,080,000'  },
@@ -1024,8 +1138,9 @@ function ScreenCompare({ onNext, onBack }) {
 }
 
 // ─── Screen 5: Store ──────────────────────────────────────────────────────────
-function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
->>>>>>> origin/main
+function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
+  const sourceFields = fields && fields.length > 0 ? fields : EXTRACTED_FIELDS;
+
   const [editValues, setEditValues] = useState(
     () => Object.fromEntries(sourceFields.map(f => [f.label, f.value]))
   );
@@ -1189,20 +1304,12 @@ export default function ExtractionView({ onNav }) {
 
   const screens = [
     <ScreenRequest  key={0} onNext={() => setStep(1)} />,
-<<<<<<< HEAD
-    <ScreenFiles    key={1} onSelect={handleFileSelect}  onBack={() => setStep(0)} />,
-    <ScreenValidate key={2} selectedFile={selectedFile}  onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
-    <ScreenExtract  key={3} selectedFile={selectedFile}  onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
-    <ScreenStore    key={4} selectedFile={selectedFile}  smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(3)} />,
-    <ScreenDone     key={5} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
-=======
     <ScreenFiles    key={1} onSelect={handleFileSelect}   onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
     <ScreenExtract  key={3} selectedFile={selectedFile}   onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
-    <ScreenCompare  key={4} onNext={(resolved) => { setFinalFields(resolved); setStep(5); }} onBack={() => setStep(3)} />,
-    <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} onNext={handleStore} onBack={() => setStep(4)} />,
+    <ScreenCompare  key={4} onNext={() => setStep(5)} onBack={() => setStep(3)} />,
+    <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(4)} />,
     <ScreenDone     key={6} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
->>>>>>> origin/main
   ];
 
   return (
