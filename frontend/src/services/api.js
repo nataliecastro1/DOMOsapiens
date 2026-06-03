@@ -48,3 +48,31 @@ export async function extractFromUpload(file) {
   if (!res.ok) throw new Error(`Upload extraction failed: ${res.status}`);
   return res.json();
 }
+
+/** Return the client roster (sorted names) for the dropdown. */
+export async function getClients() {
+  return get('/clients');
+}
+
+/**
+ * Add a new client to the roster.
+ * Returns { name: <canonical name>, clients: <updated sorted name list> }.
+ */
+export async function addClient(name) {
+  return post('/clients', { name });
+}
+
+/**
+ * Upload a source document (PPTX/PDF/XLSX) via multipart/form-data.
+ * Returns the stored file's metadata { id, filename, size, content_type, uploaded_at }.
+ */
+export async function uploadFile(file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/uploads`, { method: 'POST', body: form });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail || `Upload failed: ${res.status}`);
+  }
+  return res.json();
+}
