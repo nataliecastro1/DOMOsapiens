@@ -392,11 +392,196 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Strip currency formatting and return a float (or NaN)
+function parseDollar(str) {
+  if (!str) return NaN;
+  return parseFloat(String(str).replace(/[$,\s]/g, ''));
+}
+
+// Format a number as a dollar string, e.g. 42000 → "$42,000"
+// Negative results are shown as "-$42,000"
+function formatDollar(n) {
+  if (isNaN(n) || n === 0) return null;
+  const abs = Math.abs(n);
+  const formatted = abs.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return (n < 0 ? '-' : '') + '$' + formatted;
+}
+
+// ─── ROI Field Metadata (definitions, questions, types, formulas) ─────────────
+const ROI_FIELD_META = {
+  'Identified Risk': {
+    definition: 'Quantified financial exposure due to non-compliance with software licensing or contractual terms.',
+    questions: [
+      'Which software publisher(s) or product(s) have a compliance shortfall?',
+      'What is the unit cost (price per license)?',
+      'How many licenses is the client entitled to per contract?',
+      'How many licenses are currently deployed or in use?',
+      'What contract period or date does this exposure apply to?',
+    ],
+    // 'text' | 'currency' | 'number' | 'date'
+    questionTypes: ['text', 'currency', 'number', 'number', 'date'],
+    formula: 'Calculated as: (Deployed Licenses − Entitled Licenses) × Unit Cost',
+    // answers[1]=unitCost  answers[2]=entitled  answers[3]=deployed
+    compute(answers) {
+      const unitCost  = parseDollar(answers[1]);
+      const entitled  = parseFloat(answers[2]);
+      const deployed  = parseFloat(answers[3]);
+      if (isNaN(unitCost) || isNaN(entitled) || isNaN(deployed)) return null;
+      return formatDollar((deployed - entitled) * unitCost);
+    },
+  },
+  'Identified Cost Avoidance': {
+    definition: 'Potential unbudgeted costs that can be prevented through proactive compliance. Measurable in avoided liabilities. Client has NOT yet acted.',
+    questions: [
+      'What over-deployment or compliance gap did you identify that the client could remediate?',
+      'How many excess licenses could be removed?',
+      'What is the unit cost of those licenses?',
+      'Can the client remediate this within their current contract terms?',
+    ],
+    questionTypes: ['text', 'number', 'currency', 'text'],
+    formula: 'Calculated as: Excess Licenses × Unit Cost',
+    // answers[1]=excessLicenses  answers[2]=unitCost
+    compute(answers) {
+      const excess    = parseFloat(answers[1]);
+      const unitCost  = parseDollar(answers[2]);
+      if (isNaN(excess) || isNaN(unitCost)) return null;
+      return formatDollar(excess * unitCost);
+    },
+  },
+  'Accomplished Cost Avoidance': {
+    definition: 'The quantified result of actions taken to prevent unbudgeted costs. Requires client action to accomplish.',
+    questions: [
+      'What action did the client take (e.g. removed deployments, reduced installs)?',
+      'How many licenses were removed or remediated?',
+      'What is the unit cost of those licenses?',
+      'What is the confirmation or evidence of the action taken?',
+    ],
+    questionTypes: ['text', 'number', 'currency', 'text'],
+    formula: 'Calculated as: Remediated Licenses × Unit Cost',
+    // answers[1]=remediatedLicenses  answers[2]=unitCost
+    compute(answers) {
+      const remediated = parseFloat(answers[1]);
+      const unitCost   = parseDollar(answers[2]);
+      if (isNaN(remediated) || isNaN(unitCost)) return null;
+      return formatDollar(remediated * unitCost);
+    },
+  },
+  'Identified Cost Optimization': {
+    definition: 'Opportunities to reduce software, hardware, or cloud expenses through license optimization, contract negotiations, or strategic adjustments. Client has NOT yet acted.',
+    questions: [
+      'What optimization opportunity did you identify?',
+      'How many licenses are surplus to actual need?',
+      'What is the unit cost or annual contract value of those licenses?',
+      'Is a contract mechanism available to right-size (e.g. true-down clause, renewal timing)?',
+    ],
+    questionTypes: ['text', 'number', 'currency', 'text'],
+    formula: 'Calculated as: Surplus Licenses × Unit Cost, or estimated contract delta',
+    // answers[1]=surplusLicenses  answers[2]=unitCost
+    compute(answers) {
+      const surplus   = parseFloat(answers[1]);
+      const unitCost  = parseDollar(answers[2]);
+      if (isNaN(surplus) || isNaN(unitCost)) return null;
+      return formatDollar(surplus * unitCost);
+    },
+  },
+  'Accomplished Cost Optimization': {
+    definition: 'Verified cost reductions through renegotiations, contract adjustments, or technology shifts. Requires client action to accomplish.',
+    // This field supports two input modes — pick one using the toggle on the form.
+    modes: {
+      contractValue: {
+        label: 'Contract value change',
+        questions: [
+          'What specific action was taken?',
+          'What was the original contract value?',
+          'What is the new contract value after the change?',
+          'What is the effective date of the change?',
+        ],
+        questionTypes: ['text', 'currency', 'currency', 'date'],
+        formula: 'Calculated as: Original Contract Value − New Contract Value',
+        // answers[1]=originalValue  answers[2]=newValue
+        compute(answers) {
+          const original = parseDollar(answers[1]);
+          const newVal   = parseDollar(answers[2]);
+          if (isNaN(original) || isNaN(newVal)) return null;
+          return formatDollar(original - newVal);
+        },
+      },
+      licenseCount: {
+        label: 'License count change',
+        questions: [
+          'What specific action was taken?',
+          'What was the original license count?',
+          'What is the new license count after the change?',
+          'What is the cost per license?',
+          'What is the effective date of the change?',
+        ],
+        questionTypes: ['text', 'number', 'number', 'currency', 'date'],
+        formula: 'Calculated as: (Original Count − New Count) × Cost Per License',
+        // answers[1]=originalCount  answers[2]=newCount  answers[3]=costPerLicense
+        compute(answers) {
+          const original        = parseFloat(answers[1]);
+          const newCount        = parseFloat(answers[2]);
+          const costPerLicense  = parseDollar(answers[3]);
+          if (isNaN(original) || isNaN(newCount) || isNaN(costPerLicense)) return null;
+          return formatDollar((original - newCount) * costPerLicense);
+        },
+      },
+    },
+  },
+  'Identified Cost Savings': {
+    definition: 'A hard-dollar reduction opportunity has been identified but not yet realized.',
+    questions: [
+      'What is the current annual spend for this publisher or product?',
+      'What specific mechanism would generate savings?',
+      'What is the projected reduced spend if the opportunity is acted upon?',
+    ],
+    questionTypes: ['currency', 'text', 'currency'],
+    formula: 'Calculated as: Current Spend − Projected Spend',
+    // answers[0]=currentSpend  answers[2]=projectedSpend
+    compute(answers) {
+      const current   = parseDollar(answers[0]);
+      const projected = parseDollar(answers[2]);
+      if (isNaN(current) || isNaN(projected)) return null;
+      return formatDollar(current - projected);
+    },
+  },
+  'Realized Cost Savings': {
+    definition: 'Hard-dollar savings reflected in budgets or financial statements due to negotiated reductions or decreased expenses.',
+    questions: [
+      "What was the client's spend for this publisher/product in the prior comparable period?",
+      'What is the confirmed spend for this period?',
+      'What drove the reduction?',
+      'Is this reflected in an invoice, PO, or budget document?',
+    ],
+    questionTypes: ['currency', 'currency', 'text', 'text'],
+    formula: 'Calculated as: Prior Period Spend − Current Period Spend',
+    // answers[0]=priorSpend  answers[1]=currentSpend
+    compute(answers) {
+      const prior   = parseDollar(answers[0]);
+      const current = parseDollar(answers[1]);
+      if (isNaN(prior) || isNaN(current)) return null;
+      return formatDollar(prior - current);
+    },
+  },
+};
+
 // ─── Screen 3: Extract ────────────────────────────────────────────────────────
 function ScreenExtract({ selectedFile, onNext }) {
   const [stepStatuses, setStepStatuses] = useState(EXTRACTION_STEPS.map(() => 'pending'));
   const [extractedData, setExtractedData] = useState(null);
   const [error, setError] = useState(null);
+
+  // Modal + fallback form state
+  const [showModal, setShowModal]         = useState(false);
+  const [fallbackMode, setFallbackMode]   = useState(false);
+  const [fallbackIndex, setFallbackIndex] = useState(0);
+  // answers keyed by field label — each value is an array of strings (one per question)
+  const [fallbackAnswers, setFallbackAnswers] = useState({});
+  // working copy of fields that will be passed to Store
+  const [mergedFields, setMergedFields] = useState(null);
+  // active mode key for multi-mode fields (e.g. Accomplished Cost Optimization)
+  const [modeSelections, setModeSelections] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -434,23 +619,227 @@ function ScreenExtract({ selectedFile, onNext }) {
   const isDone = stepStatuses.every(s => s === 'done');
 
   const displayFields = extractedData ? [
-    { label: 'Total Savings',           value: extractedData.total_savings           || '—', variant: 'green' },
-    { label: 'License Spend',           value: extractedData.license_spend           || '—', variant: 'green' },
-    { label: 'Compliance Risk Avoided', value: extractedData.compliance_risk_avoided || '—', variant: 'green' },
-    { label: 'Support Cost Reduction',  value: extractedData.support_cost_reduction  || '—', variant: 'blue'  },
-    { label: 'Net ROI',                 value: extractedData.net_roi                 || '—', variant: 'green' },
+    { label: 'Identified Risk',                value: extractedData.identified_risk                || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.identified_risk ? 'extracted' : null },
+    { label: 'Identified Cost Avoidance',      value: extractedData.identified_cost_avoidance      || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.identified_cost_avoidance ? 'extracted' : null },
+    { label: 'Accomplished Cost Avoidance',    value: extractedData.accomplished_cost_avoidance    || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.accomplished_cost_avoidance ? 'extracted' : null },
+    { label: 'Identified Cost Optimization',   value: extractedData.identified_cost_optimization   || null, variant: 'blue',  confidence: 0, source: null, flag: null, entryMode: extractedData.identified_cost_optimization ? 'extracted' : null },
+    { label: 'Accomplished Cost Optimization', value: extractedData.accomplished_cost_optimization || null, variant: 'blue',  confidence: 0, source: null, flag: null, entryMode: extractedData.accomplished_cost_optimization ? 'extracted' : null },
+    { label: 'Identified Cost Savings',        value: extractedData.identified_cost_savings        || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.identified_cost_savings ? 'extracted' : null },
+    { label: 'Realized Cost Savings',          value: extractedData.realized_cost_savings          || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.realized_cost_savings ? 'extracted' : null },
   ] : EXTRACTED_FIELDS;
 
   const confidence = extractedData?.confidence ?? 94;
   const confClass = c => c >= 90 ? 'conf-high' : c >= 75 ? 'conf-mid' : 'conf-low';
 
+  // Fields with no extracted value
+  const missingFields = displayFields.filter(f => !f.value);
+
+  // Show modal once extraction finishes (only if there are missing fields)
+  useEffect(() => {
+    if (isDone && missingFields.length > 0 && !showModal && !fallbackMode && !mergedFields) {
+      setShowModal(true);
+    }
+  }, [isDone]);
+
+  // ── Modal handlers ──
+  const handleSkipAll = () => {
+    const skipped = displayFields.map(f =>
+      f.value ? f : { ...f, value: null, flag: 'SME skipped — data not available', entryMode: null }
+    );
+    setShowModal(false);
+    onNext(skipped);
+  };
+
+  const handleFillIn = () => {
+    setShowModal(false);
+    setFallbackIndex(0);
+    setFallbackAnswers(
+      Object.fromEntries(missingFields.map(f => {
+        const fieldMeta    = ROI_FIELD_META[f.label];
+        // Mode-based fields (e.g. Accomplished Cost Optimization) have no top-level
+        // questions array — initialize using the first mode's question count instead.
+        const firstModeKey = fieldMeta?.modes ? Object.keys(fieldMeta.modes)[0] : null;
+        const questionCount = firstModeKey
+          ? fieldMeta.modes[firstModeKey].questions.length
+          : (fieldMeta?.questions?.length || 0);
+        return [f.label, Array(questionCount).fill('')];
+      }))
+    );
+    setFallbackMode(true);
+  };
+
+  // ── Fallback form handlers ──
+  const advanceFallback = (updatedFields) => {
+    if (fallbackIndex < missingFields.length - 1) {
+      setFallbackIndex(i => i + 1);
+      setMergedFields(updatedFields);
+    } else {
+      // All missing fields handled — go to Store
+      setFallbackMode(false);
+      onNext(updatedFields);
+    }
+  };
+
+  const handleFallbackNext = () => {
+    const field          = missingFields[fallbackIndex];
+    const answers        = fallbackAnswers[field.label] || [];
+    const meta           = ROI_FIELD_META[field.label];
+    const activeModeKey  = modeSelections[field.label] || (meta?.modes ? Object.keys(meta.modes)[0] : null);
+    const resolvedMeta   = activeModeKey ? meta.modes[activeModeKey] : meta;
+    const computed = resolvedMeta?.compute ? resolvedMeta.compute(answers) : null;
+    const updated = (mergedFields || displayFields).map(f =>
+      f.label === field.label
+        ? { ...f, value: computed, entryMode: computed ? 'manual' : null, flag: computed ? null : 'SME skipped — data not available' }
+        : f
+    );
+    advanceFallback(updated);
+  };
+
+  const handleFallbackSkip = () => {
+    const field = missingFields[fallbackIndex];
+    const updated = (mergedFields || displayFields).map(f =>
+      f.label === field.label
+        ? { ...f, value: null, entryMode: null, flag: 'SME skipped — data not available' }
+        : f
+    );
+    advanceFallback(updated);
+  };
+
+  const updateAnswer = (qIdx, val) => {
+    const field = missingFields[fallbackIndex];
+    setFallbackAnswers(prev => {
+      const arr = [...(prev[field.label] || [])];
+      arr[qIdx] = val;
+      return { ...prev, [field.label]: arr };
+    });
+  };
+
+  // ── Render: fallback form ──
+  if (fallbackMode) {
+    const field      = missingFields[fallbackIndex];
+    const meta       = ROI_FIELD_META[field.label] || { definition: '', questions: [], questionTypes: [], formula: '' };
+    const answers    = fallbackAnswers[field.label] || [];
+
+    // If this field has multiple modes, resolve the active mode's sub-config
+    const activeModeKey = modeSelections[field.label] || (meta.modes ? Object.keys(meta.modes)[0] : null);
+    const activeMeta    = activeModeKey ? meta.modes[activeModeKey] : meta;
+
+    const handleModeChange = (modeKey) => {
+      setModeSelections(prev => ({ ...prev, [field.label]: modeKey }));
+      // Reset answers for this field so stale answer indices don't bleed across modes
+      setFallbackAnswers(prev => ({
+        ...prev,
+        [field.label]: Array(meta.modes[modeKey].questions.length).fill(''),
+      }));
+    };
+
+    const liveComputed = activeMeta.compute ? activeMeta.compute(answers) : null;
+
+    return (
+      <div className="card">
+        <div className="fallback-progress">
+          <i className="ti ti-edit" aria-hidden="true" />
+          Field {fallbackIndex + 1} of {missingFields.length} — Manual Entry
+        </div>
+        <div className="card-title">{field.label}</div>
+        <p className="fallback-field-def">{meta.definition}</p>
+
+        {/* Mode toggle — only shown for multi-mode fields */}
+        {meta.modes && (
+          <div className="fallback-mode-toggle">
+            {Object.entries(meta.modes).map(([key, modeMeta]) => (
+              <button
+                key={key}
+                className={`fallback-mode-btn ${activeModeKey === key ? 'active' : ''}`}
+                onClick={() => handleModeChange(key)}
+              >
+                {modeMeta.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="fallback-questions">
+          {activeMeta.questions.map((q, qi) => {
+            const qType = (activeMeta.questionTypes && activeMeta.questionTypes[qi]) || 'text';
+            const val   = answers[qi] || '';
+            return (
+              <div className="fallback-question" key={qi}>
+                <label className="field-label" htmlFor={`fb-q-${qi}`}>{q}</label>
+                {qType === 'currency' ? (
+                  <div className="input-prefix-group">
+                    <span className="input-prefix">$</span>
+                    <input
+                      id={`fb-q-${qi}`}
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="0"
+                      value={val}
+                      onChange={e => updateAnswer(qi, e.target.value)}
+                    />
+                  </div>
+                ) : qType === 'date' ? (
+                  <input
+                    id={`fb-q-${qi}`}
+                    type="date"
+                    value={val}
+                    onChange={e => updateAnswer(qi, e.target.value)}
+                  />
+                ) : qType === 'number' ? (
+                  <input
+                    id={`fb-q-${qi}`}
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="0"
+                    value={val}
+                    onChange={e => updateAnswer(qi, e.target.value)}
+                  />
+                ) : (
+                  <input
+                    id={`fb-q-${qi}`}
+                    type="text"
+                    placeholder="Optional — leave blank to skip"
+                    value={val}
+                    onChange={e => updateAnswer(qi, e.target.value)}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="fallback-formula">{activeMeta.formula}</div>
+
+        {liveComputed && (
+          <div className="fallback-computed-preview">
+            <i className="ti ti-calculator" aria-hidden="true" />
+            Calculated value: <strong>{liveComputed}</strong>
+          </div>
+        )}
+
+        <div className="btn-row">
+          <button className="btn ghost" onClick={handleFallbackSkip}>
+            <i className="ti ti-forward" aria-hidden="true" /> Skip this field
+          </button>
+          <button className="btn primary" onClick={handleFallbackNext}>
+            {fallbackIndex < missingFields.length - 1 ? 'Next Field' : 'Review & Store'}
+            <i className="ti ti-arrow-right" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: extraction progress + results ──
   return (
     <div className="card">
       <div className="card-title">
         <i className="ti ti-cpu" aria-hidden="true" />
         ROI Extraction
       </div>
-      <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 20 }}>
+      <p className="extract-sub">
         Processing validated file against extraction schema…
       </p>
 
@@ -480,11 +869,7 @@ function ScreenExtract({ selectedFile, onNext }) {
       </div>
 
       {error && (
-        <div style={{
-          marginTop: 16, padding: 14,
-          background: 'var(--red-pale)', borderRadius: 'var(--radius-sm)',
-          fontSize: 13, color: 'var(--red-text)',
-        }}>
+        <div className="extract-error">
           <strong>Backend unavailable:</strong> showing preview data. ({error})
         </div>
       )}
@@ -494,20 +879,52 @@ function ScreenExtract({ selectedFile, onNext }) {
           <div className="extract-results-title">Extracted Fields</div>
           <div className="extract-chips">
             {displayFields.map(f => (
-              <div className="extract-chip" key={f.label}>
-                <span style={{ color: 'var(--text-muted)' }}>{f.label.split(' ')[0]}:</span>
-                <strong>{f.value}</strong>
+              <div className={`extract-chip ${!f.value ? 'missing' : ''}`} key={f.label}>
+                <span className="extract-chip-label">{f.label.split(' ')[0]}:</span>
+                <strong>{f.value ?? <span className="extract-chip-missing">not found</span>}</strong>
               </div>
             ))}
             <div className="extract-chip">
-              <span style={{ color: 'var(--text-muted)' }}>Confidence:</span>
+              <span className="extract-chip-label">Confidence:</span>
               <strong className={confClass(confidence)}>{confidence}%</strong>
             </div>
           </div>
-          <div className="btn-row">
-            <button className="btn primary" onClick={() => onNext(displayFields)}>
-              Review &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
-            </button>
+          {!showModal && missingFields.length === 0 && (
+            <div className="btn-row">
+              <button className="btn primary" onClick={() => onNext(displayFields)}>
+                Review &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Missing-fields modal ── */}
+      {showModal && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div className="modal-box">
+            <div className="modal-icon">
+              <i className="ti ti-alert-circle" aria-hidden="true" />
+            </div>
+            <div className="modal-title" id="modal-title">
+              Some fields couldn't be extracted from your documents. Would you like to fill them in manually?
+            </div>
+            <ul className="modal-missing-list">
+              {missingFields.map(f => (
+                <li key={f.label}>
+                  <i className="ti ti-point-filled" aria-hidden="true" />
+                  {f.label}
+                </li>
+              ))}
+            </ul>
+            <div className="modal-btn-row">
+              <button className="btn ghost" onClick={handleSkipAll}>
+                Skip — Continue to Store
+              </button>
+              <button className="btn primary" onClick={handleFillIn}>
+                <i className="ti ti-pencil" aria-hidden="true" /> Fill In Missing Fields
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -518,9 +935,25 @@ function ScreenExtract({ selectedFile, onNext }) {
 // ─── Field Card with View Source ──────────────────────────────────────────────
 function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKeyDown }) {
   const [sourceOpen, setSourceOpen] = useState(false);
-  const isEdited  = currentValue !== field.value;
-  const confClass = field.confidence >= 90 ? 'conf-high' : field.confidence >= 75 ? 'conf-mid' : 'conf-low';
-  const dotClass  = field.confidence >= 90 ? 'high'      : field.confidence >= 75 ? 'mid'      : 'low';
+  const isSkipped  = field.flag === 'SME skipped — data not available';
+  const isManual   = field.entryMode === 'manual';
+  const isEdited   = !isSkipped && currentValue !== field.value;
+  const confClass  = field.confidence >= 90 ? 'conf-high' : field.confidence >= 75 ? 'conf-mid' : 'conf-low';
+  const dotClass   = field.confidence >= 90 ? 'high'      : field.confidence >= 75 ? 'mid'      : 'low';
+
+  if (isSkipped) {
+    return (
+      <div className="field-card field-card-skipped">
+        <div className="field-card-name">{field.label}</div>
+        <div className="field-card-value field-card-na">Not available</div>
+        <div className="field-card-meta">
+          <span className="field-card-skip-tag">
+            <i className="ti ti-ban" aria-hidden="true" /> SME skipped
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="field-card">
@@ -531,12 +964,13 @@ function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKe
           defaultValue={currentValue}
           onBlur={e => onCommit(field.label, e.target.value)}
           onKeyDown={e => onKeyDown(e, field.label)}
-          style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}
+          className="field-card-edit-input"
         />
       ) : (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div className="field-card-value-row">
           <span className="field-card-value">{currentValue}</span>
-          {isEdited && <Badge color="amber">edited</Badge>}
+          {isManual  && <span className="field-card-manual-tag">Manually entered</span>}
+          {isEdited  && <Badge color="amber">edited</Badge>}
           <button
             className="field-edit-btn"
             onClick={() => onStartEdit(field.label)}
@@ -547,55 +981,81 @@ function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKe
         </div>
       )}
       <div className="field-card-meta">
-        <span className={confClass} style={{ fontSize: 13 }}>
-          <span className={`conf-dot ${dotClass}`} />
-          {field.confidence}%
-        </span>
-        <button className="view-source-btn" onClick={() => setSourceOpen(s => !s)}>
-          <i className={`ti ti-${sourceOpen ? 'chevron-up' : 'link'}`} aria-hidden="true" />
-          {sourceOpen ? 'Hide' : 'View Source'}
-        </button>
+        {field.entryMode === 'extracted' && (
+          <span className={confClass} style={{ fontSize: 13 }}>
+            <span className={`conf-dot ${dotClass}`} />
+            {field.confidence}%
+          </span>
+        )}
+        {field.source && (
+          <button className="view-source-btn" onClick={() => setSourceOpen(s => !s)}>
+            <i className={`ti ti-${sourceOpen ? 'chevron-up' : 'link'}`} aria-hidden="true" />
+            {sourceOpen ? 'Hide' : 'View Source'}
+          </button>
+        )}
       </div>
-      {sourceOpen && (
+      {sourceOpen && field.source && (
         <div className="source-citation">{field.source}</div>
       )}
     </div>
   );
 }
 
+
 // ─── Screen 4: Compare ───────────────────────────────────────────────────────
-const COMPARE_FIELDS = [
-  { label: 'Identified Risk',         script: '$1,080,000',  claude: '$1,080,000'  },
-  { label: 'ID Cost Avoidance',       script: '$540,000',    claude: '$540,000'    },
-  { label: 'Acc. Cost Avoidance',     script: '$320,000',    claude: '$315,000'    },
-  { label: 'ID Cost Optimization',    script: '$210,000',    claude: '$210,000'    },
-  { label: 'Acc. Cost Optimization',  script: '$98,000',     claude: '$105,000'    },
-  { label: 'Realized Savings',        script: '$418,000',    claude: '$418,000'    },
-  { label: 'Contract Spend',          script: '$2,400,000',  claude: '$2,400,000'  },
-  { label: 'Year',                    script: '2025',        claude: '2025'        },
-  { label: 'Currency',                script: 'USD',         claude: 'USD'         },
-  { label: 'Pricing Available',       script: 'Yes',         claude: 'No'          },
-];
+// Mocked "what the script found" — keyed by canonical ROI field label.
+// Two intentional mismatches (Identified Cost Optimization, Realized Cost Savings)
+// so the compare screen has something meaningful to resolve during testing.
+// When the real script is deployed, replace these values with the API response.
+const SCRIPT_VALUES = {
+  'Identified Risk':                '$2,400,000',
+  'Identified Cost Avoidance':      '$870,000',
+  'Accomplished Cost Avoidance':    '$340,000',
+  'Identified Cost Optimization':   '$195,000',
+  'Accomplished Cost Optimization': '$98,000',
+  'Identified Cost Savings':        '$1,530,000',
+  'Realized Cost Savings':          '$412,000',
+};
+
+// Strip $ / commas → raw numeric string for the number input
+function toRaw(val) {
+  if (!val || val === '—') return '';
+  return String(val).replace(/[$,\s]/g, '');
+}
+// Raw numeric string → formatted dollar string for display and storage
+function toFormatted(raw) {
+  const n = parseFloat(raw);
+  if (isNaN(n)) return '—';
+  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
 
 function CompareRow({ field, onResolve }) {
-  const matches = field.script === field.claude;
-  const [checked,   setChecked]   = useState(matches);
-  const [editVal,   setEditVal]   = useState(matches ? field.claude : '');
-  const [confirmed, setConfirmed] = useState(matches);
+  const isSkipped   = field.flag === 'SME skipped — data not available';
+  const bestVal     = field.sme ?? field.claude;
+  const scriptMatch = !isSkipped && field.script !== '—' && field.script === bestVal;
 
-  // Notify parent whenever resolved state changes
+  // Store raw number string; format only for display and when notifying parent
+  const [editVal,   setEditVal]   = useState(toRaw(bestVal));
+  const [confirmed, setConfirmed] = useState(true);
+
   useEffect(() => {
-    onResolve(field.label, confirmed ? (checked ? field.claude : editVal) : null);
-  }, [confirmed, checked, editVal]);
+    onResolve(field.label, confirmed ? toFormatted(editVal) : null);
+  }, [confirmed, editVal]);
 
-  const rowColor   = confirmed ? 'rgba(34,197,94,0.07)'  : 'rgba(239,68,68,0.06)';
-  const borderColor= confirmed ? 'rgba(34,197,94,0.25)'  : 'rgba(239,68,68,0.22)';
-  const labelColor = confirmed ? '#15803d' : '#b91c1c';
+  const rowColor    = isSkipped  ? 'rgba(107,127,163,0.06)'
+                    : confirmed  ? 'rgba(34,197,94,0.07)'
+                    : 'rgba(239,68,68,0.06)';
+  const borderColor = isSkipped  ? 'rgba(107,127,163,0.25)'
+                    : confirmed  ? 'rgba(34,197,94,0.25)'
+                    : 'rgba(239,68,68,0.22)';
+
+  const monoStyle = { fontSize: 13, fontFamily: 'monospace', color: '#374151' };
+  const naStyle   = { fontSize: 12, color: '#9ca3af', fontStyle: 'italic' };
 
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: '1.6fr 1fr 1fr 1.4fr',
+      gridTemplateColumns: '1.4fr 0.9fr 0.9fr 0.9fr 1.3fr',
       alignItems: 'center',
       gap: 0,
       borderBottom: '1px solid #edf0f6',
@@ -604,74 +1064,74 @@ function CompareRow({ field, onResolve }) {
       borderLeft: `3px solid ${borderColor}`,
       transition: 'background 0.2s, border-color 0.2s',
     }}>
+
       {/* Field name */}
       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>
         {field.label}
       </span>
 
       {/* Script value */}
-      <span style={{ fontSize: 13, color: '#374151', fontFamily: 'monospace' }}>
-        {field.script}
-      </span>
-
-      {/* Claude value */}
-      <span style={{
-        fontSize: 13, fontFamily: 'monospace',
-        color: matches ? '#374151' : '#b91c1c', fontWeight: matches ? 400 : 600,
-      }}>
-        {field.claude}
-        {!matches && (
+      <span style={isSkipped ? naStyle : { ...monoStyle, color: scriptMatch ? '#374151' : '#b91c1c', fontWeight: scriptMatch ? 400 : 600 }}>
+        {isSkipped ? '—' : field.script}
+        {!isSkipped && !scriptMatch && field.script !== '—' && (
           <i className="ti ti-alert-triangle" style={{ marginLeft: 5, fontSize: 11 }} aria-hidden="true" />
         )}
       </span>
 
-      {/* Final / resolve column */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {confirmed ? (
-          // Confirmed → green checkmark (click to uncheck/edit)
-          <button
-            onClick={() => { setConfirmed(false); setChecked(false); }}
-            title="Click to edit"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: '#15803d', fontSize: 13, fontWeight: 600, padding: 0,
-            }}
-          >
-            <span style={{
-              width: 22, height: 22, borderRadius: 6,
-              background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <i className="ti ti-check" style={{ fontSize: 13, color: '#fff' }} aria-hidden="true" />
+      {/* Claude AI value */}
+      <span style={field.claude ? monoStyle : naStyle}>
+        {field.claude ?? '—'}
+      </span>
+
+      {/* SME Derived value */}
+      <span style={field.sme ? { ...monoStyle, color: '#0369a1', fontWeight: 600 } : naStyle}>
+        {isSkipped ? <span style={naStyle}>Skipped</span> : (field.sme ?? '—')}
+      </span>
+
+      {/* Final Value — confirmed: value + pencil; editing: input + Done */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {isSkipped ? (
+          <span style={naStyle}>—</span>
+        ) : confirmed ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#15803d', fontFamily: 'monospace' }}>
+              {toFormatted(editVal)}
             </span>
-            {editVal || field.claude}
-          </button>
-        ) : (
-          // Not confirmed → input + Done button
-          <div style={{ display: 'flex', gap: 6, width: '100%' }}>
-            <input
-              type="text"
-              value={editVal}
-              onChange={e => setEditVal(e.target.value)}
-              placeholder="Enter correct value…"
-              style={{
-                flex: 1, fontSize: 13, padding: '4px 8px',
-                border: '1.5px solid #fca5a5', borderRadius: 6,
-                outline: 'none', background: '#fff',
-                fontFamily: 'inherit',
-              }}
-              onFocus={e => e.target.style.borderColor = '#ef4444'}
-              onBlur={e => e.target.style.borderColor = '#fca5a5'}
-            />
             <button
-              disabled={!editVal.trim()}
-              onClick={() => { if (editVal.trim()) setConfirmed(true); }}
+              onClick={() => setConfirmed(false)}
+              title="Edit final value"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+                color: '#6b7fa3', fontSize: 13, lineHeight: 1, flexShrink: 0,
+              }}
+              aria-label="Edit final value"
+            >
+              <i className="ti ti-pencil" aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 5, width: '100%', alignItems: 'center' }}>
+            <div className="input-prefix-group" style={{ flex: 1 }}>
+              <span className="input-prefix">$</span>
+              <input
+                autoFocus
+                type="number"
+                min="0"
+                step="any"
+                value={editVal}
+                onChange={e => setEditVal(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <button
+              disabled={!editVal.toString().trim()}
+              onClick={() => { if (editVal.toString().trim()) setConfirmed(true); }}
               style={{
                 padding: '4px 10px', fontSize: 12, fontWeight: 700,
-                background: editVal.trim() ? '#22c55e' : '#d1fae5',
+                background: editVal.toString().trim() ? '#22c55e' : '#d1fae5',
                 color: '#fff', border: 'none', borderRadius: 6,
-                cursor: editVal.trim() ? 'pointer' : 'not-allowed',
-                transition: 'background 0.15s',
+                cursor: editVal.toString().trim() ? 'pointer' : 'not-allowed',
+                transition: 'background 0.15s', flexShrink: 0,
               }}
             >
               Done
@@ -683,16 +1143,44 @@ function CompareRow({ field, onResolve }) {
   );
 }
 
-function ScreenCompare({ onNext, onBack }) {
+function ScreenCompare({ fields, onNext, onBack }) {
+  // Build rows from live extracted fields + mocked script values.
+  // claude = what the AI extracted (null if it couldn't find it).
+  // sme    = what the SME computed via the fallback form (null if extracted or skipped).
+  const sourceFields = fields && fields.length > 0 ? fields : [];
+  const compareRows = sourceFields.map(f => ({
+    label:  f.label,
+    script: SCRIPT_VALUES[f.label] ?? '—',
+    claude: f.entryMode === 'extracted' ? f.value : null,
+    sme:    f.entryMode === 'manual'    ? f.value : null,
+    flag:   f.flag,
+  }));
+
   const [resolved, setResolved] = useState({});
 
   const handleResolve = (label, val) => {
     setResolved(prev => ({ ...prev, [label]: val }));
   };
 
-  const allDone = COMPARE_FIELDS.every(f => resolved[f.label] !== null && resolved[f.label] !== undefined);
-  const matchCount    = COMPARE_FIELDS.filter(f => f.script === f.claude).length;
-  const mismatchCount = COMPARE_FIELDS.length - matchCount;
+  // Skipped rows don't need SME resolution — only non-skipped rows must be confirmed
+  const resolvableRows = compareRows.filter(f => f.flag !== 'SME skipped — data not available');
+  const allDone = resolvableRows.every(f => resolved[f.label] !== null && resolved[f.label] !== undefined);
+
+  // "Best available" value per row — prefer sme-computed, fall back to claude extracted
+  const bestVal = (row) => row.sme ?? row.claude;
+  const matchCount    = compareRows.filter(f => f.flag !== 'SME skipped — data not available' && f.script === bestVal(f)).length;
+  const mismatchCount = resolvableRows.length - matchCount;
+
+  const handleNext = () => {
+    const resolvedFields = sourceFields.map(f => {
+      const finalVal = resolved[f.label];
+      if (finalVal && finalVal !== f.value) {
+        return { ...f, value: finalVal };
+      }
+      return f;
+    });
+    onNext(resolvedFields);
+  };
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -718,7 +1206,7 @@ function ScreenCompare({ onNext, onBack }) {
       {/* Column headers */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '1.6fr 1fr 1fr 1.4fr',
+        gridTemplateColumns: '1.4fr 0.9fr 0.9fr 0.9fr 1.3fr',
         padding: '8px 16px',
         background: '#f7f9fc',
         borderBottom: '1px solid #edf0f6',
@@ -731,12 +1219,13 @@ function ScreenCompare({ onNext, onBack }) {
         <span>Field</span>
         <span>Script</span>
         <span>Claude AI</span>
+        <span>SME Derived</span>
         <span>Final Value</span>
       </div>
 
       {/* Rows */}
       <div>
-        {COMPARE_FIELDS.map(f => (
+        {compareRows.map(f => (
           <CompareRow key={f.label} field={f} onResolve={handleResolve} />
         ))}
       </div>
@@ -755,7 +1244,7 @@ function ScreenCompare({ onNext, onBack }) {
           <button
             className="btn primary"
             disabled={!allDone}
-            onClick={() => onNext(resolved)}
+            onClick={handleNext}
             style={{ opacity: allDone ? 1 : 0.45, cursor: allDone ? 'pointer' : 'not-allowed' }}
           >
             Confirm &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
@@ -767,9 +1256,11 @@ function ScreenCompare({ onNext, onBack }) {
 }
 
 // ─── Screen 5: Store ──────────────────────────────────────────────────────────
-function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
+function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
+  const sourceFields = fields && fields.length > 0 ? fields : EXTRACTED_FIELDS;
+
   const [editValues, setEditValues] = useState(
-    () => Object.fromEntries(EXTRACTED_FIELDS.map(f => [f.label, f.value]))
+    () => Object.fromEntries(sourceFields.map(f => [f.label, f.value]))
   );
   const [editingLabel, setEditingLabel] = useState(null);
 
@@ -784,8 +1275,11 @@ function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
   };
 
   const handleSave = () => {
-    onNext(EXTRACTED_FIELDS.map(f => ({ ...f, value: editValues[f.label] })));
+    onNext(sourceFields.map(f => ({ ...f, value: editValues[f.label] })));
   };
+
+  const manualCount = sourceFields.filter(f => f.entryMode === 'manual').length;
+  const skippedCount = sourceFields.filter(f => f.flag === 'SME skipped — data not available').length;
 
   return (
     <div className="card">
@@ -793,26 +1287,27 @@ function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
         <i className="ti ti-database" aria-hidden="true" />
         Store Results
       </div>
-      <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>
-        Review extracted values before writing to the ROI Tracker. Click the pencil icon to correct
-        a value, and expand <strong>View Source</strong> to see the exact cell reference.
+      <p className="store-sub">
+        Review values before writing to the ROI Tracker. Click the pencil icon to correct a value.
+        {manualCount > 0 && <> <span className="field-card-manual-tag">Manually entered</span> fields were filled in by the SME.</>}
+        {skippedCount > 0 && <> Greyed-out fields were skipped and will be stored as not available.</>}
       </p>
 
       <div className="field-cards">
-        {EXTRACTED_FIELDS.map(f => (
+        {sourceFields.map(f => (
           <FieldCard
             key={f.label}
             field={f}
             currentValue={editValues[f.label]}
             isEditing={editingLabel === f.label}
-            onStartEdit={setEditingLabel}
+            onStartEdit={f.flag === 'SME skipped — data not available' ? () => {} : setEditingLabel}
             onCommit={commitEdit}
             onKeyDown={handleKeyDown}
           />
         ))}
       </div>
 
-      <label className="field-label" style={{ marginBottom: 12 }}>What gets stored</label>
+      <label className="field-label store-what-label">What gets stored</label>
       <div className="store-grid">
         {[
           { icon: 'ti-table',            title: 'ROI values',      sub: 'Client_ROI_Tracker.xlsx · sheet: All_ROI_Data' },
@@ -930,8 +1425,8 @@ export default function ExtractionView({ onNav }) {
     <ScreenFiles    key={1} onSelect={handleFileSelect}   onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
     <ScreenExtract  key={3} selectedFile={selectedFile}   onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
-    <ScreenCompare  key={4} onNext={(resolved) => { setFinalFields(resolved); setStep(5); }} onBack={() => setStep(3)} />,
-    <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} onNext={handleStore} onBack={() => setStep(4)} />,
+    <ScreenCompare  key={4} fields={finalFields} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
+    <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(4)} />,
     <ScreenDone     key={6} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
 
