@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import auth, client_scopes, extraction, records
+from routes import auth, client_scopes, extraction, records, roar
 
 app = FastAPI(title="DOMOsapiens API")
 
@@ -16,6 +16,7 @@ app.include_router(auth.router)
 app.include_router(client_scopes.router)
 app.include_router(extraction.router)
 app.include_router(records.router)
+app.include_router(roar.router)
 
 
 @app.get("/api/health")
