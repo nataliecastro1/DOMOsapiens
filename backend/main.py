@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from routes import auth, client_scopes, extraction, records, documents
 from routes import auth, client_scopes, clients, extraction, records, uploads
 
 app = FastAPI(title="DOMOsapiens API")
@@ -16,6 +17,7 @@ app.include_router(auth.router)
 app.include_router(client_scopes.router)
 app.include_router(extraction.router)
 app.include_router(records.router)
+app.include_router(documents.router)
 app.include_router(uploads.router)
 app.include_router(clients.router)
 

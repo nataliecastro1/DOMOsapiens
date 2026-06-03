@@ -1,4 +1,4 @@
-const BASE = '/api';
+const BASE = 'http://localhost:8000/api';
 
 export async function get(path) {
   const res = await fetch(`${BASE}${path}`);
@@ -17,11 +17,36 @@ export async function post(path, body) {
 }
 
 /**
- * Send document text to the backend, which calls Claude via Alfred proxy.
- * Returns extracted ROI fields.
+ * Search local documents folder by client, year, publisher.
+ * Returns { files: [...], total: N }
  */
-export async function extractROI(documentText) {
-  return post('/extract', { document_text: documentText });
+export async function searchDocuments({ client = '', year = '', publisher = '' } = {}) {
+  const params = new URLSearchParams({ client, year, publisher });
+  return get(`/documents/search?${params}`);
+}
+
+/**
+ * Extract ROI data from a local document file (selected from search results).
+ * file_path is the path returned by searchDocuments.
+ */
+export async function extractFromFile(filePath) {
+  return post('/extract', { file_path: filePath });
+}
+
+/**
+ * Extract ROI data from a file the user uploaded manually.
+ * file is a browser File object.
+ */
+export async function extractFromUpload(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${BASE}/extract/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) throw new Error(`Upload extraction failed: ${res.status}`);
+  return res.json();
 }
 
 /** Return the client roster (sorted names) for the dropdown. */
