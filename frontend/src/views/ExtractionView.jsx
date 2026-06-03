@@ -19,7 +19,7 @@ const STEP_DEFS = [
 
 function JourneyBar({ currentStep, onStep }) {
   return (
-    <div className="journey-bar" role="list" aria-label="Extraction pipeline">
+    <div id="journey-bar" className="journey-bar" role="list" aria-label="Extraction pipeline">
       {STEP_DEFS.map((step, i) => {
         const isDone   = i < currentStep;
         const isActive = i === currentStep;
@@ -77,7 +77,7 @@ function ScreenRequest({ onNext }) {
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'stretch' }}>
 
       {/* ── Card 1: SharePoint Search ── */}
-      <div className="card">
+      <div id="search-card" className="card">
         <div className="card-title">
           <i className="ti ti-adjustments-horizontal" aria-hidden="true" />
           Search SharePoint
@@ -110,7 +110,7 @@ function ScreenRequest({ onNext }) {
       </div>
 
       {/* ── Card 2: Manual Upload ── */}
-      <div className="card">
+      <div id="upload-card" className="card">
         <div className="card-title">
           <i className="ti ti-upload" aria-hidden="true" />
           Upload a File
