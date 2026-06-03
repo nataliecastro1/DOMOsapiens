@@ -269,11 +269,94 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
   );
 }
 
+// ─── ROI Field Metadata (definitions, questions, formulas) ───────────────────
+const ROI_FIELD_META = {
+  'Identified Risk': {
+    definition: 'Quantified financial exposure due to non-compliance with software licensing or contractual terms.',
+    questions: [
+      'Which software publisher(s) or product(s) have a compliance shortfall?',
+      'What is the unit cost (price per license)?',
+      'How many licenses is the client entitled to per contract?',
+      'How many licenses are currently deployed or in use?',
+      'What contract period or date does this exposure apply to?',
+    ],
+    formula: 'Calculated as: (Deployed Licenses − Entitled Licenses) × Unit Cost',
+  },
+  'Identified Cost Avoidance': {
+    definition: 'Potential unbudgeted costs that can be prevented through proactive compliance. Measurable in avoided liabilities. Client has NOT yet acted.',
+    questions: [
+      'What over-deployment or compliance gap did you identify that the client could remediate?',
+      'How many excess licenses could be removed?',
+      'What is the unit cost of those licenses?',
+      'Can the client remediate this within their current contract terms?',
+    ],
+    formula: 'Calculated as: Excess Licenses × Unit Cost',
+  },
+  'Accomplished Cost Avoidance': {
+    definition: 'The quantified result of actions taken to prevent unbudgeted costs. Requires client action to accomplish.',
+    questions: [
+      'What action did the client take (e.g. removed deployments, reduced installs)?',
+      'How many licenses were removed or remediated?',
+      'What is the unit cost of those licenses?',
+      'What is the confirmation or evidence of the action taken?',
+    ],
+    formula: 'Calculated as: Remediated Licenses × Unit Cost',
+  },
+  'Identified Cost Optimization': {
+    definition: 'Opportunities to reduce software, hardware, or cloud expenses through license optimization, contract negotiations, or strategic adjustments. Client has NOT yet acted.',
+    questions: [
+      'What optimization opportunity did you identify?',
+      'How many licenses are surplus to actual need?',
+      'What is the unit cost or annual contract value of those licenses?',
+      'Is a contract mechanism available to right-size (e.g. true-down clause, renewal timing)?',
+    ],
+    formula: 'Calculated as: Surplus Licenses × Unit Cost, or estimated contract delta',
+  },
+  'Accomplished Cost Optimization': {
+    definition: 'Verified cost reductions through renegotiations, contract adjustments, or technology shifts. Requires client action to accomplish.',
+    questions: [
+      'What specific action was taken?',
+      'What was the original license count or contract value?',
+      'What is the new license count or contract value after the change?',
+      'What is the effective date of the change?',
+    ],
+    formula: 'Calculated as: (Original Value − New Value) for the period',
+  },
+  'Identified Cost Savings': {
+    definition: 'A hard-dollar reduction opportunity has been identified but not yet realized.',
+    questions: [
+      'What is the current annual spend for this publisher or product?',
+      'What specific mechanism would generate savings?',
+      'What is the projected reduced spend if the opportunity is acted upon?',
+    ],
+    formula: 'Calculated as: Current Spend − Projected Spend',
+  },
+  'Realized Cost Savings': {
+    definition: 'Hard-dollar savings reflected in budgets or financial statements due to negotiated reductions or decreased expenses.',
+    questions: [
+      "What was the client's spend for this publisher/product in the prior comparable period?",
+      'What is the confirmed spend for this period?',
+      'What drove the reduction?',
+      'Is this reflected in an invoice, PO, or budget document?',
+    ],
+    formula: 'Calculated as: Prior Period Spend − Current Period Spend',
+  },
+};
+
 // ─── Screen 3: Extract ────────────────────────────────────────────────────────
 function ScreenExtract({ selectedFile, onNext }) {
   const [stepStatuses, setStepStatuses] = useState(EXTRACTION_STEPS.map(() => 'pending'));
   const [extractedData, setExtractedData] = useState(null);
   const [error, setError] = useState(null);
+
+  // Modal + fallback form state
+  const [showModal, setShowModal]         = useState(false);
+  const [fallbackMode, setFallbackMode]   = useState(false);
+  const [fallbackIndex, setFallbackIndex] = useState(0);
+  // answers keyed by field label — each value is an array of strings (one per question)
+  const [fallbackAnswers, setFallbackAnswers] = useState({});
+  // working copy of fields that will be passed to Store
+  const [mergedFields, setMergedFields] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -311,23 +394,141 @@ function ScreenExtract({ selectedFile, onNext }) {
   const isDone = stepStatuses.every(s => s === 'done');
 
   const displayFields = extractedData ? [
-    { label: 'Total Savings',           value: extractedData.total_savings           || '—', variant: 'green' },
-    { label: 'License Spend',           value: extractedData.license_spend           || '—', variant: 'green' },
-    { label: 'Compliance Risk Avoided', value: extractedData.compliance_risk_avoided || '—', variant: 'green' },
-    { label: 'Support Cost Reduction',  value: extractedData.support_cost_reduction  || '—', variant: 'blue'  },
-    { label: 'Net ROI',                 value: extractedData.net_roi                 || '—', variant: 'green' },
+    { label: 'Identified Risk',                value: extractedData.identified_risk                || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.identified_risk ? 'extracted' : null },
+    { label: 'Identified Cost Avoidance',      value: extractedData.identified_cost_avoidance      || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.identified_cost_avoidance ? 'extracted' : null },
+    { label: 'Accomplished Cost Avoidance',    value: extractedData.accomplished_cost_avoidance    || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.accomplished_cost_avoidance ? 'extracted' : null },
+    { label: 'Identified Cost Optimization',   value: extractedData.identified_cost_optimization   || null, variant: 'blue',  confidence: 0, source: null, flag: null, entryMode: extractedData.identified_cost_optimization ? 'extracted' : null },
+    { label: 'Accomplished Cost Optimization', value: extractedData.accomplished_cost_optimization || null, variant: 'blue',  confidence: 0, source: null, flag: null, entryMode: extractedData.accomplished_cost_optimization ? 'extracted' : null },
+    { label: 'Identified Cost Savings',        value: extractedData.identified_cost_savings        || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.identified_cost_savings ? 'extracted' : null },
+    { label: 'Realized Cost Savings',          value: extractedData.realized_cost_savings          || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.realized_cost_savings ? 'extracted' : null },
   ] : EXTRACTED_FIELDS;
 
   const confidence = extractedData?.confidence ?? 94;
   const confClass = c => c >= 90 ? 'conf-high' : c >= 75 ? 'conf-mid' : 'conf-low';
 
+  // Fields with no extracted value
+  const missingFields = displayFields.filter(f => !f.value);
+
+  // Show modal once extraction finishes (only if there are missing fields)
+  useEffect(() => {
+    if (isDone && missingFields.length > 0 && !showModal && !fallbackMode && !mergedFields) {
+      setShowModal(true);
+    }
+  }, [isDone]);
+
+  // ── Modal handlers ──
+  const handleSkipAll = () => {
+    const skipped = displayFields.map(f =>
+      f.value ? f : { ...f, value: null, flag: 'SME skipped — data not available', entryMode: null }
+    );
+    setShowModal(false);
+    onNext(skipped);
+  };
+
+  const handleFillIn = () => {
+    setShowModal(false);
+    setFallbackIndex(0);
+    setFallbackAnswers(
+      Object.fromEntries(missingFields.map(f => [f.label, Array(ROI_FIELD_META[f.label]?.questions.length || 0).fill('')]))
+    );
+    setFallbackMode(true);
+  };
+
+  // ── Fallback form handlers ──
+  const advanceFallback = (updatedFields) => {
+    if (fallbackIndex < missingFields.length - 1) {
+      setFallbackIndex(i => i + 1);
+      setMergedFields(updatedFields);
+    } else {
+      // All missing fields handled — go to Store
+      setFallbackMode(false);
+      onNext(updatedFields);
+    }
+  };
+
+  const handleFallbackNext = () => {
+    const field = missingFields[fallbackIndex];
+    const answers = fallbackAnswers[field.label] || [];
+    const combinedValue = answers.filter(Boolean).join(' / ') || null;
+    const updated = (mergedFields || displayFields).map(f =>
+      f.label === field.label
+        ? { ...f, value: combinedValue, entryMode: combinedValue ? 'manual' : null, flag: combinedValue ? null : 'SME skipped — data not available' }
+        : f
+    );
+    advanceFallback(updated);
+  };
+
+  const handleFallbackSkip = () => {
+    const field = missingFields[fallbackIndex];
+    const updated = (mergedFields || displayFields).map(f =>
+      f.label === field.label
+        ? { ...f, value: null, entryMode: null, flag: 'SME skipped — data not available' }
+        : f
+    );
+    advanceFallback(updated);
+  };
+
+  const updateAnswer = (qIdx, val) => {
+    const field = missingFields[fallbackIndex];
+    setFallbackAnswers(prev => {
+      const arr = [...(prev[field.label] || [])];
+      arr[qIdx] = val;
+      return { ...prev, [field.label]: arr };
+    });
+  };
+
+  // ── Render: fallback form ──
+  if (fallbackMode) {
+    const field   = missingFields[fallbackIndex];
+    const meta    = ROI_FIELD_META[field.label] || { definition: '', questions: [], formula: '' };
+    const answers = fallbackAnswers[field.label] || [];
+    return (
+      <div className="card">
+        <div className="fallback-progress">
+          <i className="ti ti-edit" aria-hidden="true" />
+          Field {fallbackIndex + 1} of {missingFields.length} — Manual Entry
+        </div>
+        <div className="card-title">{field.label}</div>
+        <p className="fallback-field-def">{meta.definition}</p>
+
+        <div className="fallback-questions">
+          {meta.questions.map((q, qi) => (
+            <div className="fallback-question" key={qi}>
+              <label className="field-label" htmlFor={`fb-q-${qi}`}>{q}</label>
+              <input
+                id={`fb-q-${qi}`}
+                type="text"
+                placeholder="Optional — leave blank to skip"
+                value={answers[qi] || ''}
+                onChange={e => updateAnswer(qi, e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="fallback-formula">{meta.formula}</div>
+
+        <div className="btn-row">
+          <button className="btn ghost" onClick={handleFallbackSkip}>
+            <i className="ti ti-forward" aria-hidden="true" /> Skip this field
+          </button>
+          <button className="btn primary" onClick={handleFallbackNext}>
+            {fallbackIndex < missingFields.length - 1 ? 'Next Field' : 'Review & Store'}
+            <i className="ti ti-arrow-right" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: extraction progress + results ──
   return (
     <div className="card">
       <div className="card-title">
         <i className="ti ti-cpu" aria-hidden="true" />
         ROI Extraction
       </div>
-      <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 20 }}>
+      <p className="extract-sub">
         Processing validated file against extraction schema…
       </p>
 
@@ -357,11 +558,7 @@ function ScreenExtract({ selectedFile, onNext }) {
       </div>
 
       {error && (
-        <div style={{
-          marginTop: 16, padding: 14,
-          background: 'var(--red-pale)', borderRadius: 'var(--radius-sm)',
-          fontSize: 13, color: 'var(--red-text)',
-        }}>
+        <div className="extract-error">
           <strong>Backend unavailable:</strong> showing preview data. ({error})
         </div>
       )}
@@ -371,20 +568,52 @@ function ScreenExtract({ selectedFile, onNext }) {
           <div className="extract-results-title">Extracted Fields</div>
           <div className="extract-chips">
             {displayFields.map(f => (
-              <div className="extract-chip" key={f.label}>
-                <span style={{ color: 'var(--text-muted)' }}>{f.label.split(' ')[0]}:</span>
-                <strong>{f.value}</strong>
+              <div className={`extract-chip ${!f.value ? 'missing' : ''}`} key={f.label}>
+                <span className="extract-chip-label">{f.label.split(' ')[0]}:</span>
+                <strong>{f.value ?? <span className="extract-chip-missing">not found</span>}</strong>
               </div>
             ))}
             <div className="extract-chip">
-              <span style={{ color: 'var(--text-muted)' }}>Confidence:</span>
+              <span className="extract-chip-label">Confidence:</span>
               <strong className={confClass(confidence)}>{confidence}%</strong>
             </div>
           </div>
-          <div className="btn-row">
-            <button className="btn primary" onClick={() => onNext(displayFields)}>
-              Review &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
-            </button>
+          {!showModal && missingFields.length === 0 && (
+            <div className="btn-row">
+              <button className="btn primary" onClick={() => onNext(displayFields)}>
+                Review &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Missing-fields modal ── */}
+      {showModal && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div className="modal-box">
+            <div className="modal-icon">
+              <i className="ti ti-alert-circle" aria-hidden="true" />
+            </div>
+            <div className="modal-title" id="modal-title">
+              Some fields couldn't be extracted from your documents. Would you like to fill them in manually?
+            </div>
+            <ul className="modal-missing-list">
+              {missingFields.map(f => (
+                <li key={f.label}>
+                  <i className="ti ti-point-filled" aria-hidden="true" />
+                  {f.label}
+                </li>
+              ))}
+            </ul>
+            <div className="modal-btn-row">
+              <button className="btn ghost" onClick={handleSkipAll}>
+                Skip — Continue to Store
+              </button>
+              <button className="btn primary" onClick={handleFillIn}>
+                <i className="ti ti-pencil" aria-hidden="true" /> Fill In Missing Fields
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -395,9 +624,25 @@ function ScreenExtract({ selectedFile, onNext }) {
 // ─── Field Card with View Source ──────────────────────────────────────────────
 function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKeyDown }) {
   const [sourceOpen, setSourceOpen] = useState(false);
-  const isEdited  = currentValue !== field.value;
-  const confClass = field.confidence >= 90 ? 'conf-high' : field.confidence >= 75 ? 'conf-mid' : 'conf-low';
-  const dotClass  = field.confidence >= 90 ? 'high'      : field.confidence >= 75 ? 'mid'      : 'low';
+  const isSkipped  = field.flag === 'SME skipped — data not available';
+  const isManual   = field.entryMode === 'manual';
+  const isEdited   = !isSkipped && currentValue !== field.value;
+  const confClass  = field.confidence >= 90 ? 'conf-high' : field.confidence >= 75 ? 'conf-mid' : 'conf-low';
+  const dotClass   = field.confidence >= 90 ? 'high'      : field.confidence >= 75 ? 'mid'      : 'low';
+
+  if (isSkipped) {
+    return (
+      <div className="field-card field-card-skipped">
+        <div className="field-card-name">{field.label}</div>
+        <div className="field-card-value field-card-na">Not available</div>
+        <div className="field-card-meta">
+          <span className="field-card-skip-tag">
+            <i className="ti ti-ban" aria-hidden="true" /> SME skipped
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="field-card">
@@ -408,12 +653,13 @@ function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKe
           defaultValue={currentValue}
           onBlur={e => onCommit(field.label, e.target.value)}
           onKeyDown={e => onKeyDown(e, field.label)}
-          style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}
+          className="field-card-edit-input"
         />
       ) : (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div className="field-card-value-row">
           <span className="field-card-value">{currentValue}</span>
-          {isEdited && <Badge color="amber">edited</Badge>}
+          {isManual  && <span className="field-card-manual-tag">Manually entered</span>}
+          {isEdited  && <Badge color="amber">edited</Badge>}
           <button
             className="field-edit-btn"
             onClick={() => onStartEdit(field.label)}
@@ -424,16 +670,20 @@ function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKe
         </div>
       )}
       <div className="field-card-meta">
-        <span className={confClass} style={{ fontSize: 13 }}>
-          <span className={`conf-dot ${dotClass}`} />
-          {field.confidence}%
-        </span>
-        <button className="view-source-btn" onClick={() => setSourceOpen(s => !s)}>
-          <i className={`ti ti-${sourceOpen ? 'chevron-up' : 'link'}`} aria-hidden="true" />
-          {sourceOpen ? 'Hide' : 'View Source'}
-        </button>
+        {field.entryMode === 'extracted' && (
+          <span className={confClass} style={{ fontSize: 13 }}>
+            <span className={`conf-dot ${dotClass}`} />
+            {field.confidence}%
+          </span>
+        )}
+        {field.source && (
+          <button className="view-source-btn" onClick={() => setSourceOpen(s => !s)}>
+            <i className={`ti ti-${sourceOpen ? 'chevron-up' : 'link'}`} aria-hidden="true" />
+            {sourceOpen ? 'Hide' : 'View Source'}
+          </button>
+        )}
       </div>
-      {sourceOpen && (
+      {sourceOpen && field.source && (
         <div className="source-citation">{field.source}</div>
       )}
     </div>
@@ -441,9 +691,12 @@ function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKe
 }
 
 // ─── Screen 4: Store ──────────────────────────────────────────────────────────
-function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
+function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
+  // Fall back to EXTRACTED_FIELDS if no fields were passed (e.g. direct step navigation)
+  const sourceFields = fields && fields.length > 0 ? fields : EXTRACTED_FIELDS;
+
   const [editValues, setEditValues] = useState(
-    () => Object.fromEntries(EXTRACTED_FIELDS.map(f => [f.label, f.value]))
+    () => Object.fromEntries(sourceFields.map(f => [f.label, f.value]))
   );
   const [editingLabel, setEditingLabel] = useState(null);
 
@@ -458,8 +711,11 @@ function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
   };
 
   const handleSave = () => {
-    onNext(EXTRACTED_FIELDS.map(f => ({ ...f, value: editValues[f.label] })));
+    onNext(sourceFields.map(f => ({ ...f, value: editValues[f.label] })));
   };
+
+  const manualCount = sourceFields.filter(f => f.entryMode === 'manual').length;
+  const skippedCount = sourceFields.filter(f => f.flag === 'SME skipped — data not available').length;
 
   return (
     <div className="card">
@@ -467,26 +723,27 @@ function ScreenStore({ selectedFile, smeName, onNext, onBack }) {
         <i className="ti ti-database" aria-hidden="true" />
         Store Results
       </div>
-      <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>
-        Review extracted values before writing to the ROI Tracker. Click the pencil icon to correct
-        a value, and expand <strong>View Source</strong> to see the exact cell reference.
+      <p className="store-sub">
+        Review values before writing to the ROI Tracker. Click the pencil icon to correct a value.
+        {manualCount > 0 && <> <span className="field-card-manual-tag">Manually entered</span> fields were filled in by the SME.</>}
+        {skippedCount > 0 && <> Greyed-out fields were skipped and will be stored as not available.</>}
       </p>
 
       <div className="field-cards">
-        {EXTRACTED_FIELDS.map(f => (
+        {sourceFields.map(f => (
           <FieldCard
             key={f.label}
             field={f}
             currentValue={editValues[f.label]}
             isEditing={editingLabel === f.label}
-            onStartEdit={setEditingLabel}
+            onStartEdit={f.flag === 'SME skipped — data not available' ? () => {} : setEditingLabel}
             onCommit={commitEdit}
             onKeyDown={handleKeyDown}
           />
         ))}
       </div>
 
-      <label className="field-label" style={{ marginBottom: 12 }}>What gets stored</label>
+      <label className="field-label store-what-label">What gets stored</label>
       <div className="store-grid">
         {[
           { icon: 'ti-table',            title: 'ROI values',      sub: 'Client_ROI_Tracker.xlsx · sheet: All_ROI_Data' },
@@ -604,7 +861,7 @@ export default function ExtractionView({ onNav }) {
     <ScreenFiles    key={1} onSelect={handleFileSelect}  onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile}  onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
     <ScreenExtract  key={3} selectedFile={selectedFile}  onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
-    <ScreenStore    key={4} selectedFile={selectedFile}  smeName={smeName} onNext={handleStore} onBack={() => setStep(3)} />,
+    <ScreenStore    key={4} selectedFile={selectedFile}  smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(3)} />,
     <ScreenDone     key={5} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
 
