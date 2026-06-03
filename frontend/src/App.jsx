@@ -7,6 +7,7 @@ import TrackerView from './views/TrackerView';
 import ClientsView from './views/ClientsView';
 import HelpView from './views/HelpView';
 import LoginView from './views/LoginView';
+import TutorialOverlay, { shouldShowTutorial } from './components/TutorialOverlay';
 import './index.css';
 
 const VIEW_META = {
@@ -18,12 +19,18 @@ const VIEW_META = {
 };
 
 export default function App() {
-  const [loggedIn, setLoggedIn]   = useState(false);
+  const [loggedIn, setLoggedIn]     = useState(false);
   const [activeView, setActiveView] = useState('extract');
+  const [showTutorial, setShowTutorial] = useState(false);
   const meta = VIEW_META[activeView] || VIEW_META.extract;
 
+  const handleLogin = () => {
+    setLoggedIn(true);
+    if (shouldShowTutorial()) setShowTutorial(true);
+  };
+
   if (!loggedIn) {
-    return <LoginView onLogin={() => setLoggedIn(true)} />;
+    return <LoginView onLogin={handleLogin} />;
   }
 
   const renderView = () => {
@@ -39,6 +46,7 @@ export default function App() {
 
   return (
     <div className="app">
+      {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
       <TopBar ctxLabel={meta.ctx} onLogout={() => setLoggedIn(false)} />
       <div className="app-body">
         <Sidebar activeView={activeView} onNav={setActiveView} />
