@@ -38,8 +38,10 @@ Assumptions:
     - Slide 1 contains the client name (BOX), publisher (TITLE first line), and date (BOX)
     - An "Executive Summary" section exists with at least one slide containing
       labeled ROI values in the format: LABEL: $VALUE[K/M/B]
-    - Sub-capacity and full-capacity distinctions are NOT handled; a single
-      value per field is assumed (flag for SME review if both are present)
+    - Full- vs sub-capacity (mainly IBM): when a field has values under both
+      models (typically on separate slides flagged in the title), the full-
+      capacity value is taken as primary and the sub-capacity value is kept as
+      a lower-confidence alternate. Both-in-one-slide layouts are not split.
     - Currency defaults to USD when no symbol is detected
     - Multi-publisher ROARs (rare) are not supported; first publisher found is used
     - File must be accessible as a local path
@@ -168,6 +170,17 @@ VALUE_ABS_TOL = 1.0
 
 # How many distinct candidate values to surface per field (1 primary + N-1 alts).
 MAX_CANDIDATES_PER_FIELD = 3
+
+# Full- vs sub-capacity (mainly IBM ROARs). Some decks present differing numbers
+# on separate slides whose titles flag the capacity model. When a field has BOTH
+# a full- and a sub-capacity candidate, the full-capacity value is the canonical
+# one: it's ranked as the primary, and the sub-capacity value is kept as a lower-
+# confidence alternate (its confidence is scaled by CAPACITY_PENALTY so the score
+# reflects the deprioritisation). Decks with only one capacity model, or none, are
+# unaffected.
+CAPACITY_FULL_RE = re.compile(r"full[\s\-]*capacity", re.IGNORECASE)
+CAPACITY_SUB_RE  = re.compile(r"sub[\s\-]*capacity", re.IGNORECASE)
+CAPACITY_PENALTY = 0.5   # confidence multiplier for a subordinated sub-capacity value
 
 # Matches a currency-prefixed value anywhere in a string.
 # Handles: $222K  $ 222K  $1,234,567  $1.5M  £500K  €200  C$50M  R 125K
@@ -510,6 +523,28 @@ def extract_roi_fields_from_slide(slide) -> dict:
     return candidates
 
 
+def _slide_capacity(slide) -> str | None:
+    """
+    Classify a slide as "full" or "sub" capacity from its title/text, or None.
+
+    The capacity model is usually flagged in the slide title (e.g. "... — Full
+    Capacity"), but we also scan the slide's other text as a fallback. If both
+    terms appear (or neither), the slide is ambiguous and returns None — i.e. no
+    capacity preference is applied. Matches "full capacity", "full-capacity",
+    "sub capacity", "sub-capacity", etc.
+    """
+    title = get_slide_title(slide)
+    body = " ".join(b["text"] for b in get_slide_text_blocks(slide))
+    hay = f"{title} {body}"
+    has_full = bool(CAPACITY_FULL_RE.search(hay))
+    has_sub = bool(CAPACITY_SUB_RE.search(hay))
+    if has_full and not has_sub:
+        return "full"
+    if has_sub and not has_full:
+        return "sub"
+    return None
+
+
 def _values_agree(a: float, b: float) -> bool:
     """True if two values are within tolerance — i.e. not meaningfully different
     (e.g. "$1.5M" vs "$1,520,000") — so they corroborate rather than conflict."""
@@ -536,13 +571,21 @@ def rank_candidates(candidates: list[dict]) -> dict:
          corroborate instead of competing. A cluster's vote count is how many
          raw matches support it.
       3. Score each cluster's representative: base score + agreement share
-         (votes / total candidates), as a 0–100 confidence.
-      4. Return the top cluster as the primary value, with up to
+         (votes / total candidates), as a 0–100 confidence. If the field has
+         both full- and sub-capacity candidates, a sub-capacity value's
+         confidence is scaled by CAPACITY_PENALTY.
+      4. Rank clusters and return the top one as the primary value, with up to
          MAX_CANDIDATES_PER_FIELD-1 distinct alternates (each retaining its
-         source_slide / shape_id for debugging).
+         source_slide / shape_id for debugging). When full- and sub-capacity
+         conflict, the full-capacity value is forced to primary regardless of
+         raw confidence (the canonical model for these decks).
     """
     total = len(candidates)
     ordered = sorted(candidates, key=_base_score, reverse=True)  # stable
+
+    # Full- vs sub-capacity only matters when BOTH appear for this field.
+    caps = {c.get("capacity") for c in candidates}
+    capacity_conflict = "full" in caps and "sub" in caps
 
     clusters: list[dict] = []  # {"rep": candidate, "votes": int}
     for c in ordered:
@@ -553,39 +596,53 @@ def rank_candidates(candidates: list[dict]) -> dict:
         else:
             clusters.append({"rep": c, "votes": 1})
 
-    def scored(cl: dict, with_factors: bool) -> dict:
+    def scored(cl: dict) -> dict:
         rep, votes = cl["rep"], cl["votes"]
         agreement = votes / total
-        confidence = round(100 * (_base_score(rep) + W_AGREE * agreement), 2)
-        out = {
+        capacity = rep.get("capacity")
+        # Subordinate sub-capacity values when a full-capacity value also exists.
+        penalty = CAPACITY_PENALTY if (capacity_conflict and capacity == "sub") else 1.0
+        confidence = round(100 * (_base_score(rep) + W_AGREE * agreement) * penalty, 2)
+        return {
             "value":        rep["value"],
             "currency":     rep["currency"],
             "raw":          rep["raw"],
             "source_slide": rep["source_slide"],
             "shape_id":     rep["shape_id"],
             "shape_name":   rep["shape_name"],
+            "capacity":     capacity,
             "confidence":   confidence,
             "votes":        votes,
-        }
-        if with_factors:
-            out["confidence_factors"] = {
+            "confidence_factors": {
                 "proximity":   round(rep["proximity"], 2),
                 "source_role": rep["source_role"],
                 "label_fit":   round(rep["label_fit"], 2),
                 "agreement":   round(agreement, 2),
-            }
-        return out
+                "capacity_penalty": penalty,
+            },
+        }
 
-    ranked = [scored(cl, with_factors=True) for cl in clusters]
-    ranked.sort(key=lambda r: r["confidence"], reverse=True)  # stable
+    ranked = [scored(cl) for cl in clusters]
+
+    # Primary selection: under a capacity conflict, full-capacity outranks
+    # everything and sub-capacity sinks below untagged values; otherwise rank by
+    # confidence alone. Confidence breaks ties within a tier (stable sort keeps
+    # the base-score / later-slide order for true ties).
+    def capacity_tier(r: dict) -> int:
+        if not capacity_conflict:
+            return 1
+        return {"full": 2, "sub": 0}.get(r["capacity"], 1)
+
+    ranked.sort(key=lambda r: (capacity_tier(r), r["confidence"]), reverse=True)
 
     primary = ranked[0]
-    alternates = []
-    for alt in ranked[1:MAX_CANDIDATES_PER_FIELD]:
-        alternates.append({k: alt[k] for k in (
-            "value", "currency", "raw", "source_slide", "shape_id", "shape_name", "confidence", "votes",
-        )})
-    primary["alternates"] = alternates
+    primary["alternates"] = [
+        {k: alt[k] for k in (
+            "value", "currency", "raw", "source_slide",
+            "shape_id", "shape_name", "capacity", "confidence", "votes",
+        )}
+        for alt in ranked[1:MAX_CANDIDATES_PER_FIELD]
+    ]
     return primary
 
 
@@ -599,17 +656,20 @@ def extract_roi_from_slides(prs: Presentation, slide_indices: list[int]) -> dict
     rank_candidates() to pick a primary value plus alternates. The consolidated
     summary slide (best title match) is weighted as the canonical source; other
     slides (e.g. a dedicated cost-optimization breakout) score slightly lower.
+    Each candidate is also tagged with its slide's capacity model ("full"/"sub"/
+    None) so rank_candidates() can prefer full-capacity values when both appear.
 
     Returns:
         {
           field_name: {
               "value": float, "currency": str, "raw": str,
               "source_slide": int, "shape_id": int|None, "shape_name": str|None,
+              "capacity": "full"|"sub"|None,  ← capacity model of the source slide
               "confidence": float,            ← 0–100
               "confidence_factors": {...},    ← signal breakdown (debug)
               "votes": int,                   ← corroborating matches
-              "alternates": [ {value, currency, raw, source_slide,
-                               shape_id, shape_name, confidence, votes}, ... ],
+              "alternates": [ {value, currency, raw, source_slide, shape_id,
+                               shape_name, capacity, confidence, votes}, ... ],
           },
           ...
           "_currency": str   ← dominant currency across all fields' primaries
@@ -629,10 +689,12 @@ def extract_roi_from_slides(prs: Presentation, slide_indices: list[int]) -> dict
     per_field: dict[str, list] = {}
     for idx in reversed(slide_indices):
         role = SOURCE_ROLE_CONSOLIDATED if idx == consolidated_idx else SOURCE_ROLE_OTHER
+        capacity = _slide_capacity(prs.slides[idx])
         for field, cands in extract_roi_fields_from_slide(prs.slides[idx]).items():
             for c in cands:
                 c["source_slide"] = idx + 1
                 c["source_role"] = role
+                c["capacity"] = capacity
             per_field.setdefault(field, []).extend(cands)
 
     results: dict = {}
@@ -703,11 +765,12 @@ def extract_roar(filepath: str) -> dict:
               "source_slide": int,   ← 1-indexed
               "shape_id":     int | None,   ← shape the value came from (debug)
               "shape_name":   str | None,
+              "capacity":     str | None,   ← "full" / "sub" / None
               "confidence":   float,        ← 0–100 (UI buckets into tiers)
-              "confidence_factors": dict,   ← {proximity, source_role, label_fit, agreement}
+              "confidence_factors": dict,   ← {proximity, source_role, label_fit, agreement, capacity_penalty}
               "votes":        int,          ← corroborating matches for this value
-              "alternates":   [ {value, currency, raw, source_slide,
-                                 shape_id, shape_name, confidence, votes}, ... ],
+              "alternates":   [ {value, currency, raw, source_slide, shape_id,
+                                 shape_name, capacity, confidence, votes}, ... ],
           }, ...
       },
       "fields_not_found": [str, ...],
