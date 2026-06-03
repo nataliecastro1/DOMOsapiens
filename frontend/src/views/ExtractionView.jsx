@@ -662,8 +662,8 @@ function ScreenExtract({ selectedFile, onNext }) {
         if (i === EXTRACTION_STEPS.length - 1) {
           try {
             const documentText = selectedFile
-              ? `Document: ${selectedFile.name}\nVersion: ${selectedFile.version}\nClient: Encova Insurance | Publisher: Oracle | Year: 2025`
-              : 'Sample ROI document for Encova Insurance Oracle 2025';
+              ? `Document: ${selectedFile.name}\nVersion: ${selectedFile.version || '—'}\nClient: ${selectedFile.client || '—'} | Publisher: ${selectedFile.publisher || '—'} | Year: ${selectedFile.year || '—'}`
+              : 'Sample ROI document';
             const result = await extractROI(documentText);
             if (!cancelled) setExtractedData(result);
           } catch (err) {
@@ -1406,7 +1406,28 @@ function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
 }
 
 // ─── Screen 5: Done ───────────────────────────────────────────────────────────
-function ScreenDone({ onNewExtraction, onTracker, onDashboards }) {
+function ScreenDone({ selectedFile, fields, onNewExtraction, onTracker, onDashboards }) {
+  const BAR_COLORS = ['var(--blue)', 'var(--blue-light)', 'var(--gold)', 'var(--green)', 'var(--navy)', 'var(--accent)'];
+
+  const valued  = (fields || []).filter(f => f.value);
+  const total   = valued.reduce((sum, f) => sum + (parseDollar(f.value) || 0), 0);
+  const netROI  = (fields || [])
+    .filter(f => ['Realized Cost Savings', 'Accomplished Cost Avoidance', 'Accomplished Cost Optimization'].includes(f.label) && f.value)
+    .reduce((sum, f) => sum + (parseDollar(f.value) || 0), 0);
+  const avgConf = valued.length
+    ? Math.round(valued.reduce((sum, f) => sum + (f.confidence || 0), 0) / valued.length)
+    : 0;
+
+  const clientLabel = [selectedFile?.client, selectedFile?.publisher, selectedFile?.year]
+    .filter(Boolean).join(' · ') || '—';
+
+  const bars = valued.map((f, i) => ({
+    label: f.label,
+    pct:   total > 0 ? `${Math.round((parseDollar(f.value) / total) * 100)}%` : '0%',
+    color: BAR_COLORS[i % BAR_COLORS.length],
+    val:   f.value,
+  }));
+
   return (
     <>
       <div className="done-hero">
@@ -1415,7 +1436,7 @@ function ScreenDone({ onNewExtraction, onTracker, onDashboards }) {
         </div>
         <div>
           <div className="done-title">Extraction Complete</div>
-          <div className="done-sub">Encova · Oracle · 2025 — All records stored successfully</div>
+          <div className="done-sub">{clientLabel} — All records stored successfully</div>
         </div>
         <div style={{ marginLeft: 'auto' }}>
           <Badge color="green">
@@ -1426,41 +1447,39 @@ function ScreenDone({ onNewExtraction, onTracker, onDashboards }) {
 
       <div className="metric-grid">
         <div className="metric-card">
-          <div className="metric-label">Total Savings</div>
-          <div className="metric-value">$2.4M</div>
-          <div className="metric-delta">↑ +12% vs 2024</div>
+          <div className="metric-label">Total Value</div>
+          <div className="metric-value">{total > 0 ? formatDollar(total) : '—'}</div>
+          <div className="metric-delta muted">across all ROI fields</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Net ROI</div>
-          <div className="metric-value">$1.53M</div>
-          <div className="metric-delta">↑ +8% vs 2024</div>
+          <div className="metric-value">{netROI > 0 ? formatDollar(netROI) : '—'}</div>
+          <div className="metric-delta muted">accomplished items</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Avg Confidence</div>
-          <div className="metric-value">93%</div>
+          <div className="metric-value">{avgConf > 0 ? `${avgConf}%` : '—'}</div>
           <div className="metric-delta muted">across all fields</div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-title">
-          <i className="ti ti-chart-bar" aria-hidden="true" />
-          Savings Breakdown
-        </div>
-        {[
-          { label: 'License spend',     pct: '62%', color: 'var(--blue)',       val: '$870K' },
-          { label: 'Compliance risk',   pct: '24%', color: 'var(--blue-light)', val: '$340K' },
-          { label: 'Support reduction', pct: '14%', color: 'var(--gold)',       val: '18%'   },
-        ].map(b => (
-          <div className="bar-row" key={b.label}>
-            <span className="bar-label">{b.label}</span>
-            <div className="bar-bg">
-              <div className="bar-fill" style={{ width: b.pct, background: b.color }} />
-            </div>
-            <span className="bar-val">{b.val}</span>
+      {bars.length > 0 && (
+        <div className="card">
+          <div className="card-title">
+            <i className="ti ti-chart-bar" aria-hidden="true" />
+            ROI Breakdown
           </div>
-        ))}
-      </div>
+          {bars.map(b => (
+            <div className="bar-row" key={b.label}>
+              <span className="bar-label">{b.label}</span>
+              <div className="bar-bg">
+                <div className="bar-fill" style={{ width: b.pct, background: b.color }} />
+              </div>
+              <span className="bar-val">{b.val}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button className="btn primary" onClick={onNewExtraction}>
@@ -1484,18 +1503,19 @@ export default function ExtractionView({ onNav }) {
   const [smeName, setSmeName]         = useState('');
   const [finalFields, setFinalFields] = useState(null);
 
-  const handleFileSelect = file              => { setFile(file);    setStep(2); };
-  const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n);    setStep(3); };
-  const handleStore      = fields            => { setFinalFields(fields); setStep(6); };
+  const handleFileSelect  = file              => { setFile(file);    setStep(2); };
+  const handleSMEConfirm  = ({ smeName: n }) => { setSmeName(n);    setStep(3); };
+  const handleStore       = fields            => { setFinalFields(fields); setStep(6); };
+  const handleNewExtraction = () => { setStep(0); setFile(null); setSmeName(''); setFinalFields(null); };
 
   const screens = [
     <ScreenRequest  key={0} onNext={() => setStep(1)} onUploaded={handleFileSelect} />,
     <ScreenFiles    key={1} onSelect={handleFileSelect}   onBack={() => setStep(0)} />,
-    <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
+    <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(selectedFile?.source === 'uploaded' ? 0 : 1)} />,
     <ScreenExtract  key={3} selectedFile={selectedFile}   onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
     <ScreenCompare  key={4} fields={finalFields} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
     <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(4)} />,
-    <ScreenDone     key={6} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
+    <ScreenDone     key={6} selectedFile={selectedFile} fields={finalFields} onNewExtraction={handleNewExtraction} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
 
   return (
