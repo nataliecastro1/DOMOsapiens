@@ -771,6 +771,20 @@ textarea { resize: vertical; }
   font-size: 14px; color: var(--text-muted);
   line-height: 1.6; margin-bottom: 20px;
 }
+.fallback-mode-toggle {
+  display: flex; gap: 8px; margin-bottom: 20px;
+}
+.fallback-mode-btn {
+  flex: 1; padding: 8px 12px; font-size: 13px; font-weight: 600;
+  border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s;
+  border: 1.5px solid var(--border);
+  background: var(--white); color: var(--text-muted);
+}
+.fallback-mode-btn.active {
+  border-color: var(--blue);
+  background: rgba(0, 82, 204, 0.07);
+  color: var(--blue);
+}
 .fallback-questions { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
 .fallback-question .field-label { margin-bottom: 6px; font-size: 13px; }
 .fallback-formula {

@@ -487,20 +487,46 @@ const ROI_FIELD_META = {
   },
   'Accomplished Cost Optimization': {
     definition: 'Verified cost reductions through renegotiations, contract adjustments, or technology shifts. Requires client action to accomplish.',
-    questions: [
-      'What specific action was taken?',
-      'What was the original license count or contract value?',
-      'What is the new license count or contract value after the change?',
-      'What is the effective date of the change?',
-    ],
-    questionTypes: ['text', 'currency', 'currency', 'date'],
-    formula: 'Calculated as: (Original Value − New Value) for the period',
-    // answers[1]=originalValue  answers[2]=newValue
-    compute(answers) {
-      const original = parseDollar(answers[1]);
-      const newVal   = parseDollar(answers[2]);
-      if (isNaN(original) || isNaN(newVal)) return null;
-      return formatDollar(original - newVal);
+    // This field supports two input modes — pick one using the toggle on the form.
+    modes: {
+      contractValue: {
+        label: 'Contract value change',
+        questions: [
+          'What specific action was taken?',
+          'What was the original contract value?',
+          'What is the new contract value after the change?',
+          'What is the effective date of the change?',
+        ],
+        questionTypes: ['text', 'currency', 'currency', 'date'],
+        formula: 'Calculated as: Original Contract Value − New Contract Value',
+        // answers[1]=originalValue  answers[2]=newValue
+        compute(answers) {
+          const original = parseDollar(answers[1]);
+          const newVal   = parseDollar(answers[2]);
+          if (isNaN(original) || isNaN(newVal)) return null;
+          return formatDollar(original - newVal);
+        },
+      },
+      licenseCount: {
+        label: 'License count change',
+        questions: [
+          'What specific action was taken?',
+          'What was the original license count?',
+          'What is the new license count after the change?',
+          'What is the cost per license?',
+          'What is the effective date of the change?',
+        ],
+        questionTypes: ['text', 'number', 'number', 'currency', 'date'],
+        formula: 'Calculated as: (Original Count − New Count) × Cost Per License',
+        // answers[1]=originalCount  answers[2]=newCount  answers[3]=costPerLicense
+        compute(answers) {
+          const original        = parseFloat(answers[1]);
+          const newCount        = parseFloat(answers[2]);
+          const costPerLicense  = parseDollar(answers[3]);
+          if (isNaN(original) || isNaN(newCount) || isNaN(costPerLicense)) return null;
+          return formatDollar((original - newCount) * costPerLicense);
+        },
+      },
     },
   },
   'Identified Cost Savings': {
@@ -554,6 +580,8 @@ function ScreenExtract({ selectedFile, onNext }) {
   const [fallbackAnswers, setFallbackAnswers] = useState({});
   // working copy of fields that will be passed to Store
   const [mergedFields, setMergedFields] = useState(null);
+  // active mode key for multi-mode fields (e.g. Accomplished Cost Optimization)
+  const [modeSelections, setModeSelections] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -626,7 +654,16 @@ function ScreenExtract({ selectedFile, onNext }) {
     setShowModal(false);
     setFallbackIndex(0);
     setFallbackAnswers(
-      Object.fromEntries(missingFields.map(f => [f.label, Array(ROI_FIELD_META[f.label]?.questions.length || 0).fill('')]))
+      Object.fromEntries(missingFields.map(f => {
+        const fieldMeta    = ROI_FIELD_META[f.label];
+        // Mode-based fields (e.g. Accomplished Cost Optimization) have no top-level
+        // questions array — initialize using the first mode's question count instead.
+        const firstModeKey = fieldMeta?.modes ? Object.keys(fieldMeta.modes)[0] : null;
+        const questionCount = firstModeKey
+          ? fieldMeta.modes[firstModeKey].questions.length
+          : (fieldMeta?.questions?.length || 0);
+        return [f.label, Array(questionCount).fill('')];
+      }))
     );
     setFallbackMode(true);
   };
@@ -644,10 +681,12 @@ function ScreenExtract({ selectedFile, onNext }) {
   };
 
   const handleFallbackNext = () => {
-    const field   = missingFields[fallbackIndex];
-    const answers = fallbackAnswers[field.label] || [];
-    const meta    = ROI_FIELD_META[field.label];
-    const computed = meta?.compute ? meta.compute(answers) : null;
+    const field          = missingFields[fallbackIndex];
+    const answers        = fallbackAnswers[field.label] || [];
+    const meta           = ROI_FIELD_META[field.label];
+    const activeModeKey  = modeSelections[field.label] || (meta?.modes ? Object.keys(meta.modes)[0] : null);
+    const resolvedMeta   = activeModeKey ? meta.modes[activeModeKey] : meta;
+    const computed = resolvedMeta?.compute ? resolvedMeta.compute(answers) : null;
     const updated = (mergedFields || displayFields).map(f =>
       f.label === field.label
         ? { ...f, value: computed, entryMode: computed ? 'manual' : null, flag: computed ? null : 'SME skipped — data not available' }
@@ -677,10 +716,24 @@ function ScreenExtract({ selectedFile, onNext }) {
 
   // ── Render: fallback form ──
   if (fallbackMode) {
-    const field   = missingFields[fallbackIndex];
-    const meta    = ROI_FIELD_META[field.label] || { definition: '', questions: [], questionTypes: [], formula: '' };
-    const answers = fallbackAnswers[field.label] || [];
-    const liveComputed = meta.compute ? meta.compute(answers) : null;
+    const field      = missingFields[fallbackIndex];
+    const meta       = ROI_FIELD_META[field.label] || { definition: '', questions: [], questionTypes: [], formula: '' };
+    const answers    = fallbackAnswers[field.label] || [];
+
+    // If this field has multiple modes, resolve the active mode's sub-config
+    const activeModeKey = modeSelections[field.label] || (meta.modes ? Object.keys(meta.modes)[0] : null);
+    const activeMeta    = activeModeKey ? meta.modes[activeModeKey] : meta;
+
+    const handleModeChange = (modeKey) => {
+      setModeSelections(prev => ({ ...prev, [field.label]: modeKey }));
+      // Reset answers for this field so stale answer indices don't bleed across modes
+      setFallbackAnswers(prev => ({
+        ...prev,
+        [field.label]: Array(meta.modes[modeKey].questions.length).fill(''),
+      }));
+    };
+
+    const liveComputed = activeMeta.compute ? activeMeta.compute(answers) : null;
 
     return (
       <div className="card">
@@ -691,9 +744,24 @@ function ScreenExtract({ selectedFile, onNext }) {
         <div className="card-title">{field.label}</div>
         <p className="fallback-field-def">{meta.definition}</p>
 
+        {/* Mode toggle — only shown for multi-mode fields */}
+        {meta.modes && (
+          <div className="fallback-mode-toggle">
+            {Object.entries(meta.modes).map(([key, modeMeta]) => (
+              <button
+                key={key}
+                className={`fallback-mode-btn ${activeModeKey === key ? 'active' : ''}`}
+                onClick={() => handleModeChange(key)}
+              >
+                {modeMeta.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="fallback-questions">
-          {meta.questions.map((q, qi) => {
-            const qType = (meta.questionTypes && meta.questionTypes[qi]) || 'text';
+          {activeMeta.questions.map((q, qi) => {
+            const qType = (activeMeta.questionTypes && activeMeta.questionTypes[qi]) || 'text';
             const val   = answers[qi] || '';
             return (
               <div className="fallback-question" key={qi}>
@@ -742,7 +810,7 @@ function ScreenExtract({ selectedFile, onNext }) {
           })}
         </div>
 
-        <div className="fallback-formula">{meta.formula}</div>
+        <div className="fallback-formula">{activeMeta.formula}</div>
 
         {liveComputed && (
           <div className="fallback-computed-preview">
@@ -935,38 +1003,59 @@ function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKe
 
 
 // ─── Screen 4: Compare ───────────────────────────────────────────────────────
-const COMPARE_FIELDS = [
-  { label: 'Identified Risk',         script: '$1,080,000',  claude: '$1,080,000'  },
-  { label: 'ID Cost Avoidance',       script: '$540,000',    claude: '$540,000'    },
-  { label: 'Acc. Cost Avoidance',     script: '$320,000',    claude: '$315,000'    },
-  { label: 'ID Cost Optimization',    script: '$210,000',    claude: '$210,000'    },
-  { label: 'Acc. Cost Optimization',  script: '$98,000',     claude: '$105,000'    },
-  { label: 'Realized Savings',        script: '$418,000',    claude: '$418,000'    },
-  { label: 'Contract Spend',          script: '$2,400,000',  claude: '$2,400,000'  },
-  { label: 'Year',                    script: '2025',        claude: '2025'        },
-  { label: 'Currency',                script: 'USD',         claude: 'USD'         },
-  { label: 'Pricing Available',       script: 'Yes',         claude: 'No'          },
-];
+// Mocked "what the script found" — keyed by canonical ROI field label.
+// Two intentional mismatches (Identified Cost Optimization, Realized Cost Savings)
+// so the compare screen has something meaningful to resolve during testing.
+// When the real script is deployed, replace these values with the API response.
+const SCRIPT_VALUES = {
+  'Identified Risk':                '$2,400,000',
+  'Identified Cost Avoidance':      '$870,000',
+  'Accomplished Cost Avoidance':    '$340,000',
+  'Identified Cost Optimization':   '$195,000',
+  'Accomplished Cost Optimization': '$98,000',
+  'Identified Cost Savings':        '$1,530,000',
+  'Realized Cost Savings':          '$412,000',
+};
+
+// Strip $ / commas → raw numeric string for the number input
+function toRaw(val) {
+  if (!val || val === '—') return '';
+  return String(val).replace(/[$,\s]/g, '');
+}
+// Raw numeric string → formatted dollar string for display and storage
+function toFormatted(raw) {
+  const n = parseFloat(raw);
+  if (isNaN(n)) return '—';
+  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
 
 function CompareRow({ field, onResolve }) {
-  const matches = field.script === field.claude;
-  const [checked,   setChecked]   = useState(matches);
-  const [editVal,   setEditVal]   = useState(matches ? field.claude : '');
-  const [confirmed, setConfirmed] = useState(matches);
+  const isSkipped   = field.flag === 'SME skipped — data not available';
+  const bestVal     = field.sme ?? field.claude;
+  const scriptMatch = !isSkipped && field.script !== '—' && field.script === bestVal;
 
-  // Notify parent whenever resolved state changes
+  // Store raw number string; format only for display and when notifying parent
+  const [editVal,   setEditVal]   = useState(toRaw(bestVal));
+  const [confirmed, setConfirmed] = useState(true);
+
   useEffect(() => {
-    onResolve(field.label, confirmed ? (checked ? field.claude : editVal) : null);
-  }, [confirmed, checked, editVal]);
+    onResolve(field.label, confirmed ? toFormatted(editVal) : null);
+  }, [confirmed, editVal]);
 
-  const rowColor   = confirmed ? 'rgba(34,197,94,0.07)'  : 'rgba(239,68,68,0.06)';
-  const borderColor= confirmed ? 'rgba(34,197,94,0.25)'  : 'rgba(239,68,68,0.22)';
-  const labelColor = confirmed ? '#15803d' : '#b91c1c';
+  const rowColor    = isSkipped  ? 'rgba(107,127,163,0.06)'
+                    : confirmed  ? 'rgba(34,197,94,0.07)'
+                    : 'rgba(239,68,68,0.06)';
+  const borderColor = isSkipped  ? 'rgba(107,127,163,0.25)'
+                    : confirmed  ? 'rgba(34,197,94,0.25)'
+                    : 'rgba(239,68,68,0.22)';
+
+  const monoStyle = { fontSize: 13, fontFamily: 'monospace', color: '#374151' };
+  const naStyle   = { fontSize: 12, color: '#9ca3af', fontStyle: 'italic' };
 
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: '1.6fr 1fr 1fr 1.4fr',
+      gridTemplateColumns: '1.4fr 0.9fr 0.9fr 0.9fr 1.3fr',
       alignItems: 'center',
       gap: 0,
       borderBottom: '1px solid #edf0f6',
@@ -975,74 +1064,74 @@ function CompareRow({ field, onResolve }) {
       borderLeft: `3px solid ${borderColor}`,
       transition: 'background 0.2s, border-color 0.2s',
     }}>
+
       {/* Field name */}
       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>
         {field.label}
       </span>
 
       {/* Script value */}
-      <span style={{ fontSize: 13, color: '#374151', fontFamily: 'monospace' }}>
-        {field.script}
-      </span>
-
-      {/* Claude value */}
-      <span style={{
-        fontSize: 13, fontFamily: 'monospace',
-        color: matches ? '#374151' : '#b91c1c', fontWeight: matches ? 400 : 600,
-      }}>
-        {field.claude}
-        {!matches && (
+      <span style={isSkipped ? naStyle : { ...monoStyle, color: scriptMatch ? '#374151' : '#b91c1c', fontWeight: scriptMatch ? 400 : 600 }}>
+        {isSkipped ? '—' : field.script}
+        {!isSkipped && !scriptMatch && field.script !== '—' && (
           <i className="ti ti-alert-triangle" style={{ marginLeft: 5, fontSize: 11 }} aria-hidden="true" />
         )}
       </span>
 
-      {/* Final / resolve column */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {confirmed ? (
-          // Confirmed → green checkmark (click to uncheck/edit)
-          <button
-            onClick={() => { setConfirmed(false); setChecked(false); }}
-            title="Click to edit"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: '#15803d', fontSize: 13, fontWeight: 600, padding: 0,
-            }}
-          >
-            <span style={{
-              width: 22, height: 22, borderRadius: 6,
-              background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <i className="ti ti-check" style={{ fontSize: 13, color: '#fff' }} aria-hidden="true" />
+      {/* Claude AI value */}
+      <span style={field.claude ? monoStyle : naStyle}>
+        {field.claude ?? '—'}
+      </span>
+
+      {/* SME Derived value */}
+      <span style={field.sme ? { ...monoStyle, color: '#0369a1', fontWeight: 600 } : naStyle}>
+        {isSkipped ? <span style={naStyle}>Skipped</span> : (field.sme ?? '—')}
+      </span>
+
+      {/* Final Value — confirmed: value + pencil; editing: input + Done */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {isSkipped ? (
+          <span style={naStyle}>—</span>
+        ) : confirmed ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#15803d', fontFamily: 'monospace' }}>
+              {toFormatted(editVal)}
             </span>
-            {editVal || field.claude}
-          </button>
-        ) : (
-          // Not confirmed → input + Done button
-          <div style={{ display: 'flex', gap: 6, width: '100%' }}>
-            <input
-              type="text"
-              value={editVal}
-              onChange={e => setEditVal(e.target.value)}
-              placeholder="Enter correct value…"
-              style={{
-                flex: 1, fontSize: 13, padding: '4px 8px',
-                border: '1.5px solid #fca5a5', borderRadius: 6,
-                outline: 'none', background: '#fff',
-                fontFamily: 'inherit',
-              }}
-              onFocus={e => e.target.style.borderColor = '#ef4444'}
-              onBlur={e => e.target.style.borderColor = '#fca5a5'}
-            />
             <button
-              disabled={!editVal.trim()}
-              onClick={() => { if (editVal.trim()) setConfirmed(true); }}
+              onClick={() => setConfirmed(false)}
+              title="Edit final value"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+                color: '#6b7fa3', fontSize: 13, lineHeight: 1, flexShrink: 0,
+              }}
+              aria-label="Edit final value"
+            >
+              <i className="ti ti-pencil" aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 5, width: '100%', alignItems: 'center' }}>
+            <div className="input-prefix-group" style={{ flex: 1 }}>
+              <span className="input-prefix">$</span>
+              <input
+                autoFocus
+                type="number"
+                min="0"
+                step="any"
+                value={editVal}
+                onChange={e => setEditVal(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <button
+              disabled={!editVal.toString().trim()}
+              onClick={() => { if (editVal.toString().trim()) setConfirmed(true); }}
               style={{
                 padding: '4px 10px', fontSize: 12, fontWeight: 700,
-                background: editVal.trim() ? '#22c55e' : '#d1fae5',
+                background: editVal.toString().trim() ? '#22c55e' : '#d1fae5',
                 color: '#fff', border: 'none', borderRadius: 6,
-                cursor: editVal.trim() ? 'pointer' : 'not-allowed',
-                transition: 'background 0.15s',
+                cursor: editVal.toString().trim() ? 'pointer' : 'not-allowed',
+                transition: 'background 0.15s', flexShrink: 0,
               }}
             >
               Done
@@ -1054,16 +1143,44 @@ function CompareRow({ field, onResolve }) {
   );
 }
 
-function ScreenCompare({ onNext, onBack }) {
+function ScreenCompare({ fields, onNext, onBack }) {
+  // Build rows from live extracted fields + mocked script values.
+  // claude = what the AI extracted (null if it couldn't find it).
+  // sme    = what the SME computed via the fallback form (null if extracted or skipped).
+  const sourceFields = fields && fields.length > 0 ? fields : [];
+  const compareRows = sourceFields.map(f => ({
+    label:  f.label,
+    script: SCRIPT_VALUES[f.label] ?? '—',
+    claude: f.entryMode === 'extracted' ? f.value : null,
+    sme:    f.entryMode === 'manual'    ? f.value : null,
+    flag:   f.flag,
+  }));
+
   const [resolved, setResolved] = useState({});
 
   const handleResolve = (label, val) => {
     setResolved(prev => ({ ...prev, [label]: val }));
   };
 
-  const allDone = COMPARE_FIELDS.every(f => resolved[f.label] !== null && resolved[f.label] !== undefined);
-  const matchCount    = COMPARE_FIELDS.filter(f => f.script === f.claude).length;
-  const mismatchCount = COMPARE_FIELDS.length - matchCount;
+  // Skipped rows don't need SME resolution — only non-skipped rows must be confirmed
+  const resolvableRows = compareRows.filter(f => f.flag !== 'SME skipped — data not available');
+  const allDone = resolvableRows.every(f => resolved[f.label] !== null && resolved[f.label] !== undefined);
+
+  // "Best available" value per row — prefer sme-computed, fall back to claude extracted
+  const bestVal = (row) => row.sme ?? row.claude;
+  const matchCount    = compareRows.filter(f => f.flag !== 'SME skipped — data not available' && f.script === bestVal(f)).length;
+  const mismatchCount = resolvableRows.length - matchCount;
+
+  const handleNext = () => {
+    const resolvedFields = sourceFields.map(f => {
+      const finalVal = resolved[f.label];
+      if (finalVal && finalVal !== f.value) {
+        return { ...f, value: finalVal };
+      }
+      return f;
+    });
+    onNext(resolvedFields);
+  };
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -1089,7 +1206,7 @@ function ScreenCompare({ onNext, onBack }) {
       {/* Column headers */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '1.6fr 1fr 1fr 1.4fr',
+        gridTemplateColumns: '1.4fr 0.9fr 0.9fr 0.9fr 1.3fr',
         padding: '8px 16px',
         background: '#f7f9fc',
         borderBottom: '1px solid #edf0f6',
@@ -1102,12 +1219,13 @@ function ScreenCompare({ onNext, onBack }) {
         <span>Field</span>
         <span>Script</span>
         <span>Claude AI</span>
+        <span>SME Derived</span>
         <span>Final Value</span>
       </div>
 
       {/* Rows */}
       <div>
-        {COMPARE_FIELDS.map(f => (
+        {compareRows.map(f => (
           <CompareRow key={f.label} field={f} onResolve={handleResolve} />
         ))}
       </div>
@@ -1126,7 +1244,7 @@ function ScreenCompare({ onNext, onBack }) {
           <button
             className="btn primary"
             disabled={!allDone}
-            onClick={() => onNext(resolved)}
+            onClick={handleNext}
             style={{ opacity: allDone ? 1 : 0.45, cursor: allDone ? 'pointer' : 'not-allowed' }}
           >
             Confirm &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
@@ -1307,7 +1425,7 @@ export default function ExtractionView({ onNav }) {
     <ScreenFiles    key={1} onSelect={handleFileSelect}   onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
     <ScreenExtract  key={3} selectedFile={selectedFile}   onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
-    <ScreenCompare  key={4} onNext={() => setStep(5)} onBack={() => setStep(3)} />,
+    <ScreenCompare  key={4} fields={finalFields} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
     <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(4)} />,
     <ScreenDone     key={6} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
