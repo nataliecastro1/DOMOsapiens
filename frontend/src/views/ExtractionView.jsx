@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
-import { extractFromFile, uploadFile } from '../services/api';
+import { extractFromFile, uploadFile, searchDocuments } from '../services/api';
 import {
   PUBLISHERS, YEARS,
   SAMPLE_FILES, EXTRACTED_FIELDS, EXTRACTION_STEPS,
@@ -132,7 +132,7 @@ function ScreenRequest({ onNext, onUploaded }) {
           </div>
         </div>
         <div className="btn-row">
-          <button className="btn primary" onClick={onNext}>
+          <button className="btn primary" onClick={() => onNext({ client, year, publisher })}>
             Find Files <i className="ti ti-arrow-right" aria-hidden="true" />
           </button>
         </div>
@@ -276,22 +276,59 @@ function ScreenRequest({ onNext, onUploaded }) {
 }
 
 // ─── Screen 1: Files ──────────────────────────────────────────────────────────
-function ScreenFiles({ onSelect, onBack }) {
+function ScreenFiles({ filters = {}, onSelect, onBack }) {
+  const [files, setFiles]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    searchDocuments(filters)
+      .then(res => { setFiles(res.files || []); setLoading(false); })
+      .catch(err => { setError(err.message); setLoading(false); });
+  }, []);
+
+  const { client = '', year = '', publisher = '' } = filters;
+  const subtitle = [client, publisher, year].filter(Boolean).join(' / ') || 'all documents';
+
   return (
     <div className="card">
       <div className="card-title">
         <i className="ti ti-files" aria-hidden="true" />
         Matched Files
       </div>
+
       <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 20 }}>
-        3 files found for{' '}
-        <strong style={{ color: 'var(--navy)' }}>Encova / Oracle / 2025</strong>.
-        Select one to route for SME validation.
+        {loading ? 'Searching…' : (
+          <>
+            <strong style={{ color: 'var(--navy)' }}>{files.length}</strong>
+            {' '}file{files.length !== 1 ? 's' : ''} found for{' '}
+            <strong style={{ color: 'var(--navy)' }}>{subtitle}</strong>.
+            {files.length > 0 && ' Select one to continue.'}
+          </>
+        )}
       </p>
-      {SAMPLE_FILES.map(f => (
-        <div className={`file-card ${f.tag === 'Latest' ? 'featured' : ''}`} key={f.name}>
+
+      {error && (
+        <div style={{ padding: 12, background: 'var(--red-pale)', borderRadius: 8, fontSize: 13, color: 'var(--red-text)', marginBottom: 16 }}>
+          <i className="ti ti-alert-triangle" style={{ marginRight: 6 }} />
+          Could not reach backend: {error}
+        </div>
+      )}
+
+      {!loading && files.length === 0 && !error && (
+        <div style={{ padding: 24, textAlign: 'center', color: '#6b7fa3', fontSize: 14 }}>
+          <i className="ti ti-folder-off" style={{ fontSize: 32, display: 'block', marginBottom: 8 }} />
+          No documents found for these filters.
+          <br />
+          <span style={{ fontSize: 12 }}>Try different filters or upload a file manually.</span>
+        </div>
+      )}
+
+      {files.map((f, i) => (
+        <div className={`file-card ${i === 0 ? 'featured' : ''}`} key={f.name}>
           <i
-            className={`ti ti-file-spreadsheet file-card-icon ${f.tag === 'Latest' ? 'featured' : ''}`}
+            className={`ti ti-file-description file-card-icon ${i === 0 ? 'featured' : ''}`}
             aria-hidden="true"
           />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -300,17 +337,18 @@ function ScreenFiles({ onSelect, onBack }) {
               <span>{f.modified}</span>
               <span>·</span>
               <span>{f.size}</span>
-              <Badge color={f.tagColor}>{f.tag}</Badge>
+              <Badge color={i === 0 ? 'green' : 'navy'}>{i === 0 ? 'Best match' : f.extension}</Badge>
             </div>
           </div>
           <button
-            className={`btn small ${f.tag === 'Latest' ? 'primary' : 'ghost'}`}
-            onClick={() => onSelect(f)}
+            className={`btn small ${i === 0 ? 'primary' : 'ghost'}`}
+            onClick={() => onSelect({ ...f, version: f.modified, source: 'local' })}
           >
             Select
           </button>
         </div>
       ))}
+
       <div className="btn-row">
         <button className="btn ghost" onClick={onBack}>
           <i className="ti ti-arrow-left" aria-hidden="true" /> Back
@@ -1481,14 +1519,15 @@ export default function ExtractionView({ onNav }) {
   const [selectedFile, setFile]       = useState(null);
   const [smeName, setSmeName]         = useState('');
   const [finalFields, setFinalFields] = useState(null);
+  const [filters, setFilters]         = useState({});
 
   const handleFileSelect = file              => { setFile(file);    setStep(2); };
   const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n);    setStep(3); };
   const handleStore      = fields            => { setFinalFields(fields); setStep(6); };
 
   const screens = [
-    <ScreenRequest  key={0} onNext={() => setStep(1)} onUploaded={handleFileSelect} />,
-    <ScreenFiles    key={1} onSelect={handleFileSelect}   onBack={() => setStep(0)} />,
+    <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFileSelect} />,
+    <ScreenFiles    key={1} filters={filters} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
     <ScreenExtract  key={3} selectedFile={selectedFile}   onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
     <ScreenCompare  key={4} fields={finalFields} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
