@@ -1,7 +1,7 @@
 // ─── Mock data for the ROI Extraction App ────────────────────────────────────
 // Replace these with real API calls / Excel reads when connecting to a backend.
 
-export const CLIENTS     = ['Encova Insurance', 'Northgate LLC', 'Acme Corp'];
+export const CLIENTS     = ['Encova Insurance', 'Northgate LLC', 'Acme Corp', 'UPS'];
 export const PUBLISHERS  = ['Oracle', 'Microsoft', 'SAP', 'IBM'];
 export const YEARS       = Array.from({ length: 2026 - 2009 + 1 }, (_, i) => String(2026 - i));
 

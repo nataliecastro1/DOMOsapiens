@@ -84,3 +84,19 @@ export async function uploadFile(file) {
   }
   return res.json();
 }
+
+/**
+ * Run the deterministic ROAR script extractor on an uploaded .pptx.
+ * `file` is a browser File object. Returns the full extractor result
+ * (client, publisher, month, year, currency, roi_fields{…}, warnings).
+ */
+export async function extractROAR(file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/roar/extract`, { method: 'POST', body: form });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail || `ROAR extraction failed: ${res.status}`);
+  }
+  return res.json();
+}
