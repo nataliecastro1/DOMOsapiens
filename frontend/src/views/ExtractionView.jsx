@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
-import { extractFromFile, uploadFile, searchDocuments } from '../services/api';
+import { extractROAR, uploadFile, searchDocuments } from '../services/api';
 import {
   PUBLISHERS, YEARS,
   SAMPLE_FILES, EXTRACTED_FIELDS, EXTRACTION_STEPS,
@@ -96,6 +96,8 @@ function ScreenRequest({ onNext, onUploaded }) {
         client: upClient,
         publisher: upPublisher,
         year: upYear,
+        source: 'uploaded',
+        file: selectedFile,   // additive: raw File retained so the Extract step can run the script extractor
       });
     } catch (err) {
       setUploadError(err.message);
@@ -220,7 +222,7 @@ function ScreenRequest({ onNext, onUploaded }) {
           </div>
           <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 6 }}>
             {docType === 'ROAR'
-              ? 'Return on Anglepoint Relationship — PDF or Excel report'
+              ? 'Return on Anglepoint Relationship — PowerPoint (.pptx)'
               : 'ELP deliverable — PowerPoint / slide deck'}
           </div>
         </div>
@@ -513,6 +515,39 @@ function formatDollar(n) {
   return (n < 0 ? '-' : '') + '$' + formatted;
 }
 
+// ─── Script extractor (/api/roar/extract) → Compare "Script" column ───────────
+// Maps the extractor's roi_fields keys to the canonical Compare labels.
+const ROAR_KEY_TO_LABEL = {
+  identified_risk:                'Identified Risk',
+  identified_cost_avoidance:      'Identified Cost Avoidance',
+  accomplished_cost_avoidance:    'Accomplished Cost Avoidance',
+  identified_cost_optimization:   'Identified Cost Optimization',
+  accomplished_cost_optimization: 'Accomplished Cost Optimization',
+  realized_cost_savings:          'Realized Cost Savings',
+};
+
+// Shape the raw extractor response into { [label]: { value, confidence, uncertain, alternates } }
+// for the Compare screen. A field is "uncertain" when the extractor found competing
+// candidate values (alternates) — that's what flags the file for SME scrutiny.
+function buildScriptData(roar) {
+  const fields = roar?.roi_fields || {};
+  const out = {};
+  for (const [key, label] of Object.entries(ROAR_KEY_TO_LABEL)) {
+    const f = fields[key];
+    if (!f) continue;
+    const alternates = Array.isArray(f.alternates) ? f.alternates : [];
+    out[label] = {
+      value: formatDollar(f.value),
+      confidence: f.confidence,
+      uncertain: alternates.length > 0,
+      alternates: alternates.map(a => ({ value: formatDollar(a.value), confidence: a.confidence })),
+      capacity: f.capacity,
+      sourceSlide: f.source_slide,
+    };
+  }
+  return out;
+}
+
 // ─── ROI Field Metadata (definitions, questions, types, formulas) ─────────────
 const ROI_FIELD_META = {
   'Identified Risk': {
@@ -672,7 +707,7 @@ const ROI_FIELD_META = {
 };
 
 // ─── Screen 3: Extract ────────────────────────────────────────────────────────
-function ScreenExtract({ selectedFile, onNext }) {
+function ScreenExtract({ selectedFile, onNext, onScriptData }) {
   const [stepStatuses, setStepStatuses] = useState(EXTRACTION_STEPS.map(() => 'pending'));
   const [extractedData, setExtractedData] = useState(null);
   const [error, setError] = useState(null);
@@ -697,13 +732,17 @@ function ScreenExtract({ selectedFile, onNext }) {
         setStepStatuses(prev => prev.map((s, idx) => idx === i ? 'running' : s));
 
         if (i === EXTRACTION_STEPS.length - 1) {
-          try {
-            const result = await extractFromFile(
-              selectedFile?.path || selectedFile?.name || ''
-            );
-            if (!cancelled) setExtractedData(result);
-          } catch (err) {
-            if (!cancelled) setError(err.message);
+          // Script extractor (deterministic .pptx parser) → Compare "Script" column.
+          // Only runs for an uploaded file; the SharePoint path falls back to mock
+          // script values in the Compare screen. The Claude AI column is left on
+          // mock for now (not wired this pass).
+          if (selectedFile?.file) {
+            try {
+              const roar = await extractROAR(selectedFile.file);
+              if (!cancelled) onScriptData?.(buildScriptData(roar));
+            } catch (err) {
+              if (!cancelled) setError(err.message);
+            }
           }
         } else {
           await new Promise(r => setTimeout(r, 700));
@@ -1174,13 +1213,34 @@ function CompareRow({ field, onResolve }) {
         {field.label}
       </span>
 
-      {/* Script value */}
-      <span style={isSkipped ? naStyle : { ...monoStyle, color: scriptMatch ? '#374151' : '#b91c1c', fontWeight: scriptMatch ? 400 : 600 }}>
-        {isSkipped ? '—' : field.script}
-        {!isSkipped && !scriptMatch && field.script !== '—' && (
-          <i className="ti ti-alert-triangle" style={{ marginLeft: 5, fontSize: 11 }} aria-hidden="true" />
-        )}
-      </span>
+      {/* Script value — always shown when the script found one, independent of
+          the SME-skipped flag (skipping concerns the Claude/SME side, not the
+          deterministic script extractor). */}
+      {(!field.script || field.script === '—') ? (
+        <span style={naStyle}>—</span>
+      ) : (
+        <span style={{ ...monoStyle, color: (!isSkipped && !scriptMatch) ? '#b91c1c' : '#374151', fontWeight: (!isSkipped && !scriptMatch) ? 600 : 400, display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+          <span>
+            {field.script}
+            {field.scriptUncertain && (
+              <i
+                className="ti ti-alert-triangle"
+                style={{ marginLeft: 5, fontSize: 11, color: '#d97706' }}
+                title={`Competing values found: ${field.scriptAlternates.map(a => a.value).filter(Boolean).join(', ')}`}
+                aria-hidden="true"
+              />
+            )}
+            {!field.scriptUncertain && !isSkipped && !scriptMatch && (
+              <i className="ti ti-alert-triangle" style={{ marginLeft: 5, fontSize: 11 }} aria-hidden="true" />
+            )}
+          </span>
+          {field.scriptUncertain && field.scriptAlternates.length > 0 && (
+            <span style={{ fontSize: 10, color: '#d97706', fontWeight: 400 }}>
+              also: {field.scriptAlternates.map(a => a.value).filter(Boolean).join(', ')}
+            </span>
+          )}
+        </span>
+      )}
 
       {/* Claude AI value */}
       <span style={field.claude ? monoStyle : naStyle}>
@@ -1247,18 +1307,34 @@ function CompareRow({ field, onResolve }) {
   );
 }
 
-function ScreenCompare({ fields, onNext, onBack }) {
-  // Build rows from live extracted fields + mocked script values.
+function ScreenCompare({ fields, scriptData, onNext, onBack }) {
+  // Build rows from live extracted fields + the script extractor's values.
+  // script = deterministic .pptx extractor (real values when a file was uploaded,
+  //          otherwise the mock SCRIPT_VALUES so the SharePoint path still demos).
   // claude = what the AI extracted (null if it couldn't find it).
   // sme    = what the SME computed via the fallback form (null if extracted or skipped).
+  const hasRealScript = scriptData && Object.keys(scriptData).length > 0;
+  const scriptFor = (label) => {
+    if (hasRealScript) return scriptData[label] || null;   // {value, uncertain, alternates} | null
+    const v = SCRIPT_VALUES[label];
+    return v ? { value: v, uncertain: false, alternates: [] } : null;
+  };
+
   const sourceFields = fields && fields.length > 0 ? fields : [];
-  const compareRows = sourceFields.map(f => ({
-    label:  f.label,
-    script: SCRIPT_VALUES[f.label] ?? '—',
-    claude: f.entryMode === 'extracted' ? f.value : null,
-    sme:    f.entryMode === 'manual'    ? f.value : null,
-    flag:   f.flag,
-  }));
+  const compareRows = sourceFields.map(f => {
+    const s = scriptFor(f.label);
+    return {
+      label:  f.label,
+      script: s?.value ?? '—',
+      scriptUncertain:  s?.uncertain ?? false,
+      scriptAlternates: s?.alternates ?? [],
+      claude: f.entryMode === 'extracted' ? f.value : null,
+      sme:    f.entryMode === 'manual'    ? f.value : null,
+      flag:   f.flag,
+    };
+  });
+
+  const uncertainLabels = compareRows.filter(r => r.scriptUncertain).map(r => r.label);
 
   const [resolved, setResolved] = useState({});
 
@@ -1305,6 +1381,21 @@ function ScreenCompare({ fields, onNext, onBack }) {
             {mismatchCount} mismatch{mismatchCount !== 1 ? 'es' : ''} — review required
           </span>
         </div>
+
+        {uncertainLabels.length > 0 && (
+          <div style={{
+            marginTop: 12, padding: '10px 12px',
+            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6,
+            fontSize: 12, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 8,
+          }}>
+            <i className="ti ti-alert-triangle" style={{ fontSize: 14, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
+            <span>
+              <strong>Uncertain extraction</strong> — the script found competing values for{' '}
+              {uncertainLabels.length} field{uncertainLabels.length !== 1 ? 's' : ''}
+              {' '}({uncertainLabels.join(', ')}). Verify the Script column against the source before storing.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Column headers */}
@@ -1520,6 +1611,7 @@ export default function ExtractionView({ onNav }) {
   const [smeName, setSmeName]         = useState('');
   const [finalFields, setFinalFields] = useState(null);
   const [filters, setFilters]         = useState({});
+  const [scriptData, setScriptData] = useState(null);
 
   const handleFileSelect = file              => { setFile(file);    setStep(2); };
   const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n);    setStep(3); };
@@ -1529,8 +1621,8 @@ export default function ExtractionView({ onNav }) {
     <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFileSelect} />,
     <ScreenFiles    key={1} filters={filters} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
-    <ScreenExtract  key={3} selectedFile={selectedFile}   onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
-    <ScreenCompare  key={4} fields={finalFields} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
+    <ScreenExtract  key={3} selectedFile={selectedFile}   onScriptData={setScriptData} onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
+    <ScreenCompare  key={4} fields={finalFields} scriptData={scriptData} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
     <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(4)} />,
     <ScreenDone     key={6} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
