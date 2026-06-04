@@ -34,6 +34,14 @@ export async function extractFromFile(filePath) {
 }
 
 /**
+ * Extract ROI data by sending raw document text to the backend.
+ * Used by ScreenExtract in ExtractionView.
+ */
+export async function extractROI(documentText) {
+  return post('/extract/text', { text: documentText });
+}
+
+/**
  * Extract ROI data from a file the user uploaded manually.
  * file is a browser File object.
  */
