@@ -722,6 +722,11 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
   const [mergedFields, setMergedFields] = useState(null);
   // active mode key for multi-mode fields (e.g. Accomplished Cost Optimization)
   const [modeSelections, setModeSelections] = useState({});
+  // direct value entry — SME types a known dollar amount instead of going through Q&A
+  const [directValues, setDirectValues] = useState({});   // { [fieldLabel]: string } raw numeric
+  const [directNotes,  setDirectNotes]  = useState({});   // { [fieldLabel]: string } optional commentary
+  // Q&A accordion — collapsed by default, resets when advancing to next field
+  const [qaOpen, setQaOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -808,6 +813,8 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
         return [f.label, Array(questionCount).fill('')];
       }))
     );
+    setDirectValues(Object.fromEntries(missingFields.map(f => [f.label, ''])));
+    setDirectNotes(Object.fromEntries(missingFields.map(f => [f.label, ''])));
     setFallbackMode(true);
   };
 
@@ -816,6 +823,7 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
     if (fallbackIndex < missingFields.length - 1) {
       setFallbackIndex(i => i + 1);
       setMergedFields(updatedFields);
+      setQaOpen(false);
     } else {
       // All missing fields handled — go to Store
       setFallbackMode(false);
@@ -825,11 +833,22 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
 
   const handleFallbackNext = () => {
     const field          = missingFields[fallbackIndex];
-    const answers        = fallbackAnswers[field.label] || [];
-    const meta           = ROI_FIELD_META[field.label];
-    const activeModeKey  = modeSelections[field.label] || (meta?.modes ? Object.keys(meta.modes)[0] : null);
-    const resolvedMeta   = activeModeKey ? meta.modes[activeModeKey] : meta;
-    const computed = resolvedMeta?.compute ? resolvedMeta.compute(answers) : null;
+    // Direct entry takes priority over the Q&A computation path
+    const rawDirect      = (directValues[field.label] || '').trim();
+    const directNum      = parseFloat(rawDirect);
+    const hasDirectValue = !isNaN(directNum) && rawDirect !== '';
+
+    let computed;
+    if (hasDirectValue) {
+      computed = formatDollar(directNum);
+    } else {
+      const answers       = fallbackAnswers[field.label] || [];
+      const meta          = ROI_FIELD_META[field.label];
+      const activeModeKey = modeSelections[field.label] || (meta?.modes ? Object.keys(meta.modes)[0] : null);
+      const resolvedMeta  = activeModeKey ? meta.modes[activeModeKey] : meta;
+      computed = resolvedMeta?.compute ? resolvedMeta.compute(answers) : null;
+    }
+
     const updated = (mergedFields || displayFields).map(f =>
       f.label === field.label
         ? { ...f, value: computed, entryMode: computed ? 'manual' : null, flag: computed ? null : 'SME skipped — data not available' }
@@ -887,80 +906,141 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
         <div className="card-title">{field.label}</div>
         <p className="fallback-field-def">{meta.definition}</p>
 
-        {/* Mode toggle — only shown for multi-mode fields */}
-        {meta.modes && (
-          <div className="fallback-mode-toggle">
-            {Object.entries(meta.modes).map(([key, modeMeta]) => (
-              <button
-                key={key}
-                className={`fallback-mode-btn ${activeModeKey === key ? 'active' : ''}`}
-                onClick={() => handleModeChange(key)}
-              >
-                {modeMeta.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="fallback-two-col">
 
-        <div className="fallback-questions">
-          {activeMeta.questions.map((q, qi) => {
-            const qType = (activeMeta.questionTypes && activeMeta.questionTypes[qi]) || 'text';
-            const val   = answers[qi] || '';
-            return (
-              <div className="fallback-question" key={qi}>
-                <label className="field-label" htmlFor={`fb-q-${qi}`}>{q}</label>
-                {qType === 'currency' ? (
-                  <div className="input-prefix-group">
-                    <span className="input-prefix">$</span>
-                    <input
-                      id={`fb-q-${qi}`}
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="0"
-                      value={val}
-                      onChange={e => updateAnswer(qi, e.target.value)}
-                    />
+          {/* ── Left: Direct Value Entry ───────────────────────────────────── */}
+          <div className="fallback-direct-section">
+            <div className="fallback-direct-header">
+              <i className="ti ti-currency-dollar" aria-hidden="true" />
+              <div>
+                <div className="fallback-direct-title">Enter a Known Value</div>
+                <div className="fallback-direct-sub">Already have the ROI figure? Type it here.</div>
+              </div>
+            </div>
+            <div className="field-group">
+              <label className="field-label" htmlFor="fb-direct-val">Dollar Amount</label>
+              <div className="input-prefix-group">
+                <span className="input-prefix">$</span>
+                <input
+                  id="fb-direct-val"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="0"
+                  value={directValues[field.label] || ''}
+                  onChange={e => setDirectValues(prev => ({ ...prev, [field.label]: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="field-group" style={{ marginBottom: 0 }}>
+              <label className="field-label" htmlFor="fb-direct-notes">
+                Commentary Notes <span className="fallback-optional-label">(optional)</span>
+              </label>
+              <textarea
+                id="fb-direct-notes"
+                className="fallback-notes-input"
+                placeholder="Add any context or source reference for this value…"
+                value={directNotes[field.label] || ''}
+                onChange={e => setDirectNotes(prev => ({ ...prev, [field.label]: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {/* ── Right: Q&A Collapsible ─────────────────────────────────────── */}
+          <div className="fallback-qa-section">
+            <button
+              className="fallback-qa-toggle"
+              onClick={() => setQaOpen(o => !o)}
+              aria-expanded={qaOpen}
+            >
+              <i className={`ti ti-chevron-${qaOpen ? 'up' : 'down'}`} aria-hidden="true" />
+              Calculate from Q&amp;A
+              <span className="fallback-qa-toggle-hint">
+                {qaOpen ? 'Hide questions' : 'Expand to calculate'}
+              </span>
+            </button>
+
+            {qaOpen && (
+              <div className="fallback-qa-body">
+                {/* Mode toggle — only shown for multi-mode fields */}
+                {meta.modes && (
+                  <div className="fallback-mode-toggle">
+                    {Object.entries(meta.modes).map(([key, modeMeta]) => (
+                      <button
+                        key={key}
+                        className={`fallback-mode-btn ${activeModeKey === key ? 'active' : ''}`}
+                        onClick={() => handleModeChange(key)}
+                      >
+                        {modeMeta.label}
+                      </button>
+                    ))}
                   </div>
-                ) : qType === 'date' ? (
-                  <input
-                    id={`fb-q-${qi}`}
-                    type="date"
-                    value={val}
-                    onChange={e => updateAnswer(qi, e.target.value)}
-                  />
-                ) : qType === 'number' ? (
-                  <input
-                    id={`fb-q-${qi}`}
-                    type="number"
-                    min="0"
-                    step="1"
-                    placeholder="0"
-                    value={val}
-                    onChange={e => updateAnswer(qi, e.target.value)}
-                  />
-                ) : (
-                  <input
-                    id={`fb-q-${qi}`}
-                    type="text"
-                    placeholder="Optional — leave blank to skip"
-                    value={val}
-                    onChange={e => updateAnswer(qi, e.target.value)}
-                  />
+                )}
+
+                <div className="fallback-questions">
+                  {activeMeta.questions.map((q, qi) => {
+                    const qType = (activeMeta.questionTypes && activeMeta.questionTypes[qi]) || 'text';
+                    const val   = answers[qi] || '';
+                    return (
+                      <div className="fallback-question" key={qi}>
+                        <label className="field-label" htmlFor={`fb-q-${qi}`}>{q}</label>
+                        {qType === 'currency' ? (
+                          <div className="input-prefix-group">
+                            <span className="input-prefix">$</span>
+                            <input
+                              id={`fb-q-${qi}`}
+                              type="number"
+                              min="0"
+                              step="any"
+                              placeholder="0"
+                              value={val}
+                              onChange={e => updateAnswer(qi, e.target.value)}
+                            />
+                          </div>
+                        ) : qType === 'date' ? (
+                          <input
+                            id={`fb-q-${qi}`}
+                            type="date"
+                            value={val}
+                            onChange={e => updateAnswer(qi, e.target.value)}
+                          />
+                        ) : qType === 'number' ? (
+                          <input
+                            id={`fb-q-${qi}`}
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="0"
+                            value={val}
+                            onChange={e => updateAnswer(qi, e.target.value)}
+                          />
+                        ) : (
+                          <input
+                            id={`fb-q-${qi}`}
+                            type="text"
+                            placeholder="Optional — leave blank to skip"
+                            value={val}
+                            onChange={e => updateAnswer(qi, e.target.value)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="fallback-formula">{activeMeta.formula}</div>
+
+                {liveComputed && (
+                  <div className="fallback-computed-preview">
+                    <i className="ti ti-calculator" aria-hidden="true" />
+                    Calculated value: <strong>{liveComputed}</strong>
+                  </div>
                 )}
               </div>
-            );
-          })}
-        </div>
-
-        <div className="fallback-formula">{activeMeta.formula}</div>
-
-        {liveComputed && (
-          <div className="fallback-computed-preview">
-            <i className="ti ti-calculator" aria-hidden="true" />
-            Calculated value: <strong>{liveComputed}</strong>
+            )}
           </div>
-        )}
+
+        </div>
 
         <div className="btn-row">
           <button className="btn ghost" onClick={handleFallbackSkip}>
