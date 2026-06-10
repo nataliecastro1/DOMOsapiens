@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
-import { extractFromFile, uploadFile, searchDocuments } from '../services/api';
+import { extractROAR, uploadFile, searchDocuments } from '../services/api';
 import {
   PUBLISHERS, YEARS,
   SAMPLE_FILES, EXTRACTED_FIELDS, EXTRACTION_STEPS,
@@ -108,7 +108,8 @@ function ScreenRequest({ onNext, onUploaded }) {
         client: upClient,
         publisher: upPublisher,
         year: upYear,
-        allFiles: selectedFiles.map(f => f.name),
+        source: 'uploaded',
+        file: selectedFile,   // additive: raw File retained so the Extract step can run the script extractor
       });
     } catch (err) {
       setUploadError(err.message);
@@ -256,7 +257,7 @@ function ScreenRequest({ onNext, onUploaded }) {
           </div>
           <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 6 }}>
             {docType === 'ROAR'
-              ? 'Return on Anglepoint Relationship — PDF or Excel report'
+              ? 'Return on Anglepoint Relationship — PowerPoint (.pptx)'
               : 'ELP deliverable — PowerPoint / slide deck'}
           </div>
         </div>
@@ -549,6 +550,39 @@ function formatDollar(n) {
   return (n < 0 ? '-' : '') + '$' + formatted;
 }
 
+// ─── Script extractor (/api/roar/extract) → Compare "Script" column ───────────
+// Maps the extractor's roi_fields keys to the canonical Compare labels.
+const ROAR_KEY_TO_LABEL = {
+  identified_risk:                'Identified Risk',
+  identified_cost_avoidance:      'Identified Cost Avoidance',
+  accomplished_cost_avoidance:    'Accomplished Cost Avoidance',
+  identified_cost_optimization:   'Identified Cost Optimization',
+  accomplished_cost_optimization: 'Accomplished Cost Optimization',
+  realized_cost_savings:          'Realized Cost Savings',
+};
+
+// Shape the raw extractor response into { [label]: { value, confidence, uncertain, alternates } }
+// for the Compare screen. A field is "uncertain" when the extractor found competing
+// candidate values (alternates) — that's what flags the file for SME scrutiny.
+function buildScriptData(roar) {
+  const fields = roar?.roi_fields || {};
+  const out = {};
+  for (const [key, label] of Object.entries(ROAR_KEY_TO_LABEL)) {
+    const f = fields[key];
+    if (!f) continue;
+    const alternates = Array.isArray(f.alternates) ? f.alternates : [];
+    out[label] = {
+      value: formatDollar(f.value),
+      confidence: f.confidence,
+      uncertain: alternates.length > 0,
+      alternates: alternates.map(a => ({ value: formatDollar(a.value), confidence: a.confidence })),
+      capacity: f.capacity,
+      sourceSlide: f.source_slide,
+    };
+  }
+  return out;
+}
+
 // ─── ROI Field Metadata (definitions, questions, types, formulas) ─────────────
 const ROI_FIELD_META = {
   'Identified Risk': {
@@ -708,7 +742,7 @@ const ROI_FIELD_META = {
 };
 
 // ─── Screen 3: Extract ────────────────────────────────────────────────────────
-function ScreenExtract({ selectedFile, onNext }) {
+function ScreenExtract({ selectedFile, onNext, onScriptData }) {
   const [stepStatuses, setStepStatuses] = useState(EXTRACTION_STEPS.map(() => 'pending'));
   const [extractedData, setExtractedData] = useState(null);
   const [error, setError] = useState(null);
@@ -723,6 +757,11 @@ function ScreenExtract({ selectedFile, onNext }) {
   const [mergedFields, setMergedFields] = useState(null);
   // active mode key for multi-mode fields (e.g. Accomplished Cost Optimization)
   const [modeSelections, setModeSelections] = useState({});
+  // direct value entry — SME types a known dollar amount instead of going through Q&A
+  const [directValues, setDirectValues] = useState({});   // { [fieldLabel]: string } raw numeric
+  const [directNotes,  setDirectNotes]  = useState({});   // { [fieldLabel]: string } optional commentary
+  // Q&A accordion — collapsed by default, resets when advancing to next field
+  const [qaOpen, setQaOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -733,13 +772,17 @@ function ScreenExtract({ selectedFile, onNext }) {
         setStepStatuses(prev => prev.map((s, idx) => idx === i ? 'running' : s));
 
         if (i === EXTRACTION_STEPS.length - 1) {
-          try {
-            const result = await extractFromFile(
-              selectedFile?.path || selectedFile?.name || ''
-            );
-            if (!cancelled) setExtractedData(result);
-          } catch (err) {
-            if (!cancelled) setError(err.message);
+          // Script extractor (deterministic .pptx parser) → Compare "Script" column.
+          // Only runs for an uploaded file; the SharePoint path falls back to mock
+          // script values in the Compare screen. The Claude AI column is left on
+          // mock for now (not wired this pass).
+          if (selectedFile?.file) {
+            try {
+              const roar = await extractROAR(selectedFile.file);
+              if (!cancelled) onScriptData?.(buildScriptData(roar));
+            } catch (err) {
+              if (!cancelled) setError(err.message);
+            }
           }
         } else {
           await new Promise(r => setTimeout(r, 700));
@@ -805,6 +848,8 @@ function ScreenExtract({ selectedFile, onNext }) {
         return [f.label, Array(questionCount).fill('')];
       }))
     );
+    setDirectValues(Object.fromEntries(missingFields.map(f => [f.label, ''])));
+    setDirectNotes(Object.fromEntries(missingFields.map(f => [f.label, ''])));
     setFallbackMode(true);
   };
 
@@ -813,6 +858,7 @@ function ScreenExtract({ selectedFile, onNext }) {
     if (fallbackIndex < missingFields.length - 1) {
       setFallbackIndex(i => i + 1);
       setMergedFields(updatedFields);
+      setQaOpen(false);
     } else {
       // All missing fields handled — go to Store
       setFallbackMode(false);
@@ -822,11 +868,22 @@ function ScreenExtract({ selectedFile, onNext }) {
 
   const handleFallbackNext = () => {
     const field          = missingFields[fallbackIndex];
-    const answers        = fallbackAnswers[field.label] || [];
-    const meta           = ROI_FIELD_META[field.label];
-    const activeModeKey  = modeSelections[field.label] || (meta?.modes ? Object.keys(meta.modes)[0] : null);
-    const resolvedMeta   = activeModeKey ? meta.modes[activeModeKey] : meta;
-    const computed = resolvedMeta?.compute ? resolvedMeta.compute(answers) : null;
+    // Direct entry takes priority over the Q&A computation path
+    const rawDirect      = (directValues[field.label] || '').trim();
+    const directNum      = parseFloat(rawDirect);
+    const hasDirectValue = !isNaN(directNum) && rawDirect !== '';
+
+    let computed;
+    if (hasDirectValue) {
+      computed = formatDollar(directNum);
+    } else {
+      const answers       = fallbackAnswers[field.label] || [];
+      const meta          = ROI_FIELD_META[field.label];
+      const activeModeKey = modeSelections[field.label] || (meta?.modes ? Object.keys(meta.modes)[0] : null);
+      const resolvedMeta  = activeModeKey ? meta.modes[activeModeKey] : meta;
+      computed = resolvedMeta?.compute ? resolvedMeta.compute(answers) : null;
+    }
+
     const updated = (mergedFields || displayFields).map(f =>
       f.label === field.label
         ? { ...f, value: computed, entryMode: computed ? 'manual' : null, flag: computed ? null : 'SME skipped — data not available' }
@@ -884,80 +941,141 @@ function ScreenExtract({ selectedFile, onNext }) {
         <div className="card-title">{field.label}</div>
         <p className="fallback-field-def">{meta.definition}</p>
 
-        {/* Mode toggle — only shown for multi-mode fields */}
-        {meta.modes && (
-          <div className="fallback-mode-toggle">
-            {Object.entries(meta.modes).map(([key, modeMeta]) => (
-              <button
-                key={key}
-                className={`fallback-mode-btn ${activeModeKey === key ? 'active' : ''}`}
-                onClick={() => handleModeChange(key)}
-              >
-                {modeMeta.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="fallback-two-col">
 
-        <div className="fallback-questions">
-          {activeMeta.questions.map((q, qi) => {
-            const qType = (activeMeta.questionTypes && activeMeta.questionTypes[qi]) || 'text';
-            const val   = answers[qi] || '';
-            return (
-              <div className="fallback-question" key={qi}>
-                <label className="field-label" htmlFor={`fb-q-${qi}`}>{q}</label>
-                {qType === 'currency' ? (
-                  <div className="input-prefix-group">
-                    <span className="input-prefix">$</span>
-                    <input
-                      id={`fb-q-${qi}`}
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="0"
-                      value={val}
-                      onChange={e => updateAnswer(qi, e.target.value)}
-                    />
+          {/* ── Left: Direct Value Entry ───────────────────────────────────── */}
+          <div className="fallback-direct-section">
+            <div className="fallback-direct-header">
+              <i className="ti ti-currency-dollar" aria-hidden="true" />
+              <div>
+                <div className="fallback-direct-title">Enter a Known Value</div>
+                <div className="fallback-direct-sub">Already have the ROI figure? Type it here.</div>
+              </div>
+            </div>
+            <div className="field-group">
+              <label className="field-label" htmlFor="fb-direct-val">Dollar Amount</label>
+              <div className="input-prefix-group">
+                <span className="input-prefix">$</span>
+                <input
+                  id="fb-direct-val"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="0"
+                  value={directValues[field.label] || ''}
+                  onChange={e => setDirectValues(prev => ({ ...prev, [field.label]: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="field-group" style={{ marginBottom: 0 }}>
+              <label className="field-label" htmlFor="fb-direct-notes">
+                Commentary Notes <span className="fallback-optional-label">(optional)</span>
+              </label>
+              <textarea
+                id="fb-direct-notes"
+                className="fallback-notes-input"
+                placeholder="Add any context or source reference for this value…"
+                value={directNotes[field.label] || ''}
+                onChange={e => setDirectNotes(prev => ({ ...prev, [field.label]: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {/* ── Right: Q&A Collapsible ─────────────────────────────────────── */}
+          <div className="fallback-qa-section">
+            <button
+              className="fallback-qa-toggle"
+              onClick={() => setQaOpen(o => !o)}
+              aria-expanded={qaOpen}
+            >
+              <i className={`ti ti-chevron-${qaOpen ? 'up' : 'down'}`} aria-hidden="true" />
+              Calculate from Q&amp;A
+              <span className="fallback-qa-toggle-hint">
+                {qaOpen ? 'Hide questions' : 'Expand to calculate'}
+              </span>
+            </button>
+
+            {qaOpen && (
+              <div className="fallback-qa-body">
+                {/* Mode toggle — only shown for multi-mode fields */}
+                {meta.modes && (
+                  <div className="fallback-mode-toggle">
+                    {Object.entries(meta.modes).map(([key, modeMeta]) => (
+                      <button
+                        key={key}
+                        className={`fallback-mode-btn ${activeModeKey === key ? 'active' : ''}`}
+                        onClick={() => handleModeChange(key)}
+                      >
+                        {modeMeta.label}
+                      </button>
+                    ))}
                   </div>
-                ) : qType === 'date' ? (
-                  <input
-                    id={`fb-q-${qi}`}
-                    type="date"
-                    value={val}
-                    onChange={e => updateAnswer(qi, e.target.value)}
-                  />
-                ) : qType === 'number' ? (
-                  <input
-                    id={`fb-q-${qi}`}
-                    type="number"
-                    min="0"
-                    step="1"
-                    placeholder="0"
-                    value={val}
-                    onChange={e => updateAnswer(qi, e.target.value)}
-                  />
-                ) : (
-                  <input
-                    id={`fb-q-${qi}`}
-                    type="text"
-                    placeholder="Optional — leave blank to skip"
-                    value={val}
-                    onChange={e => updateAnswer(qi, e.target.value)}
-                  />
+                )}
+
+                <div className="fallback-questions">
+                  {activeMeta.questions.map((q, qi) => {
+                    const qType = (activeMeta.questionTypes && activeMeta.questionTypes[qi]) || 'text';
+                    const val   = answers[qi] || '';
+                    return (
+                      <div className="fallback-question" key={qi}>
+                        <label className="field-label" htmlFor={`fb-q-${qi}`}>{q}</label>
+                        {qType === 'currency' ? (
+                          <div className="input-prefix-group">
+                            <span className="input-prefix">$</span>
+                            <input
+                              id={`fb-q-${qi}`}
+                              type="number"
+                              min="0"
+                              step="any"
+                              placeholder="0"
+                              value={val}
+                              onChange={e => updateAnswer(qi, e.target.value)}
+                            />
+                          </div>
+                        ) : qType === 'date' ? (
+                          <input
+                            id={`fb-q-${qi}`}
+                            type="date"
+                            value={val}
+                            onChange={e => updateAnswer(qi, e.target.value)}
+                          />
+                        ) : qType === 'number' ? (
+                          <input
+                            id={`fb-q-${qi}`}
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="0"
+                            value={val}
+                            onChange={e => updateAnswer(qi, e.target.value)}
+                          />
+                        ) : (
+                          <input
+                            id={`fb-q-${qi}`}
+                            type="text"
+                            placeholder="Optional — leave blank to skip"
+                            value={val}
+                            onChange={e => updateAnswer(qi, e.target.value)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="fallback-formula">{activeMeta.formula}</div>
+
+                {liveComputed && (
+                  <div className="fallback-computed-preview">
+                    <i className="ti ti-calculator" aria-hidden="true" />
+                    Calculated value: <strong>{liveComputed}</strong>
+                  </div>
                 )}
               </div>
-            );
-          })}
-        </div>
-
-        <div className="fallback-formula">{activeMeta.formula}</div>
-
-        {liveComputed && (
-          <div className="fallback-computed-preview">
-            <i className="ti ti-calculator" aria-hidden="true" />
-            Calculated value: <strong>{liveComputed}</strong>
+            )}
           </div>
-        )}
+
+        </div>
 
         <div className="btn-row">
           <button className="btn ghost" onClick={handleFallbackSkip}>
@@ -1210,13 +1328,34 @@ function CompareRow({ field, onResolve }) {
         {field.label}
       </span>
 
-      {/* Script value */}
-      <span style={isSkipped ? naStyle : { ...monoStyle, color: scriptMatch ? '#374151' : '#b91c1c', fontWeight: scriptMatch ? 400 : 600 }}>
-        {isSkipped ? '—' : field.script}
-        {!isSkipped && !scriptMatch && field.script !== '—' && (
-          <i className="ti ti-alert-triangle" style={{ marginLeft: 5, fontSize: 11 }} aria-hidden="true" />
-        )}
-      </span>
+      {/* Script value — always shown when the script found one, independent of
+          the SME-skipped flag (skipping concerns the Claude/SME side, not the
+          deterministic script extractor). */}
+      {(!field.script || field.script === '—') ? (
+        <span style={naStyle}>—</span>
+      ) : (
+        <span style={{ ...monoStyle, color: (!isSkipped && !scriptMatch) ? '#b91c1c' : '#374151', fontWeight: (!isSkipped && !scriptMatch) ? 600 : 400, display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+          <span>
+            {field.script}
+            {field.scriptUncertain && (
+              <i
+                className="ti ti-alert-triangle"
+                style={{ marginLeft: 5, fontSize: 11, color: '#d97706' }}
+                title={`Competing values found: ${field.scriptAlternates.map(a => a.value).filter(Boolean).join(', ')}`}
+                aria-hidden="true"
+              />
+            )}
+            {!field.scriptUncertain && !isSkipped && !scriptMatch && (
+              <i className="ti ti-alert-triangle" style={{ marginLeft: 5, fontSize: 11 }} aria-hidden="true" />
+            )}
+          </span>
+          {field.scriptUncertain && field.scriptAlternates.length > 0 && (
+            <span style={{ fontSize: 10, color: '#d97706', fontWeight: 400 }}>
+              also: {field.scriptAlternates.map(a => a.value).filter(Boolean).join(', ')}
+            </span>
+          )}
+        </span>
+      )}
 
       {/* Claude AI value */}
       <span style={field.claude ? monoStyle : naStyle}>
@@ -1283,18 +1422,34 @@ function CompareRow({ field, onResolve }) {
   );
 }
 
-function ScreenCompare({ fields, onNext, onBack }) {
-  // Build rows from live extracted fields + mocked script values.
+function ScreenCompare({ fields, scriptData, onNext, onBack }) {
+  // Build rows from live extracted fields + the script extractor's values.
+  // script = deterministic .pptx extractor (real values when a file was uploaded,
+  //          otherwise the mock SCRIPT_VALUES so the SharePoint path still demos).
   // claude = what the AI extracted (null if it couldn't find it).
   // sme    = what the SME computed via the fallback form (null if extracted or skipped).
+  const hasRealScript = scriptData && Object.keys(scriptData).length > 0;
+  const scriptFor = (label) => {
+    if (hasRealScript) return scriptData[label] || null;   // {value, uncertain, alternates} | null
+    const v = SCRIPT_VALUES[label];
+    return v ? { value: v, uncertain: false, alternates: [] } : null;
+  };
+
   const sourceFields = fields && fields.length > 0 ? fields : [];
-  const compareRows = sourceFields.map(f => ({
-    label:  f.label,
-    script: SCRIPT_VALUES[f.label] ?? '—',
-    claude: f.entryMode === 'extracted' ? f.value : null,
-    sme:    f.entryMode === 'manual'    ? f.value : null,
-    flag:   f.flag,
-  }));
+  const compareRows = sourceFields.map(f => {
+    const s = scriptFor(f.label);
+    return {
+      label:  f.label,
+      script: s?.value ?? '—',
+      scriptUncertain:  s?.uncertain ?? false,
+      scriptAlternates: s?.alternates ?? [],
+      claude: f.entryMode === 'extracted' ? f.value : null,
+      sme:    f.entryMode === 'manual'    ? f.value : null,
+      flag:   f.flag,
+    };
+  });
+
+  const uncertainLabels = compareRows.filter(r => r.scriptUncertain).map(r => r.label);
 
   const [resolved, setResolved] = useState({});
 
@@ -1341,6 +1496,21 @@ function ScreenCompare({ fields, onNext, onBack }) {
             {mismatchCount} mismatch{mismatchCount !== 1 ? 'es' : ''} — review required
           </span>
         </div>
+
+        {uncertainLabels.length > 0 && (
+          <div style={{
+            marginTop: 12, padding: '10px 12px',
+            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6,
+            fontSize: 12, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 8,
+          }}>
+            <i className="ti ti-alert-triangle" style={{ fontSize: 14, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
+            <span>
+              <strong>Uncertain extraction</strong> — the script found competing values for{' '}
+              {uncertainLabels.length} field{uncertainLabels.length !== 1 ? 's' : ''}
+              {' '}({uncertainLabels.join(', ')}). Verify the Script column against the source before storing.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Column headers */}
@@ -1556,6 +1726,7 @@ export default function ExtractionView({ onNav }) {
   const [smeName, setSmeName]         = useState('');
   const [finalFields, setFinalFields] = useState(null);
   const [filters, setFilters]         = useState({});
+  const [scriptData, setScriptData] = useState(null);
 
   const handleFileSelect = file              => { setFile(file);    setStep(2); };
   const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n);    setStep(3); };
@@ -1565,8 +1736,8 @@ export default function ExtractionView({ onNav }) {
     <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFileSelect} />,
     <ScreenFiles    key={1} filters={filters} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
-    <ScreenExtract  key={3} selectedFile={selectedFile}   onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
-    <ScreenCompare  key={4} fields={finalFields} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
+    <ScreenExtract  key={3} selectedFile={selectedFile}   onScriptData={setScriptData} onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
+    <ScreenCompare  key={4} fields={finalFields} scriptData={scriptData} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
     <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(4)} />,
     <ScreenDone     key={6} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];

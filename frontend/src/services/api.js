@@ -34,6 +34,14 @@ export async function extractFromFile(filePath) {
 }
 
 /**
+ * Extract ROI data by sending raw document text to the backend.
+ * Used by ScreenExtract in ExtractionView.
+ */
+export async function extractROI(documentText) {
+  return post('/extract/text', { text: documentText });
+}
+
+/**
  * Extract ROI data from a file the user uploaded manually.
  * file is a browser File object.
  */
@@ -73,6 +81,22 @@ export async function uploadFile(file) {
   if (!res.ok) {
     const detail = await res.json().catch(() => null);
     throw new Error(detail?.detail || `Upload failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Run the deterministic ROAR script extractor on an uploaded .pptx.
+ * `file` is a browser File object. Returns the full extractor result
+ * (client, publisher, month, year, currency, roi_fields{…}, warnings).
+ */
+export async function extractROAR(file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/roar/extract`, { method: 'POST', body: form });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail || `ROAR extraction failed: ${res.status}`);
   }
   return res.json();
 }

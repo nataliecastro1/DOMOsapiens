@@ -3,7 +3,7 @@
 
 export const CLIENTS     = ['Encova Insurance', 'Northgate LLC', 'Acme Corp', 'UPS'];
 export const PUBLISHERS  = ['Oracle', 'Microsoft', 'SAP', 'IBM'];
-export const YEARS       = ['2025', '2024', '2023', '2022'];
+export const YEARS       = Array.from({ length: 2026 - 2009 + 1 }, (_, i) => String(2026 - i));
 
 export const SAMPLE_FILES = [
   { name: 'Encova_Oracle_ROAR_2025_v3.xlsx', modified: 'Apr 12 2025', size: '142 KB', version: 'v3 (final)', tag: 'Latest',  tagColor: 'green' },

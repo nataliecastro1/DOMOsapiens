@@ -804,6 +804,69 @@ textarea { resize: vertical; }
 .fallback-computed-preview i { color: #16a34a; font-size: 15px; }
 .fallback-computed-preview strong { color: #15803d; font-size: 15px; }
 
+/* ─── Fallback Two-Column Layout ─────────────────── */
+.fallback-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+/* ─── Fallback Direct Value Section (left col) ───── */
+.fallback-direct-section {
+  background: linear-gradient(135deg, #eef5ff 0%, #e3effa 100%);
+  border: 2px solid var(--blue-light);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+}
+.fallback-direct-header {
+  display: flex; align-items: flex-start; gap: 12px;
+  margin-bottom: 18px;
+}
+.fallback-direct-header > i {
+  font-size: 28px; color: var(--blue); flex-shrink: 0; margin-top: 1px;
+}
+.fallback-direct-title {
+  font-size: 15px; font-weight: 800; color: var(--navy); margin-bottom: 4px;
+}
+.fallback-direct-sub {
+  font-size: 13px; color: var(--text-muted); line-height: 1.5;
+}
+.fallback-optional-label {
+  font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px;
+}
+.fallback-notes-input {
+  height: 72px; resize: vertical;
+}
+
+/* ─── Fallback Q&A Collapsible (right col) ────────── */
+.fallback-qa-section {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.fallback-qa-toggle {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 16px 18px;
+  background: var(--navy-5);
+  border: none; cursor: pointer; font-family: inherit;
+  text-align: left; font-size: 14px; font-weight: 700; color: var(--navy);
+  transition: background 0.15s;
+}
+.fallback-qa-toggle:hover { background: var(--surface-3); }
+.fallback-qa-toggle > i { font-size: 16px; color: var(--text-muted); flex-shrink: 0; }
+.fallback-qa-toggle-hint {
+  margin-left: auto;
+  font-size: 12px; font-weight: 400; color: var(--text-muted);
+  white-space: nowrap;
+}
+.fallback-qa-body {
+  padding: 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
 /* ─── Input prefix group ($) ─────────────────── */
 .input-prefix-group {
   display: flex; align-items: stretch;
