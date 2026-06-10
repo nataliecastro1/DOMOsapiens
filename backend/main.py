@@ -1,14 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import auth, client_scopes, extraction, records, documents
-from routes import auth, client_scopes, clients, extraction, records, uploads
+from routes import auth, client_scopes, clients, extraction, records, uploads, documents
 
 app = FastAPI(title="DOMOsapiens API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
