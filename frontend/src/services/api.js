@@ -29,8 +29,17 @@ export async function searchDocuments({ client = '', year = '', publisher = '' }
  * Extract ROI data from a local document file (selected from search results).
  * file_path is the path returned by searchDocuments.
  */
-export async function extractFromFile(filePath) {
-  return post('/extract', { file_path: filePath });
+export async function extractFromFile(fileRef) {
+  // fileRef can be a string path (from search results) or
+  // an object with { id, stored_name, path } (from uploaded file)
+  if (typeof fileRef === 'string') {
+    return post('/extract', { file_path: fileRef });
+  }
+  return post('/extract', {
+    file_path:   fileRef.path        || '',
+    file_id:     fileRef.id          || '',
+    stored_name: fileRef.stored_name || '',
+  });
 }
 
 /**

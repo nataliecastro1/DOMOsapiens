@@ -36,9 +36,9 @@ async def extract_with_claude(file_path: str) -> dict:
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     ext = Path(file_path).suffix.lower()
-    b64_data = _pdf_to_base64(file_path)
 
     if ext == ".pdf":
+        b64_data = _pdf_to_base64(file_path)
         content = [
             {
                 "type": "document",
@@ -52,6 +52,25 @@ async def extract_with_claude(file_path: str) -> dict:
                 "type": "text",
                 "text": "Extract the ROI data from this ROAR document and return the JSON.",
             },
+        ]
+    elif ext in (".pptx", ".ppt"):
+        from pptx import Presentation
+        prs = Presentation(file_path)
+        slides_text = []
+        for slide in prs.slides:
+            slide_lines = [
+                shape.text.strip()
+                for shape in slide.shapes
+                if hasattr(shape, "text") and shape.text.strip()
+            ]
+            if slide_lines:
+                slides_text.append("\n".join(slide_lines))
+        pptx_text = "\n\n---\n\n".join(slides_text)
+        content = [
+            {
+                "type": "text",
+                "text": f"Extract the ROI data from this ROAR PowerPoint presentation and return the JSON.\n\n{pptx_text}",
+            }
         ]
     else:
         content = [

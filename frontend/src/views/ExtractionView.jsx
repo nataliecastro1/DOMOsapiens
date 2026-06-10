@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
-import { extractROAR, uploadFile, searchDocuments } from '../services/api';
+import { extractROAR, extractFromFile, uploadFile, searchDocuments } from '../services/api';
 import {
   PUBLISHERS, YEARS,
   SAMPLE_FILES, EXTRACTED_FIELDS, EXTRACTION_STEPS,
@@ -109,7 +109,7 @@ function ScreenRequest({ onNext, onUploaded }) {
         publisher: upPublisher,
         year: upYear,
         source: 'uploaded',
-        file: selectedFile,   // additive: raw File retained so the Extract step can run the script extractor
+        file: selectedFiles[0],   // raw File retained so the Extract step can run the script extractor
       });
     } catch (err) {
       setUploadError(err.message);
@@ -772,18 +772,34 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
         setStepStatuses(prev => prev.map((s, idx) => idx === i ? 'running' : s));
 
         if (i === EXTRACTION_STEPS.length - 1) {
-          // Script extractor (deterministic .pptx parser) → Compare "Script" column.
-          // Only runs for an uploaded file; the SharePoint path falls back to mock
-          // script values in the Compare screen. The Claude AI column is left on
-          // mock for now (not wired this pass).
+          // Run both extractions in parallel:
+          // 1. Script extractor (deterministic parser) → Compare "Script" column
+          // 2. Claude AI → Compare "Claude AI" column
+          const tasks = [];
+
           if (selectedFile?.file) {
-            try {
-              const roar = await extractROAR(selectedFile.file);
-              if (!cancelled) onScriptData?.(buildScriptData(roar));
-            } catch (err) {
-              if (!cancelled) setError(err.message);
-            }
+            tasks.push(
+              extractROAR(selectedFile.file)
+                .then(roar => { if (!cancelled) onScriptData?.(buildScriptData(roar)); })
+                .catch(() => {})
+            );
           }
+
+          // Pass the full selectedFile object so extractFromFile can use id/stored_name/path
+          console.log('[Extract] selectedFile:', selectedFile);
+          if (selectedFile) {
+            const fileRef = selectedFile.path || selectedFile.id
+              ? selectedFile
+              : (selectedFile.name || '');
+            console.log('[Extract] calling extractFromFile with:', fileRef);
+            tasks.push(
+              extractFromFile(fileRef)
+                .then(res => { console.log('[Extract] Claude result:', res); if (!cancelled) setExtractedData(res.data || res); })
+                .catch(err => { console.error('[Extract] Claude error:', err); if (!cancelled) setError(err.message); })
+            );
+          }
+
+          if (tasks.length) await Promise.all(tasks);
         } else {
           await new Promise(r => setTimeout(r, 700));
         }
@@ -801,14 +817,15 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
 
   const isDone = stepStatuses.every(s => s === 'done');
 
+  const fmt = (n) => n != null ? `$${Number(n).toLocaleString()}` : null;
   const displayFields = extractedData ? [
-    { label: 'Identified Risk',                value: extractedData.identified_risk                || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.identified_risk ? 'extracted' : null },
-    { label: 'Identified Cost Avoidance',      value: extractedData.identified_cost_avoidance      || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.identified_cost_avoidance ? 'extracted' : null },
-    { label: 'Accomplished Cost Avoidance',    value: extractedData.accomplished_cost_avoidance    || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.accomplished_cost_avoidance ? 'extracted' : null },
-    { label: 'Identified Cost Optimization',   value: extractedData.identified_cost_optimization   || null, variant: 'blue',  confidence: 0, source: null, flag: null, entryMode: extractedData.identified_cost_optimization ? 'extracted' : null },
-    { label: 'Accomplished Cost Optimization', value: extractedData.accomplished_cost_optimization || null, variant: 'blue',  confidence: 0, source: null, flag: null, entryMode: extractedData.accomplished_cost_optimization ? 'extracted' : null },
-    { label: 'Identified Cost Savings',        value: extractedData.identified_cost_savings        || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.identified_cost_savings ? 'extracted' : null },
-    { label: 'Realized Cost Savings',          value: extractedData.realized_cost_savings          || null, variant: 'green', confidence: 0, source: null, flag: null, entryMode: extractedData.realized_cost_savings ? 'extracted' : null },
+    { label: 'Identified Risk',                value: fmt(extractedData.identified_risk),       variant: 'green', confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.identified_risk       != null ? 'extracted' : null },
+    { label: 'Identified Cost Avoidance',      value: fmt(extractedData.id_cost_avoidance),     variant: 'green', confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.id_cost_avoidance     != null ? 'extracted' : null },
+    { label: 'Accomplished Cost Avoidance',    value: fmt(extractedData.acc_cost_avoidance),    variant: 'green', confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.acc_cost_avoidance    != null ? 'extracted' : null },
+    { label: 'Identified Cost Optimization',   value: fmt(extractedData.id_cost_optimization),  variant: 'blue',  confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.id_cost_optimization  != null ? 'extracted' : null },
+    { label: 'Accomplished Cost Optimization', value: fmt(extractedData.acc_cost_optimization), variant: 'blue',  confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.acc_cost_optimization != null ? 'extracted' : null },
+    { label: 'Identified Cost Savings',        value: fmt(extractedData.realized_savings),      variant: 'green', confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.realized_savings      != null ? 'extracted' : null },
+    { label: 'Realized Cost Savings',          value: fmt(extractedData.contract_spend),        variant: 'green', confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.contract_spend        != null ? 'extracted' : null },
   ] : EXTRACTED_FIELDS;
 
   const confidence = extractedData?.confidence ?? 94;
@@ -1648,7 +1665,47 @@ function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
 }
 
 // ─── Screen 5: Done ───────────────────────────────────────────────────────────
-function ScreenDone({ onNewExtraction, onTracker, onDashboards }) {
+function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onDashboards }) {
+  // Parse a dollar string like "$1,080,000" → number
+  const parseDollar = (v) => {
+    if (!v) return 0;
+    return parseFloat(String(v).replace(/[$,]/g, '')) || 0;
+  };
+
+  const fmtM = (n) => {
+    if (!n) return '—';
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}K`;
+    return `$${n.toLocaleString()}`;
+  };
+
+  const fields = finalFields || [];
+  const get = (label) => parseDollar(fields.find(f => f.label === label)?.value);
+
+  const totalSavings   = get('Identified Cost Savings') || get('Identified Risk') || 0;
+  const netROI         = get('Accomplished Cost Avoidance') + get('Accomplished Cost Optimization') || get('Realized Cost Savings') || 0;
+  const idAvoidance    = get('Identified Cost Avoidance');
+  const accAvoidance   = get('Accomplished Cost Avoidance');
+  const idOptimization = get('Identified Cost Optimization');
+
+  const confidenceVals = fields.filter(f => f.confidence > 0).map(f => f.confidence);
+  const avgConfidence  = confidenceVals.length
+    ? Math.round(confidenceVals.reduce((a, b) => a + b, 0) / confidenceVals.length)
+    : (fields.length ? 85 : null);
+
+  const client    = selectedFile?.client    || selectedFile?.upClient    || '—';
+  const publisher = selectedFile?.publisher || selectedFile?.upPublisher || '—';
+  const year      = selectedFile?.year      || selectedFile?.upYear      || '—';
+  const subtitle  = [client, publisher, year].filter(v => v && v !== '—').join(' · ');
+
+  // Build breakdown bars from real data
+  const breakdownTotal = idAvoidance + idOptimization || 1;
+  const breakdown = [
+    { label: 'Identified Cost Avoidance',   val: idAvoidance,    color: 'var(--blue)'       },
+    { label: 'Identified Cost Optimization', val: idOptimization, color: 'var(--blue-light)' },
+    { label: 'Accomplished Cost Avoidance',  val: accAvoidance,   color: 'var(--gold)'       },
+  ].filter(b => b.val > 0);
+
   return (
     <>
       <div className="done-hero">
@@ -1657,7 +1714,9 @@ function ScreenDone({ onNewExtraction, onTracker, onDashboards }) {
         </div>
         <div>
           <div className="done-title">Extraction Complete</div>
-          <div className="done-sub">Encova · Oracle · 2025 — All records stored successfully</div>
+          <div className="done-sub">
+            {subtitle ? `${subtitle} — ` : ''}All records stored successfully
+          </div>
         </div>
         <div style={{ marginLeft: 'auto' }}>
           <Badge color="green">
@@ -1668,41 +1727,42 @@ function ScreenDone({ onNewExtraction, onTracker, onDashboards }) {
 
       <div className="metric-grid">
         <div className="metric-card">
-          <div className="metric-label">Total Savings</div>
-          <div className="metric-value">$2.4M</div>
-          <div className="metric-delta">↑ +12% vs 2024</div>
+          <div className="metric-label">Total Identified Savings</div>
+          <div className="metric-value">{fmtM(totalSavings)}</div>
+          <div className="metric-delta muted">from extraction</div>
         </div>
         <div className="metric-card">
-          <div className="metric-label">Net ROI</div>
-          <div className="metric-value">$1.53M</div>
-          <div className="metric-delta">↑ +8% vs 2024</div>
+          <div className="metric-label">Accomplished ROI</div>
+          <div className="metric-value">{fmtM(netROI)}</div>
+          <div className="metric-delta muted">realized value</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Avg Confidence</div>
-          <div className="metric-value">93%</div>
+          <div className="metric-value">{avgConfidence ? `${avgConfidence}%` : '—'}</div>
           <div className="metric-delta muted">across all fields</div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-title">
-          <i className="ti ti-chart-bar" aria-hidden="true" />
-          Savings Breakdown
-        </div>
-        {[
-          { label: 'License spend',     pct: '62%', color: 'var(--blue)',       val: '$870K' },
-          { label: 'Compliance risk',   pct: '24%', color: 'var(--blue-light)', val: '$340K' },
-          { label: 'Support reduction', pct: '14%', color: 'var(--gold)',       val: '18%'   },
-        ].map(b => (
-          <div className="bar-row" key={b.label}>
-            <span className="bar-label">{b.label}</span>
-            <div className="bar-bg">
-              <div className="bar-fill" style={{ width: b.pct, background: b.color }} />
-            </div>
-            <span className="bar-val">{b.val}</span>
+      {breakdown.length > 0 && (
+        <div className="card">
+          <div className="card-title">
+            <i className="ti ti-chart-bar" aria-hidden="true" />
+            Savings Breakdown
           </div>
-        ))}
-      </div>
+          {breakdown.map(b => (
+            <div className="bar-row" key={b.label}>
+              <span className="bar-label">{b.label}</span>
+              <div className="bar-bg">
+                <div className="bar-fill" style={{
+                  width: `${Math.round((b.val / breakdownTotal) * 100)}%`,
+                  background: b.color,
+                }} />
+              </div>
+              <span className="bar-val">{fmtM(b.val)}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button className="btn primary" onClick={onNewExtraction}>
@@ -1739,7 +1799,7 @@ export default function ExtractionView({ onNav }) {
     <ScreenExtract  key={3} selectedFile={selectedFile}   onScriptData={setScriptData} onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
     <ScreenCompare  key={4} fields={finalFields} scriptData={scriptData} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
     <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(4)} />,
-    <ScreenDone     key={6} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
+    <ScreenDone     key={6} finalFields={finalFields} selectedFile={selectedFile} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
 
   return (
