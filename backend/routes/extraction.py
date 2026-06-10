@@ -28,19 +28,36 @@ def _resolve_safe(file_path: str) -> str:
 
 
 class ExtractionRequest(BaseModel):
-    file_path: str
+    file_path: str = ""
+    file_id: str = ""     # id from /api/uploads response
+    stored_name: str = "" # stored_name from /api/uploads response
 
 
 @router.post("/extract")
 async def extract_from_file(body: ExtractionRequest):
     """Extract ROI data from a document file using Claude API."""
-    if not body.file_path.strip():
-        raise HTTPException(status_code=400, detail="file_path cannot be empty")
 
-    abs_path = _resolve_safe(body.file_path)
+    # Resolve which file to use — by id/stored_name (uploads) or by path (documents)
+    abs_path = None
 
-    if not os.path.exists(abs_path):
-        raise HTTPException(status_code=404, detail=f"File not found: {body.file_path}")
+    if body.file_id or body.stored_name:
+        # File from uploads folder
+        stored = body.stored_name or body.file_id
+        candidate = os.path.realpath(os.path.join(UPLOAD_DIR, stored))
+        if os.path.exists(candidate):
+            abs_path = candidate
+        else:
+            # Try finding by id prefix
+            for f in os.listdir(UPLOAD_DIR):
+                if f.startswith(body.file_id):
+                    abs_path = os.path.join(UPLOAD_DIR, f)
+                    break
+
+    elif body.file_path.strip():
+        abs_path = _resolve_safe(body.file_path)
+
+    if not abs_path or not os.path.exists(abs_path):
+        raise HTTPException(status_code=404, detail="File not found")
 
     try:
         result = await extract_with_claude(abs_path)
