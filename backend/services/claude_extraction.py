@@ -1,10 +1,9 @@
 """
-ROI extraction using the Alfred proxy (Anglepoint's Claude gateway).
+ROI extraction using the Anthropic Claude API directly.
 
-TOKEN SETUP — CUANDO TE DEN UN TOKEN NUEVO:
-  1. Abre el archivo:  DOMOsapiens/backend/.env   ← ESE ARCHIVO
-  2. Reemplaza el valor de ALFRED_TOKEN con el token nuevo (lts_...)
-  3. Guarda el archivo y reinicia el backend.
+TOKEN SETUP:
+  Open backend/.env and make sure this line is there:
+  ANTHROPIC_API_KEY=sk-ant-api03-...
 """
 
 import base64
@@ -12,8 +11,7 @@ import json
 import re
 from pathlib import Path
 
-import httpx
-from config import ALFRED_TOKEN, ALFRED_BASE_URL
+from config import ANTHROPIC_API_KEY
 from services.prompt import EXTRACTION_PROMPT
 
 
@@ -24,19 +22,22 @@ def _pdf_to_base64(file_path: str) -> str:
 
 async def extract_with_claude(file_path: str) -> dict:
     """
-    Send a document file directly to Claude via Alfred proxy.
-    Claude reads the PDF visually — no text extraction needed.
+    Send a document file directly to Claude and return extracted ROI fields.
+    Claude reads the PDF visually — works with design-heavy PowerPoints and PDFs.
     """
-    if not ALFRED_TOKEN:
+    if not ANTHROPIC_API_KEY:
         raise ValueError(
-            "Alfred token is not set. "
-            "Abre backend/.env y pon el token en ALFRED_TOKEN=lts_..."
+            "Anthropic API key is not set. "
+            "Open backend/.env and add: ANTHROPIC_API_KEY=sk-ant-..."
         )
+
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     ext = Path(file_path).suffix.lower()
     b64_data = _pdf_to_base64(file_path)
 
-    # Build the message — send PDF directly as a document block
     if ext == ".pdf":
         content = [
             {
@@ -60,30 +61,14 @@ async def extract_with_claude(file_path: str) -> dict:
             }
         ]
 
-    payload = {
-        "model": "claude-sonnet-4-6",
-        "max_tokens": 1024,
-        "system": EXTRACTION_PROMPT,
-        "messages": [{"role": "user", "content": content}],
-    }
+    message = client.messages.create(
+        model="claude-opus-4-5",
+        max_tokens=1024,
+        system=EXTRACTION_PROMPT,
+        messages=[{"role": "user", "content": content}],
+    )
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        response = await client.post(
-            f"{ALFRED_BASE_URL}/v1/proxy/messages",
-            headers={
-                "Authorization": f"Bearer {ALFRED_TOKEN}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
-
-    if response.status_code != 200:
-        raise ValueError(
-            f"Alfred returned {response.status_code}: {response.text[:300]}"
-        )
-
-    data = response.json()
-    raw = data["content"][0]["text"].strip()
+    raw = message.content[0].text.strip()
 
     json_match = re.search(r"\{.*\}", raw, re.DOTALL)
     if not json_match:

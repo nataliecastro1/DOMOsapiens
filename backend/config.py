@@ -10,6 +10,7 @@ load_dotenv()
 # Y REEMPLAZA EL VALOR DE ALFRED_TOKEN CON EL NUEVO !!!
 # ─────────────────────────────────────────────────────────────────────────────
 ALFRED_TOKEN = os.getenv("ALFRED_TOKEN", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY", "")
 
 # Folder where local ROAR/ELP documents are stored.
 # Drop new documents here — they will appear automatically in search results.
