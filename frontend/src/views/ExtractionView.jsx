@@ -56,38 +56,50 @@ function ScreenRequest({ onNext, onUploaded }) {
   const [year, setYear]       = useState(YEARS[0]);
   const [publisher, setPub]   = useState(PUBLISHERS[0]);
 
-  // Upload card state
-  const [dragOver, setDragOver]     = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [docType, setDocType]       = useState('ROAR');
-  const [uploading, setUploading]   = useState(false);
+  // Upload card state — up to 4 files
+  const MAX_FILES = 4;
+  const [dragOver, setDragOver]       = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [docType, setDocType]         = useState('ROAR');
+  const [uploading, setUploading]     = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const fileInputRef                = useRef(null);
+  const fileInputRef                  = useRef(null);
 
-  // Client / Publisher / Year for the manual-upload path (independent of the
-  // SharePoint search card above).
   const [upClient, setUpClient]       = useState('');
   const [upYear, setUpYear]           = useState(YEARS[0]);
   const [upPublisher, setUpPublisher] = useState(PUBLISHERS[0]);
 
+  const addFiles = (incoming) => {
+    setUploadError(null);
+    const all = [...selectedFiles, ...Array.from(incoming)];
+    if (all.length > MAX_FILES) {
+      setUploadError(`You can upload a maximum of ${MAX_FILES} files at a time.`);
+      setSelectedFiles(all.slice(0, MAX_FILES));
+    } else {
+      setSelectedFiles(all);
+    }
+  };
+
+  const removeFile = (idx) => setSelectedFiles(prev => prev.filter((_, i) => i !== idx));
+
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) { setSelectedFile(file); setUploadError(null); }
+    addFiles(e.dataTransfer.files);
   };
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) { setSelectedFile(file); setUploadError(null); }
+    addFiles(e.target.files);
+    e.target.value = '';
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (!selectedFiles.length) return;
     setUploading(true);
     setUploadError(null);
     try {
-      const meta = await uploadFile(selectedFile);
+      // Upload first file and proceed — the rest can be queued in future iterations
+      const meta = await uploadFile(selectedFiles[0]);
       onUploaded({
         ...meta,
         name: meta.filename,
@@ -144,56 +156,79 @@ function ScreenRequest({ onNext, onUploaded }) {
       <div id="upload-card" className="card">
         <div className="card-title">
           <i className="ti ti-upload" aria-hidden="true" />
-          Upload a File
+          Upload Files
+          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 400, color: '#6b7fa3' }}>
+            {selectedFiles.length}/{MAX_FILES} files
+          </span>
         </div>
 
         {/* Drag & drop zone */}
         <div
-          onClick={() => fileInputRef.current.click()}
+          onClick={() => selectedFiles.length < MAX_FILES && fileInputRef.current.click()}
           onDragOver={e => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           style={{
             border: `2px dashed ${dragOver ? 'var(--accent)' : '#c8d4e8'}`,
             borderRadius: 8,
-            padding: '32px 16px',
+            padding: '20px 16px',
             textAlign: 'center',
-            cursor: 'pointer',
+            cursor: selectedFiles.length < MAX_FILES ? 'pointer' : 'default',
             background: dragOver ? 'rgba(0,82,204,0.04)' : '#f7f9fc',
             transition: 'border-color 0.15s, background 0.15s',
-            marginBottom: 16,
+            marginBottom: 12,
+            opacity: selectedFiles.length >= MAX_FILES ? 0.5 : 1,
           }}
         >
-          <i
-            className="ti ti-file-upload"
-            style={{ fontSize: 32, color: dragOver ? 'var(--accent)' : '#6b7fa3', display: 'block', marginBottom: 8 }}
+          <i className="ti ti-file-upload"
+            style={{ fontSize: 28, color: dragOver ? 'var(--accent)' : '#6b7fa3', display: 'block', marginBottom: 6 }}
             aria-hidden="true"
           />
-          {selectedFile ? (
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>{selectedFile.name}</div>
-              <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 4 }}>
-                {(selectedFile.size / 1024).toFixed(0)} KB · Click to change
-              </div>
-            </div>
-          ) : (
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>
-                Drag &amp; drop your file here
-              </div>
-              <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 4 }}>
-                or click to browse · PPTX, PDF, XLSX
-              </div>
-            </div>
-          )}
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>
+            {selectedFiles.length >= MAX_FILES ? 'Maximum files reached' : 'Drag & drop files here'}
+          </div>
+          <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 3 }}>
+            {selectedFiles.length < MAX_FILES
+              ? `or click to browse · up to ${MAX_FILES} files · PDF, PPTX, XLSX`
+              : 'Remove a file to add another'}
+          </div>
         </div>
         <input
           ref={fileInputRef}
           type="file"
           accept=".pdf,.pptx,.xlsx,.ppt"
+          multiple
           style={{ display: 'none' }}
           onChange={handleFileChange}
         />
+
+        {/* File list */}
+        {selectedFiles.length > 0 && (
+          <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {selectedFiles.map((f, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: '#f7f9fc', borderRadius: 7, padding: '7px 10px',
+                border: '1px solid #e2e8f0',
+              }}>
+                <i className="ti ti-file-description" style={{ color: '#0052cc', fontSize: 15, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: 'var(--navy)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {f.name}
+                </span>
+                <span style={{ fontSize: 11, color: '#6b7fa3', flexShrink: 0 }}>
+                  {(f.size / 1024).toFixed(0)} KB
+                </span>
+                <button
+                  onClick={() => removeFile(i)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b91c1c', padding: 0, flexShrink: 0 }}
+                  title="Remove"
+                >
+                  <i className="ti ti-x" style={{ fontSize: 13 }} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Document type */}
         <div className="field-group">
@@ -261,9 +296,9 @@ function ScreenRequest({ onNext, onUploaded }) {
         <div className="btn-row">
           <button
             className="btn primary"
-            disabled={!selectedFile || uploading}
+            disabled={!selectedFiles.length || uploading}
             onClick={handleUpload}
-            style={{ opacity: (selectedFile && !uploading) ? 1 : 0.45, cursor: (selectedFile && !uploading) ? 'pointer' : 'not-allowed' }}
+            style={{ opacity: (selectedFiles.length && !uploading) ? 1 : 0.45, cursor: (selectedFiles.length && !uploading) ? 'pointer' : 'not-allowed' }}
           >
             {uploading
               ? <><i className="ti ti-loader-2" style={{ animation: 'spin 0.8s linear infinite' }} aria-hidden="true" /> Uploading…</>
