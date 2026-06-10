@@ -49,10 +49,12 @@ def save_upload(filename: str, content: bytes) -> dict:
     with open(os.path.join(UPLOAD_DIR, stored_name), "wb") as fh:
         fh.write(content)
 
+    full_path = os.path.join(UPLOAD_DIR, stored_name)
     return {
         "id": file_id,
         "filename": os.path.basename(filename),
         "stored_name": stored_name,
+        "path": full_path,
         "size": len(content),
         "content_type": ext.lstrip("."),
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
