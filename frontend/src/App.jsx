@@ -7,6 +7,7 @@ import TrackerView from './views/TrackerView';
 import ClientsView from './views/ClientsView';
 import HelpView from './views/HelpView';
 import LoginView from './views/LoginView';
+import TutorialOverlay, { shouldShowTutorial } from './components/TutorialOverlay';
 import './index.css';
 
 const VIEW_META = {
@@ -18,17 +19,24 @@ const VIEW_META = {
 };
 
 export default function App() {
-  const [loggedIn, setLoggedIn]   = useState(false);
-  const [activeView, setActiveView] = useState('extract');
+  const [loggedIn, setLoggedIn]         = useState(false);
+  const [activeView, setActiveView]     = useState('extract');
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [extractionKey, setExtractionKey] = useState(0);
   const meta = VIEW_META[activeView] || VIEW_META.extract;
 
+  const handleLogin = () => {
+    setLoggedIn(true);
+    if (shouldShowTutorial()) setShowTutorial(true);
+  };
+
   if (!loggedIn) {
-    return <LoginView onLogin={() => setLoggedIn(true)} />;
+    return <LoginView onLogin={handleLogin} />;
   }
 
   const renderView = () => {
     switch (activeView) {
-      case 'extract':    return <ExtractionView onNav={setActiveView} />;
+      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} />;
       case 'dashboards': return <DashboardsView />;
       case 'tracker':    return <TrackerView />;
       case 'clients':    return <ClientsView />;
@@ -39,6 +47,7 @@ export default function App() {
 
   return (
     <div className="app">
+      {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
       <TopBar ctxLabel={meta.ctx} onLogout={() => setLoggedIn(false)} />
       <div className="app-body">
         <Sidebar activeView={activeView} onNav={setActiveView} />
@@ -49,7 +58,7 @@ export default function App() {
               <div className="page-sub">{meta.sub}</div>
             </div>
             {activeView === 'extract' && (
-              <button className="btn primary" onClick={() => setActiveView('extract')}>
+              <button className="btn primary" onClick={() => setExtractionKey(k => k + 1)}>
                 <i className="ti ti-plus" aria-hidden="true" /> New Extraction
               </button>
             )}

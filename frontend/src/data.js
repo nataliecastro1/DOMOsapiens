@@ -1,9 +1,9 @@
 // ─── Mock data for the ROI Extraction App ────────────────────────────────────
 // Replace these with real API calls / Excel reads when connecting to a backend.
 
-export const CLIENTS     = ['Encova Insurance', 'Northgate LLC', 'Acme Corp'];
+export const CLIENTS     = ['Encova Insurance', 'Northgate LLC', 'Acme Corp', 'UPS'];
 export const PUBLISHERS  = ['Oracle', 'Microsoft', 'SAP', 'IBM'];
-export const YEARS       = ['2025', '2024', '2023', '2022'];
+export const YEARS       = Array.from({ length: 2026 - 2009 + 1 }, (_, i) => String(2026 - i));
 
 export const SAMPLE_FILES = [
   { name: 'Encova_Oracle_ROAR_2025_v3.xlsx', modified: 'Apr 12 2025', size: '142 KB', version: 'v3 (final)', tag: 'Latest',  tagColor: 'green' },
@@ -12,11 +12,13 @@ export const SAMPLE_FILES = [
 ];
 
 export const EXTRACTED_FIELDS = [
-  { label: 'Total savings',           value: '$2,400,000', confidence: 97, variant: 'green', source: 'Sheet: All_ROI_Data · B14' },
-  { label: 'License spend',           value: '$870,000',   confidence: 95, variant: 'green', source: 'Sheet: All_ROI_Data · C14' },
-  { label: 'Compliance risk avoided', value: '$340,000',   confidence: 91, variant: 'green', source: 'Sheet: Compliance · D8'    },
-  { label: 'Support cost reduction',  value: '18%',        confidence: 88, variant: 'blue',  source: 'Sheet: Summary · F22'      },
-  { label: 'Net ROI',                 value: '$1,530,000', confidence: 93, variant: 'green', source: 'Sheet: All_ROI_Data · H14' },
+  { label: 'Identified Risk',                value: '$2,400,000', confidence: 97, variant: 'green', source: 'Sheet: All_ROI_Data · B14',  flag: null, entryMode: 'extracted' },
+  { label: 'Identified Cost Avoidance',      value: '$870,000',   confidence: 95, variant: 'green', source: 'Sheet: All_ROI_Data · C14',  flag: null, entryMode: 'extracted' },
+  { label: 'Accomplished Cost Avoidance',    value: '$340,000',   confidence: 91, variant: 'green', source: 'Sheet: Compliance · D8',     flag: null, entryMode: 'extracted' },
+  { label: 'Identified Cost Optimization',   value: null,         confidence: 0,  variant: 'blue',  source: null,                         flag: null, entryMode: null        },
+  { label: 'Accomplished Cost Optimization', value: null,         confidence: 0,  variant: 'blue',  source: null,                         flag: null, entryMode: null        },
+  { label: 'Identified Cost Savings',        value: '$1,530,000', confidence: 93, variant: 'green', source: 'Sheet: All_ROI_Data · H14',  flag: null, entryMode: 'extracted' },
+  { label: 'Realized Cost Savings',          value: null,         confidence: 0,  variant: 'green', source: null,                         flag: null, entryMode: null        },
 ];
 
 export const ROI_ROWS = [

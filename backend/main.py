@@ -1,13 +1,22 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import auth, client_scopes, extraction
+from routes import (
+    auth,
+    client_scopes,
+    clients,
+    documents,
+    extraction,
+    records,
+    uploads,
+    roar,
+)
 
 app = FastAPI(title="DOMOsapiens API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -15,6 +24,11 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(client_scopes.router)
 app.include_router(extraction.router)
+app.include_router(records.router)
+app.include_router(documents.router)
+app.include_router(uploads.router)
+app.include_router(clients.router)
+app.include_router(roar.router)
 
 
 @app.get("/api/health")

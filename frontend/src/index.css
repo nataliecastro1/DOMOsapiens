@@ -724,6 +724,221 @@ textarea { resize: vertical; }
   .done-hero { padding: 20px; }
 }
 
+/* ─── Missing-fields Modal ──────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(226, 232, 245, 0.92);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+}
+.modal-box {
+  background: #ffffff;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  padding: 32px 28px;
+  max-width: 480px; width: 90%;
+  box-shadow: 0 4px 24px rgba(0, 25, 65, 0.12), 0 1px 4px rgba(0, 25, 65, 0.08);
+}
+.modal-icon {
+  font-size: 28px; color: var(--amber);
+  margin-bottom: 14px;
+}
+.modal-title {
+  font-size: 15px; font-weight: 600; color: var(--navy);
+  line-height: 1.5; margin-bottom: 16px;
+}
+.modal-missing-list {
+  list-style: none; margin: 0 0 22px; padding: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.modal-missing-list li {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text-muted);
+}
+.modal-missing-list li i { font-size: 10px; color: var(--amber); flex-shrink: 0; }
+.modal-btn-row {
+  display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;
+}
+
+/* ─── Fallback Form ──────────────────────────── */
+.fallback-progress {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--blue);
+  margin-bottom: 18px;
+}
+.fallback-field-def {
+  font-size: 14px; color: var(--text-muted);
+  line-height: 1.6; margin-bottom: 20px;
+}
+.fallback-mode-toggle {
+  display: flex; gap: 8px; margin-bottom: 20px;
+}
+.fallback-mode-btn {
+  flex: 1; padding: 8px 12px; font-size: 13px; font-weight: 600;
+  border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s;
+  border: 1.5px solid var(--border);
+  background: var(--white); color: var(--text-muted);
+}
+.fallback-mode-btn.active {
+  border-color: var(--blue);
+  background: rgba(0, 82, 204, 0.07);
+  color: var(--blue);
+}
+.fallback-questions { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+.fallback-question .field-label { margin-bottom: 6px; font-size: 13px; }
+.fallback-formula {
+  font-size: 12px; color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  padding-top: 12px; margin-bottom: 10px;
+  font-style: italic;
+}
+.fallback-computed-preview {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--navy);
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px; margin-bottom: 4px;
+}
+.fallback-computed-preview i { color: #16a34a; font-size: 15px; }
+.fallback-computed-preview strong { color: #15803d; font-size: 15px; }
+
+/* ─── Fallback Two-Column Layout ─────────────────── */
+.fallback-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+/* ─── Fallback Direct Value Section (left col) ───── */
+.fallback-direct-section {
+  background: linear-gradient(135deg, #eef5ff 0%, #e3effa 100%);
+  border: 2px solid var(--blue-light);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+}
+.fallback-direct-header {
+  display: flex; align-items: flex-start; gap: 12px;
+  margin-bottom: 18px;
+}
+.fallback-direct-header > i {
+  font-size: 28px; color: var(--blue); flex-shrink: 0; margin-top: 1px;
+}
+.fallback-direct-title {
+  font-size: 15px; font-weight: 800; color: var(--navy); margin-bottom: 4px;
+}
+.fallback-direct-sub {
+  font-size: 13px; color: var(--text-muted); line-height: 1.5;
+}
+.fallback-optional-label {
+  font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px;
+}
+.fallback-notes-input {
+  height: 72px; resize: vertical;
+}
+
+/* ─── Fallback Q&A Collapsible (right col) ────────── */
+.fallback-qa-section {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.fallback-qa-toggle {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 16px 18px;
+  background: var(--navy-5);
+  border: none; cursor: pointer; font-family: inherit;
+  text-align: left; font-size: 14px; font-weight: 700; color: var(--navy);
+  transition: background 0.15s;
+}
+.fallback-qa-toggle:hover { background: var(--surface-3); }
+.fallback-qa-toggle > i { font-size: 16px; color: var(--text-muted); flex-shrink: 0; }
+.fallback-qa-toggle-hint {
+  margin-left: auto;
+  font-size: 12px; font-weight: 400; color: var(--text-muted);
+  white-space: nowrap;
+}
+.fallback-qa-body {
+  padding: 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* ─── Input prefix group ($) ─────────────────── */
+.input-prefix-group {
+  display: flex; align-items: stretch;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--white);
+  transition: border-color 0.15s;
+}
+.input-prefix-group:focus-within { border-color: var(--blue); }
+.input-prefix {
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 10px;
+  background: #f0f4fa;
+  font-size: 14px; font-weight: 700; color: var(--text-muted);
+  border-right: 1.5px solid var(--border);
+  user-select: none;
+  flex-shrink: 0;
+}
+.input-prefix-group input {
+  flex: 1; border: none; outline: none;
+  padding: 9px 10px; font-size: 14px;
+  background: transparent; color: var(--navy);
+  /* Remove browser number spinners */
+  -moz-appearance: textfield;
+}
+.input-prefix-group input::-webkit-outer-spin-button,
+.input-prefix-group input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ─── Extract screen helpers ─────────────────── */
+.extract-sub  { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+.extract-error {
+  margin-top: 16px; padding: 14px;
+  background: var(--red-pale); border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--red-text);
+}
+.extract-chip-label { color: var(--text-muted); }
+.extract-chip-missing { color: var(--text-muted); font-weight: 400; font-style: italic; }
+.extract-chip.missing { opacity: 0.65; border-color: var(--amber); }
+
+/* ─── Store screen helpers ───────────────────── */
+.store-sub { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; line-height: 1.6; }
+.store-what-label { display: block; margin-bottom: 12px; }
+
+/* ─── FieldCard — manual + skipped states ────── */
+.field-card-value-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+}
+.field-card-edit-input {
+  font-size: 20px; font-weight: 800; margin-bottom: 12px;
+  width: 100%; border: none; border-bottom: 2px solid var(--blue);
+  outline: none; background: transparent; color: var(--navy);
+}
+.field-card-manual-tag {
+  font-size: 11px; font-weight: 600; color: var(--blue);
+  background: var(--blue-pale, rgba(59,130,246,0.08));
+  border-radius: 4px; padding: 2px 7px;
+  white-space: nowrap;
+}
+.field-card-skipped {
+  opacity: 0.5;
+  background: var(--bg-subtle, #f6f7f9);
+  pointer-events: none;
+}
+.field-card-na {
+  font-size: 15px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px;
+}
+.field-card-skip-tag {
+  font-size: 11px; color: var(--text-muted);
+  display: flex; align-items: center; gap: 5px;
+}
+
 /* ─── Font Face ─────────────────────────────── */
 @font-face {
   font-family: "TT Norms Pro";
