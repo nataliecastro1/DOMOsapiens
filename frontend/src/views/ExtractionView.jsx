@@ -7,6 +7,20 @@ import {
   SAMPLE_FILES, EXTRACTED_FIELDS, EXTRACTION_STEPS,
 } from '../data';
 
+// ─── Blank field template ─────────────────────────────────────────────────────
+// The canonical 7 ROI fields with no data — derived from EXTRACTED_FIELDS so the
+// field labels and variant colors stay in one place (its schema), but every value
+// is nulled. Used as the honest empty state when extraction fails or when a step
+// is reached without any extracted data, instead of substituting mock numbers.
+const BLANK_FIELDS = EXTRACTED_FIELDS.map(f => ({
+  ...f,
+  value: null,
+  confidence: null,
+  source: null,
+  flag: null,
+  entryMode: null,
+}));
+
 // ─── Journey Bar ──────────────────────────────────────────────────────────────
 const STEP_DEFS = [
   { label: 'Request',      icon: 'ti-adjustments-horizontal' },
@@ -119,7 +133,7 @@ function ScreenRequest({ onNext, onUploaded }) {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'stretch' }}>
+    <div className="request-grid">
 
       {/* ── Card 1: SharePoint Search ── */}
       <div id="search-card" className="card">
@@ -157,37 +171,24 @@ function ScreenRequest({ onNext, onUploaded }) {
         <div className="card-title">
           <i className="ti ti-upload" aria-hidden="true" />
           Upload Files
-          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 400, color: '#6b7fa3' }}>
+          <span className="upload-count">
             {selectedFiles.length}/{MAX_FILES} files
           </span>
         </div>
 
         {/* Drag & drop zone */}
         <div
+          className={`upload-dropzone ${dragOver ? 'is-dragover' : ''} ${selectedFiles.length >= MAX_FILES ? 'is-full' : ''}`}
           onClick={() => selectedFiles.length < MAX_FILES && fileInputRef.current.click()}
           onDragOver={e => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
-          style={{
-            border: `2px dashed ${dragOver ? 'var(--accent)' : '#c8d4e8'}`,
-            borderRadius: 8,
-            padding: '20px 16px',
-            textAlign: 'center',
-            cursor: selectedFiles.length < MAX_FILES ? 'pointer' : 'default',
-            background: dragOver ? 'rgba(0,82,204,0.04)' : '#f7f9fc',
-            transition: 'border-color 0.15s, background 0.15s',
-            marginBottom: 12,
-            opacity: selectedFiles.length >= MAX_FILES ? 0.5 : 1,
-          }}
         >
-          <i className="ti ti-file-upload"
-            style={{ fontSize: 28, color: dragOver ? 'var(--accent)' : '#6b7fa3', display: 'block', marginBottom: 6 }}
-            aria-hidden="true"
-          />
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>
+          <i className="ti ti-file-upload upload-dropzone-icon" aria-hidden="true" />
+          <div className="upload-dropzone-title">
             {selectedFiles.length >= MAX_FILES ? 'Maximum files reached' : 'Drag & drop files here'}
           </div>
-          <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 3 }}>
+          <div className="upload-dropzone-hint">
             {selectedFiles.length < MAX_FILES
               ? `or click to browse · up to ${MAX_FILES} files · PDF, PPTX, XLSX`
               : 'Remove a file to add another'}
@@ -198,32 +199,28 @@ function ScreenRequest({ onNext, onUploaded }) {
           type="file"
           accept=".pdf,.pptx,.xlsx,.ppt"
           multiple
-          style={{ display: 'none' }}
+          className="upload-file-input"
           onChange={handleFileChange}
         />
 
         {/* File list */}
         {selectedFiles.length > 0 && (
-          <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="upload-file-list">
             {selectedFiles.map((f, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                background: '#f7f9fc', borderRadius: 7, padding: '7px 10px',
-                border: '1px solid #e2e8f0',
-              }}>
-                <i className="ti ti-file-description" style={{ color: '#0052cc', fontSize: 15, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: 'var(--navy)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div key={i} className="upload-file-chip">
+                <i className="ti ti-file-description upload-file-chip-icon" />
+                <span className="upload-file-chip-name">
                   {f.name}
                 </span>
-                <span style={{ fontSize: 11, color: '#6b7fa3', flexShrink: 0 }}>
+                <span className="upload-file-chip-size">
                   {(f.size / 1024).toFixed(0)} KB
                 </span>
                 <button
                   onClick={() => removeFile(i)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b91c1c', padding: 0, flexShrink: 0 }}
+                  className="upload-file-chip-remove"
                   title="Remove"
                 >
-                  <i className="ti ti-x" style={{ fontSize: 13 }} />
+                  <i className="ti ti-x" />
                 </button>
               </div>
             ))}
@@ -233,29 +230,18 @@ function ScreenRequest({ onNext, onUploaded }) {
         {/* Document type */}
         <div className="field-group">
           <label className="field-label">Document Type</label>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div className="doctype-row">
             {['ROAR', 'ELP'].map(type => (
               <button
                 key={type}
                 onClick={() => setDocType(type)}
-                style={{
-                  flex: 1,
-                  padding: '8px 0',
-                  borderRadius: 6,
-                  border: `1.5px solid ${docType === type ? 'var(--accent)' : '#d0d9ea'}`,
-                  background: docType === type ? 'rgba(0,82,204,0.07)' : '#fff',
-                  color: docType === type ? 'var(--accent)' : '#6b7fa3',
-                  fontWeight: docType === type ? 700 : 400,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
+                className={`doctype-btn ${docType === type ? 'active' : ''}`}
               >
                 {type}
               </button>
             ))}
           </div>
-          <div style={{ fontSize: 11, color: '#6b7fa3', marginTop: 6 }}>
+          <div className="doctype-hint">
             {docType === 'ROAR'
               ? 'Return on Anglepoint Relationship — PowerPoint (.pptx)'
               : 'ELP deliverable — PowerPoint / slide deck'}
@@ -283,25 +269,20 @@ function ScreenRequest({ onNext, onUploaded }) {
         </div>
 
         {uploadError && (
-          <div style={{
-            marginBottom: 12, padding: 10,
-            background: 'var(--red-pale)', borderRadius: 'var(--radius-sm)',
-            fontSize: 12, color: 'var(--red-text)',
-          }}>
-            <i className="ti ti-alert-triangle" style={{ marginRight: 6 }} aria-hidden="true" />
+          <div className="upload-error">
+            <i className="ti ti-alert-triangle" aria-hidden="true" />
             {uploadError}
           </div>
         )}
 
         <div className="btn-row">
           <button
-            className="btn primary"
+            className="btn primary is-gated"
             disabled={!selectedFiles.length || uploading}
             onClick={handleUpload}
-            style={{ opacity: (selectedFiles.length && !uploading) ? 1 : 0.45, cursor: (selectedFiles.length && !uploading) ? 'pointer' : 'not-allowed' }}
           >
             {uploading
-              ? <><i className="ti ti-loader-2" style={{ animation: 'spin 0.8s linear infinite' }} aria-hidden="true" /> Uploading…</>
+              ? <><i className="ti ti-loader-2 spinning" aria-hidden="true" /> Uploading…</>
               : <>Upload &amp; Use This File <i className="ti ti-arrow-right" aria-hidden="true" /></>
             }
           </button>
@@ -335,30 +316,30 @@ function ScreenFiles({ filters = {}, onSelect, onBack }) {
         Matched Files
       </div>
 
-      <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 20 }}>
+      <p className="files-subtitle">
         {loading ? 'Searching…' : (
           <>
-            <strong style={{ color: 'var(--navy)' }}>{files.length}</strong>
+            <strong>{files.length}</strong>
             {' '}file{files.length !== 1 ? 's' : ''} found for{' '}
-            <strong style={{ color: 'var(--navy)' }}>{subtitle}</strong>.
+            <strong>{subtitle}</strong>.
             {files.length > 0 && ' Select one to continue.'}
           </>
         )}
       </p>
 
       {error && (
-        <div style={{ padding: 12, background: 'var(--red-pale)', borderRadius: 8, fontSize: 13, color: 'var(--red-text)', marginBottom: 16 }}>
-          <i className="ti ti-alert-triangle" style={{ marginRight: 6 }} />
+        <div className="files-error">
+          <i className="ti ti-alert-triangle" />
           Could not reach backend: {error}
         </div>
       )}
 
       {!loading && files.length === 0 && !error && (
-        <div style={{ padding: 24, textAlign: 'center', color: '#6b7fa3', fontSize: 14 }}>
-          <i className="ti ti-folder-off" style={{ fontSize: 32, display: 'block', marginBottom: 8 }} />
+        <div className="files-empty">
+          <i className="ti ti-folder-off files-empty-icon" />
           No documents found for these filters.
           <br />
-          <span style={{ fontSize: 12 }}>Try different filters or upload a file manually.</span>
+          <span className="files-empty-hint">Try different filters or upload a file manually.</span>
         </div>
       )}
 
@@ -368,7 +349,7 @@ function ScreenFiles({ filters = {}, onSelect, onBack }) {
             className={`ti ti-file-description file-card-icon ${i === 0 ? 'featured' : ''}`}
             aria-hidden="true"
           />
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="file-card-body">
             <div className="file-card-name">{f.name}</div>
             <div className="file-card-meta">
               <span>{f.modified}</span>
@@ -409,19 +390,19 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
 
   const OPTIONS = [
     {
-      id: 'approve', iconColor: '#4ade80',
+      id: 'approve',
       icon: 'ti-circle-check',
       title: 'Approve — correct file, proceed',
       sub: 'Decision + timestamp stored in audit log',
     },
     {
-      id: 'flag', iconColor: '#fbbf24',
+      id: 'flag',
       icon: 'ti-alert-triangle',
       title: 'Flag — wrong file, return to selection',
       sub: 'Flagged decision is still recorded',
     },
     {
-      id: 'note', iconColor: '#60a5fa',
+      id: 'note',
       icon: 'ti-edit',
       title: 'Approve with notes',
       sub: 'Notes attached to the audit record',
@@ -454,7 +435,7 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
               <span className="sme-info-val">
                 {(selectedFile?.client || selectedFile?.publisher || selectedFile?.year)
                   ? [selectedFile?.client, selectedFile?.publisher, selectedFile?.year].map(v => v || '—').join(' · ')
-                  : 'Encova · Oracle · 2025'}
+                  : '— · — · —'}
               </span>
             </div>
             <div className="sme-info-row">
@@ -474,8 +455,7 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
               onClick={() => setDecision(opt.id)}
             >
               <i
-                className={`ti ${opt.icon} sme-option-icon`}
-                style={{ color: opt.iconColor }}
+                className={`ti ${opt.icon} sme-option-icon ${opt.id}`}
                 aria-hidden="true"
               />
               <div>
@@ -485,7 +465,7 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
             </button>
           ))}
 
-          <div className="field-group" style={{ marginTop: 20 }}>
+          <div className="field-group sme-name-field">
             <label className="field-label sme-field-label" htmlFor="sme-name">
               SME name / initials
             </label>
@@ -504,8 +484,7 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
               <label className="field-label sme-field-label" htmlFor="sme-notes">Notes</label>
               <textarea
                 id="sme-notes"
-                className="sme-input"
-                style={{ height: 80 }}
+                className="sme-input sme-notes-input"
                 placeholder="Add context for the record…"
                 value={smeNotes}
                 onChange={e => setSmeNotes(e.target.value)}
@@ -515,8 +494,7 @@ function ScreenValidate({ selectedFile, onConfirm, onBack }) {
 
           <div className="sme-btn-row">
             <button
-              className="btn"
-              style={{ background: 'rgba(255,255,255,0.07)', borderColor: 'rgba(255,255,255,0.18)', color: '#fff' }}
+              className="btn sme-back-btn"
               onClick={onBack}
             >
               <i className="ti ti-arrow-left" aria-hidden="true" /> Back
@@ -552,6 +530,9 @@ function formatDollar(n) {
 
 // ─── Script extractor (/api/roar/extract) → Compare "Script" column ───────────
 // Maps the extractor's roi_fields keys to the canonical Compare labels.
+// Note: 'identified_cost_savings' is intentionally omitted — the deterministic
+// script extractor does not return it by design (it is not present in standard
+// ROAR documents), so there is no key to map here.
 const ROAR_KEY_TO_LABEL = {
   identified_risk:                'Identified Risk',
   identified_cost_avoidance:      'Identified Cost Avoidance',
@@ -786,16 +767,14 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
           }
 
           // Pass the full selectedFile object so extractFromFile can use id/stored_name/path
-          console.log('[Extract] selectedFile:', selectedFile);
           if (selectedFile) {
             const fileRef = selectedFile.path || selectedFile.id
               ? selectedFile
               : (selectedFile.name || '');
-            console.log('[Extract] calling extractFromFile with:', fileRef);
             tasks.push(
               extractFromFile(fileRef)
-                .then(res => { console.log('[Extract] Claude result:', res); if (!cancelled) setExtractedData(res.data || res); })
-                .catch(err => { console.error('[Extract] Claude error:', err); if (!cancelled) setError(err.message); })
+                .then(res => { if (!cancelled) setExtractedData(res.data || res); })
+                .catch(err => { if (!cancelled) setError(err.message); })
             );
           }
 
@@ -818,17 +797,30 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
   const isDone = stepStatuses.every(s => s === 'done');
 
   const fmt = (n) => n != null ? `$${Number(n).toLocaleString()}` : null;
-  const displayFields = extractedData ? [
-    { label: 'Identified Risk',                value: fmt(extractedData.identified_risk),       variant: 'green', confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.identified_risk       != null ? 'extracted' : null },
-    { label: 'Identified Cost Avoidance',      value: fmt(extractedData.id_cost_avoidance),     variant: 'green', confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.id_cost_avoidance     != null ? 'extracted' : null },
-    { label: 'Accomplished Cost Avoidance',    value: fmt(extractedData.acc_cost_avoidance),    variant: 'green', confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.acc_cost_avoidance    != null ? 'extracted' : null },
-    { label: 'Identified Cost Optimization',   value: fmt(extractedData.id_cost_optimization),  variant: 'blue',  confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.id_cost_optimization  != null ? 'extracted' : null },
-    { label: 'Accomplished Cost Optimization', value: fmt(extractedData.acc_cost_optimization), variant: 'blue',  confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.acc_cost_optimization != null ? 'extracted' : null },
-    { label: 'Identified Cost Savings',        value: fmt(extractedData.realized_savings),      variant: 'green', confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.realized_savings      != null ? 'extracted' : null },
-    { label: 'Realized Cost Savings',          value: fmt(extractedData.contract_spend),        variant: 'green', confidence: extractedData.confidence ?? 0, source: null, flag: null, entryMode: extractedData.contract_spend        != null ? 'extracted' : null },
-  ] : EXTRACTED_FIELDS;
 
-  const confidence = extractedData?.confidence ?? 94;
+  // Per-field confidence: prefer a field-specific score if the backend ever returns one
+  // (via a `confidences` map keyed by the field's response key), otherwise fall back to the
+  // single top-level confidence, otherwise null. Today only the top-level value exists, so
+  // this preserves current behavior without discarding per-field data the backend may add later.
+  const confidenceFor = (key) =>
+    extractedData?.confidences?.[key] ?? extractedData?.confidence ?? null;
+
+  // When extraction returns no data (e.g. the Claude extractor failed), fall back to the
+  // honest blank-field template rather than substituting mock numbers from data.js. The
+  // empty values route the SME into the existing manual-entry / skip flow.
+  const displayFields = extractedData ? [
+    { label: 'Identified Risk',                value: fmt(extractedData.identified_risk),       variant: 'green', confidence: confidenceFor('identified_risk'),       source: null, flag: null, entryMode: extractedData.identified_risk       != null ? 'extracted' : null },
+    { label: 'Identified Cost Avoidance',      value: fmt(extractedData.id_cost_avoidance),     variant: 'green', confidence: confidenceFor('id_cost_avoidance'),     source: null, flag: null, entryMode: extractedData.id_cost_avoidance     != null ? 'extracted' : null },
+    { label: 'Accomplished Cost Avoidance',    value: fmt(extractedData.acc_cost_avoidance),    variant: 'green', confidence: confidenceFor('acc_cost_avoidance'),    source: null, flag: null, entryMode: extractedData.acc_cost_avoidance    != null ? 'extracted' : null },
+    { label: 'Identified Cost Optimization',   value: fmt(extractedData.id_cost_optimization),  variant: 'blue',  confidence: confidenceFor('id_cost_optimization'),  source: null, flag: null, entryMode: extractedData.id_cost_optimization  != null ? 'extracted' : null },
+    { label: 'Accomplished Cost Optimization', value: fmt(extractedData.acc_cost_optimization), variant: 'blue',  confidence: confidenceFor('acc_cost_optimization'), source: null, flag: null, entryMode: extractedData.acc_cost_optimization != null ? 'extracted' : null },
+    // identified_cost_savings is intentionally absent from the Claude AI extractor prompt, so the backend
+    // never returns it — this will always be null/undefined here and correctly triggers the manual entry fallback.
+    { label: 'Identified Cost Savings',        value: fmt(extractedData.identified_cost_savings), variant: 'green', confidence: confidenceFor('identified_cost_savings'), source: null, flag: null, entryMode: extractedData.identified_cost_savings != null ? 'extracted' : null },
+    { label: 'Realized Cost Savings',          value: fmt(extractedData.realized_savings),        variant: 'green', confidence: confidenceFor('realized_savings'),        source: null, flag: null, entryMode: extractedData.realized_savings        != null ? 'extracted' : null },
+  ] : BLANK_FIELDS;
+
+  const confidence = extractedData?.confidence ?? null;
   const confClass = c => c >= 90 ? 'conf-high' : c >= 75 ? 'conf-mid' : 'conf-low';
 
   // Fields with no extracted value
@@ -984,7 +976,7 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
                 />
               </div>
             </div>
-            <div className="field-group" style={{ marginBottom: 0 }}>
+            <div className="field-group field-group-flush">
               <label className="field-label" htmlFor="fb-direct-notes">
                 Commentary Notes <span className="fallback-optional-label">(optional)</span>
               </label>
@@ -1127,8 +1119,7 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
                 {status === 'done'    && <i className="ti ti-check" aria-hidden="true" />}
                 {status === 'running' && (
                   <i
-                    className="ti ti-loader-2"
-                    style={{ animation: 'spin 0.8s linear infinite' }}
+                    className="ti ti-loader-2 spinning"
                     aria-hidden="true"
                   />
                 )}
@@ -1145,7 +1136,7 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
 
       {error && (
         <div className="extract-error">
-          <strong>Backend unavailable:</strong> showing preview data. ({error})
+          <strong>Extraction failed:</strong> no values were returned. Enter the fields manually or skip them below. ({error})
         </div>
       )}
 
@@ -1161,7 +1152,9 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
             ))}
             <div className="extract-chip">
               <span className="extract-chip-label">Confidence:</span>
-              <strong className={confClass(confidence)}>{confidence}%</strong>
+              <strong className={confidence != null ? confClass(confidence) : ''}>
+                {confidence != null ? `${confidence}%` : '—'}
+              </strong>
             </div>
           </div>
           {!showModal && missingFields.length === 0 && (
@@ -1257,7 +1250,7 @@ function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKe
       )}
       <div className="field-card-meta">
         {field.entryMode === 'extracted' && (
-          <span className={confClass} style={{ fontSize: 13 }}>
+          <span className={`${confClass} field-card-conf`}>
             <span className={`conf-dot ${dotClass}`} />
             {field.confidence}%
           </span>
@@ -1278,19 +1271,6 @@ function FieldCard({ field, currentValue, isEditing, onStartEdit, onCommit, onKe
 
 
 // ─── Screen 4: Compare ───────────────────────────────────────────────────────
-// Mocked "what the script found" — keyed by canonical ROI field label.
-// Two intentional mismatches (Identified Cost Optimization, Realized Cost Savings)
-// so the compare screen has something meaningful to resolve during testing.
-// When the real script is deployed, replace these values with the API response.
-const SCRIPT_VALUES = {
-  'Identified Risk':                '$2,400,000',
-  'Identified Cost Avoidance':      '$870,000',
-  'Accomplished Cost Avoidance':    '$340,000',
-  'Identified Cost Optimization':   '$195,000',
-  'Accomplished Cost Optimization': '$98,000',
-  'Identified Cost Savings':        '$1,530,000',
-  'Realized Cost Savings':          '$412,000',
-};
 
 // Strip $ / commas → raw numeric string for the number input
 function toRaw(val) {
@@ -1317,31 +1297,13 @@ function CompareRow({ field, onResolve }) {
     onResolve(field.label, confirmed ? toFormatted(editVal) : null);
   }, [confirmed, editVal]);
 
-  const rowColor    = isSkipped  ? 'rgba(107,127,163,0.06)'
-                    : confirmed  ? 'rgba(34,197,94,0.07)'
-                    : 'rgba(239,68,68,0.06)';
-  const borderColor = isSkipped  ? 'rgba(107,127,163,0.25)'
-                    : confirmed  ? 'rgba(34,197,94,0.25)'
-                    : 'rgba(239,68,68,0.22)';
-
-  const monoStyle = { fontSize: 13, fontFamily: 'monospace', color: '#374151' };
-  const naStyle   = { fontSize: 12, color: '#9ca3af', fontStyle: 'italic' };
+  const rowState = isSkipped ? 'skipped' : confirmed ? 'match' : 'mismatch';
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1.4fr 0.9fr 0.9fr 0.9fr 1.3fr',
-      alignItems: 'center',
-      gap: 0,
-      borderBottom: '1px solid #edf0f6',
-      padding: '11px 16px',
-      background: rowColor,
-      borderLeft: `3px solid ${borderColor}`,
-      transition: 'background 0.2s, border-color 0.2s',
-    }}>
+    <div className={`compare-row ${rowState}`}>
 
       {/* Field name */}
-      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>
+      <span className="compare-cell-field">
         {field.label}
       </span>
 
@@ -1349,25 +1311,24 @@ function CompareRow({ field, onResolve }) {
           the SME-skipped flag (skipping concerns the Claude/SME side, not the
           deterministic script extractor). */}
       {(!field.script || field.script === '—') ? (
-        <span style={naStyle}>—</span>
+        <span className="compare-na">—</span>
       ) : (
-        <span style={{ ...monoStyle, color: (!isSkipped && !scriptMatch) ? '#b91c1c' : '#374151', fontWeight: (!isSkipped && !scriptMatch) ? 600 : 400, display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+        <span className={`compare-script ${(!isSkipped && !scriptMatch) ? 'is-mismatch' : ''}`}>
           <span>
             {field.script}
             {field.scriptUncertain && (
               <i
-                className="ti ti-alert-triangle"
-                style={{ marginLeft: 5, fontSize: 11, color: '#d97706' }}
+                className="ti ti-alert-triangle compare-flag-icon warn"
                 title={`Competing values found: ${field.scriptAlternates.map(a => a.value).filter(Boolean).join(', ')}`}
                 aria-hidden="true"
               />
             )}
             {!field.scriptUncertain && !isSkipped && !scriptMatch && (
-              <i className="ti ti-alert-triangle" style={{ marginLeft: 5, fontSize: 11 }} aria-hidden="true" />
+              <i className="ti ti-alert-triangle compare-flag-icon" aria-hidden="true" />
             )}
           </span>
           {field.scriptUncertain && field.scriptAlternates.length > 0 && (
-            <span style={{ fontSize: 10, color: '#d97706', fontWeight: 400 }}>
+            <span className="compare-alt">
               also: {field.scriptAlternates.map(a => a.value).filter(Boolean).join(', ')}
             </span>
           )}
@@ -1375,39 +1336,36 @@ function CompareRow({ field, onResolve }) {
       )}
 
       {/* Claude AI value */}
-      <span style={field.claude ? monoStyle : naStyle}>
+      <span className={field.claude ? 'compare-mono' : 'compare-na'}>
         {field.claude ?? '—'}
       </span>
 
       {/* SME Derived value */}
-      <span style={field.sme ? { ...monoStyle, color: '#0369a1', fontWeight: 600 } : naStyle}>
-        {isSkipped ? <span style={naStyle}>Skipped</span> : (field.sme ?? '—')}
+      <span className={field.sme ? 'compare-sme' : 'compare-na'}>
+        {isSkipped ? <span className="compare-na">Skipped</span> : (field.sme ?? '—')}
       </span>
 
       {/* Final Value — confirmed: value + pencil; editing: input + Done */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div className="compare-final">
         {isSkipped ? (
-          <span style={naStyle}>—</span>
+          <span className="compare-na">—</span>
         ) : confirmed ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#15803d', fontFamily: 'monospace' }}>
+          <div className="compare-final-confirmed">
+            <span className="compare-final-value">
               {toFormatted(editVal)}
             </span>
             <button
               onClick={() => setConfirmed(false)}
               title="Edit final value"
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
-                color: '#6b7fa3', fontSize: 13, lineHeight: 1, flexShrink: 0,
-              }}
+              className="compare-edit-btn"
               aria-label="Edit final value"
             >
               <i className="ti ti-pencil" aria-hidden="true" />
             </button>
           </div>
         ) : (
-          <div style={{ display: 'flex', gap: 5, width: '100%', alignItems: 'center' }}>
-            <div className="input-prefix-group" style={{ flex: 1 }}>
+          <div className="compare-final-editing">
+            <div className="input-prefix-group compare-final-input">
               <span className="input-prefix">$</span>
               <input
                 autoFocus
@@ -1420,15 +1378,9 @@ function CompareRow({ field, onResolve }) {
               />
             </div>
             <button
+              className="compare-done-btn"
               disabled={!editVal.toString().trim()}
               onClick={() => { if (editVal.toString().trim()) setConfirmed(true); }}
-              style={{
-                padding: '4px 10px', fontSize: 12, fontWeight: 700,
-                background: editVal.toString().trim() ? '#22c55e' : '#d1fae5',
-                color: '#fff', border: 'none', borderRadius: 6,
-                cursor: editVal.toString().trim() ? 'pointer' : 'not-allowed',
-                transition: 'background 0.15s', flexShrink: 0,
-              }}
             >
               Done
             </button>
@@ -1441,15 +1393,14 @@ function CompareRow({ field, onResolve }) {
 
 function ScreenCompare({ fields, scriptData, onNext, onBack }) {
   // Build rows from live extracted fields + the script extractor's values.
-  // script = deterministic .pptx extractor (real values when a file was uploaded,
-  //          otherwise the mock SCRIPT_VALUES so the SharePoint path still demos).
+  // script = deterministic .pptx extractor — real values only (null when no file was
+  //          uploaded, e.g. the SharePoint search path, where the Script column shows —).
   // claude = what the AI extracted (null if it couldn't find it).
   // sme    = what the SME computed via the fallback form (null if extracted or skipped).
   const hasRealScript = scriptData && Object.keys(scriptData).length > 0;
   const scriptFor = (label) => {
     if (hasRealScript) return scriptData[label] || null;   // {value, uncertain, alternates} | null
-    const v = SCRIPT_VALUES[label];
-    return v ? { value: v, uncertain: false, alternates: [] } : null;
+    return null;
   };
 
   const sourceFields = fields && fields.length > 0 ? fields : [];
@@ -1495,32 +1446,28 @@ function ScreenCompare({ fields, scriptData, onNext, onBack }) {
   };
 
   return (
-    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+    <div className="card compare-card">
 
       {/* Header */}
-      <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #edf0f6' }}>
-        <div className="card-title" style={{ marginBottom: 6 }}>
+      <div className="compare-head">
+        <div className="card-title compare-title">
           <i className="ti ti-git-compare" aria-hidden="true" />
           Script vs. Claude AI — Field Comparison
         </div>
-        <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
-          <span style={{ color: '#15803d', fontWeight: 600 }}>
-            <i className="ti ti-circle-check" style={{ marginRight: 4 }} aria-hidden="true" />
+        <div className="compare-summary">
+          <span className="compare-match">
+            <i className="ti ti-circle-check" aria-hidden="true" />
             {matchCount} match{matchCount !== 1 ? 'es' : ''}
           </span>
-          <span style={{ color: '#b91c1c', fontWeight: 600 }}>
-            <i className="ti ti-alert-triangle" style={{ marginRight: 4 }} aria-hidden="true" />
+          <span className="compare-mismatch-label">
+            <i className="ti ti-alert-triangle" aria-hidden="true" />
             {mismatchCount} mismatch{mismatchCount !== 1 ? 'es' : ''} — review required
           </span>
         </div>
 
         {uncertainLabels.length > 0 && (
-          <div style={{
-            marginTop: 12, padding: '10px 12px',
-            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6,
-            fontSize: 12, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 8,
-          }}>
-            <i className="ti ti-alert-triangle" style={{ fontSize: 14, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
+          <div className="compare-uncertain">
+            <i className="ti ti-alert-triangle compare-uncertain-icon" aria-hidden="true" />
             <span>
               <strong>Uncertain extraction</strong> — the script found competing values for{' '}
               {uncertainLabels.length} field{uncertainLabels.length !== 1 ? 's' : ''}
@@ -1531,18 +1478,7 @@ function ScreenCompare({ fields, scriptData, onNext, onBack }) {
       </div>
 
       {/* Column headers */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1.4fr 0.9fr 0.9fr 0.9fr 1.3fr',
-        padding: '8px 16px',
-        background: '#f7f9fc',
-        borderBottom: '1px solid #edf0f6',
-        fontSize: 11,
-        fontWeight: 700,
-        color: '#6b7fa3',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-      }}>
+      <div className="compare-header">
         <span>Field</span>
         <span>Script</span>
         <span>Claude AI</span>
@@ -1558,21 +1494,20 @@ function ScreenCompare({ fields, scriptData, onNext, onBack }) {
       </div>
 
       {/* Footer */}
-      <div style={{ padding: '16px 20px', borderTop: '1px solid #edf0f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="compare-footer">
         <button className="btn ghost" onClick={onBack}>
           <i className="ti ti-arrow-left" aria-hidden="true" /> Back
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="compare-footer-actions">
           {!allDone && (
-            <span style={{ fontSize: 12, color: '#b91c1c' }}>
+            <span className="compare-resolve-hint">
               Resolve all red fields to continue
             </span>
           )}
           <button
-            className="btn primary"
+            className="btn primary is-gated"
             disabled={!allDone}
             onClick={handleNext}
-            style={{ opacity: allDone ? 1 : 0.45, cursor: allDone ? 'pointer' : 'not-allowed' }}
           >
             Confirm &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
           </button>
@@ -1584,7 +1519,9 @@ function ScreenCompare({ fields, scriptData, onNext, onBack }) {
 
 // ─── Screen 5: Store ──────────────────────────────────────────────────────────
 function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
-  const sourceFields = fields && fields.length > 0 ? fields : EXTRACTED_FIELDS;
+  // Defensive default for reaching Store directly (e.g. jumping via the Journey Bar)
+  // without any extracted fields — show the honest blank-field template, not mock numbers.
+  const sourceFields = fields && fields.length > 0 ? fields : BLANK_FIELDS;
 
   const [editValues, setEditValues] = useState(
     () => Object.fromEntries(sourceFields.map(f => [f.label, f.value]))
@@ -1691,7 +1628,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   const confidenceVals = fields.filter(f => f.confidence > 0).map(f => f.confidence);
   const avgConfidence  = confidenceVals.length
     ? Math.round(confidenceVals.reduce((a, b) => a + b, 0) / confidenceVals.length)
-    : (fields.length ? 85 : null);
+    : null;
 
   const client    = selectedFile?.client    || selectedFile?.upClient    || '—';
   const publisher = selectedFile?.publisher || selectedFile?.upPublisher || '—';
@@ -1718,7 +1655,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
             {subtitle ? `${subtitle} — ` : ''}All records stored successfully
           </div>
         </div>
-        <div style={{ marginLeft: 'auto' }}>
+        <div className="done-badge-right">
           <Badge color="green">
             <i className="ti ti-circle-check" aria-hidden="true" /> All records stored
           </Badge>
@@ -1754,8 +1691,8 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
               <span className="bar-label">{b.label}</span>
               <div className="bar-bg">
                 <div className="bar-fill" style={{
-                  width: `${Math.round((b.val / breakdownTotal) * 100)}%`,
-                  background: b.color,
+                  '--bar-w': `${Math.round((b.val / breakdownTotal) * 100)}%`,
+                  '--bar-color': b.color,
                 }} />
               </div>
               <span className="bar-val">{fmtM(b.val)}</span>
@@ -1764,7 +1701,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div className="done-actions">
         <button className="btn primary" onClick={onNewExtraction}>
           <i className="ti ti-plus" aria-hidden="true" /> New Extraction
         </button>
@@ -1792,6 +1729,18 @@ export default function ExtractionView({ onNav }) {
   const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n);    setStep(3); };
   const handleStore      = fields            => { setFinalFields(fields); setStep(6); };
 
+  // Reset the entire pipeline so a new extraction starts clean — resetting only
+  // the step would leave selectedFile, smeName, finalFields, filters, and
+  // scriptData populated with stale data from the previous run.
+  const handleReset = () => {
+    setStep(0);
+    setFile(null);
+    setSmeName('');
+    setFinalFields(null);
+    setFilters({});
+    setScriptData(null);
+  };
+
   const screens = [
     <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFileSelect} />,
     <ScreenFiles    key={1} filters={filters} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
@@ -1799,7 +1748,7 @@ export default function ExtractionView({ onNav }) {
     <ScreenExtract  key={3} selectedFile={selectedFile}   onScriptData={setScriptData} onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
     <ScreenCompare  key={4} fields={finalFields} scriptData={scriptData} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
     <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(4)} />,
-    <ScreenDone     key={6} finalFields={finalFields} selectedFile={selectedFile} onNewExtraction={() => setStep(0)} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
+    <ScreenDone     key={6} finalFields={finalFields} selectedFile={selectedFile} onNewExtraction={handleReset} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
 
   return (
@@ -1809,3 +1758,4 @@ export default function ExtractionView({ onNav }) {
     </>
   );
 }
+
