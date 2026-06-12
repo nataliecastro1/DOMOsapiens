@@ -1,104 +1,97 @@
-import React, { useEffect, useState } from 'react';
-import { getClients, addClient } from '../services/api';
+import React, { useState, useRef, useEffect } from 'react';
+import { CLIENTS } from '../data';
 
-// DB-backed client dropdown. Loads the roster from /api/clients and lets the
-// SME add a new client inline, which is persisted server-side and immediately
-// selectable. Falls back gracefully if the backend is unreachable.
-export default function ClientSelect({ value, onChange }) {
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [adding, setAdding]   = useState(false);
-  const [newName, setNewName] = useState('');
-  const [saving, setSaving]   = useState(false);
-  const [error, setError]     = useState(null);
+// Typable client picker. The list comes from `clients` (loaded from the SME's
+// real folders at login); if that hasn't been loaded it falls back to the
+// CLIENTS mock so the field is never empty. Filtering matches anywhere in the
+// name but sorts names that start with the query first. Free text is allowed —
+// the SME can type a client that isn't in the list — so nothing is ever forced.
+export default function ClientSelect({ value, onChange, clients }) {
+  const list = (clients && clients.length) ? clients : CLIENTS;
 
+  const [open, setOpen]     = useState(false);
+  const [query, setQuery]   = useState('');
+  const [active, setActive] = useState(0);
+  const wrapRef = useRef(null);
+
+  // Close the dropdown when clicking outside the component.
   useEffect(() => {
-    let active = true;
-    getClients()
-      .then(list => {
-        if (!active) return;
-        setClients(list);
-        if (!value && list.length) onChange(list[0]);
-      })
-      .catch(e => active && setError(e.message))
-      .finally(() => active && setLoading(false));
-    return () => { active = false; };
+    const onDocClick = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-  const cancelAdd = () => { setAdding(false); setNewName(''); setError(null); };
+  const q = query.trim().toLowerCase();
+  const filtered = (q
+    ? list
+        .filter(c => c.toLowerCase().includes(q))
+        .sort((a, b) => {
+          const ap = a.toLowerCase().startsWith(q) ? 0 : 1;   // prefix matches first
+          const bp = b.toLowerCase().startsWith(q) ? 0 : 1;
+          return ap - bp || a.localeCompare(b, undefined, { sensitivity: 'base' });
+        })
+    : list
+  ).slice(0, 50);   // cap the visible list; keep typing to narrow further
 
-  async function handleAdd() {
-    const name = newName.trim();
-    if (!name) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await addClient(name);
-      setClients(res.clients);
-      onChange(res.name);
-      setNewName('');
-      setAdding(false);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSaving(false);
+  const choose = (name) => {
+    onChange(name);
+    setQuery(name);
+    setOpen(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) { setOpen(true); return; }
+    if (e.key === 'ArrowDown')      { e.preventDefault(); setActive(a => Math.min(a + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); setActive(a => Math.max(a - 1, 0)); }
+    else if (e.key === 'Enter')     {
+      e.preventDefault();
+      if (filtered[active]) choose(filtered[active]);
+      else if (query.trim()) choose(query.trim());
     }
-  }
+    else if (e.key === 'Escape')    { setOpen(false); }
+  };
+
+  // Show the committed value when closed; show what the SME is typing when open.
+  const display = open ? query : (value || '');
 
   return (
-    <div>
-      <select
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        disabled={loading}
-      >
-        {loading
-          ? <option>Loading…</option>
-          : clients.map(c => <option key={c} value={c}>{c}</option>)}
-      </select>
+    <div className="client-select" ref={wrapRef}>
+      <div className={`client-select-field${open ? ' open' : ''}`}>
+        <input
+          type="text"
+          className="client-select-input"
+          value={display}
+          placeholder="Type or select a client…"
+          aria-label="Client"
+          onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); setActive(0); }}
+          onFocus={() => { setQuery(value || ''); setOpen(true); setActive(0); }}
+          onKeyDown={handleKeyDown}
+        />
+        <i className={`ti ti-chevron-down client-select-caret${open ? ' open' : ''}`} aria-hidden="true" />
+      </div>
 
-      {!adding ? (
-        <button
-          type="button"
-          onClick={() => { setAdding(true); setError(null); }}
-          style={{
-            marginTop: 8, background: 'none', border: 'none', padding: 0,
-            color: 'var(--accent)', fontSize: 12, fontWeight: 600,
-            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
-          }}
-        >
-          <i className="ti ti-plus" aria-hidden="true" /> Add new client
-        </button>
-      ) : (
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <input
-            autoFocus
-            type="text"
-            value={newName}
-            placeholder="New client name"
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') handleAdd();
-              if (e.key === 'Escape') cancelAdd();
-            }}
-            style={{ flex: 1 }}
-          />
-          <button
-            className="btn small primary"
-            onClick={handleAdd}
-            disabled={saving || !newName.trim()}
-          >
-            {saving ? 'Adding…' : 'Add'}
-          </button>
-          <button className="btn small ghost" onClick={cancelAdd} disabled={saving}>
-            Cancel
-          </button>
-        </div>
+      {open && filtered.length > 0 && (
+        <ul className="client-select-list" role="listbox">
+          {filtered.map((c, i) => (
+            <li
+              key={c}
+              role="option"
+              aria-selected={c === value}
+              className={`client-select-option${i === active ? ' active' : ''}${c === value ? ' selected' : ''}`}
+              onMouseDown={(e) => { e.preventDefault(); choose(c); }}
+              onMouseEnter={() => setActive(i)}
+            >
+              {c}
+            </li>
+          ))}
+        </ul>
       )}
 
-      {error && (
-        <div style={{ color: 'var(--red-text)', fontSize: 12, marginTop: 6 }}>
-          {error}
+      {open && q && filtered.length === 0 && (
+        <div className="client-select-empty">
+          No matches — press Enter to use &ldquo;{query.trim()}&rdquo;.
         </div>
       )}
     </div>
