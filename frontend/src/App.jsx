@@ -20,13 +20,15 @@ const VIEW_META = {
 
 export default function App() {
   const [loggedIn, setLoggedIn]         = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState('');
   const [activeView, setActiveView]     = useState('extract');
   const [showTutorial, setShowTutorial] = useState(false);
   const [extractionKey, setExtractionKey] = useState(0);
   const meta = VIEW_META[activeView] || VIEW_META.extract;
 
-  const handleLogin = () => {
+  const handleLogin = (username) => {
     setLoggedIn(true);
+    setLoggedInUser(username);
     if (shouldShowTutorial()) setShowTutorial(true);
   };
 
@@ -36,12 +38,12 @@ export default function App() {
 
   const renderView = () => {
     switch (activeView) {
-      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} />;
+      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} loggedInUser={loggedInUser} />;
       case 'dashboards': return <DashboardsView />;
-      case 'tracker':    return <TrackerView />;
+      case 'tracker':    return <TrackerView loggedInUser={loggedInUser} />;
       case 'clients':    return <ClientsView />;
       case 'help':       return <HelpView />;
-      default:           return <ExtractionView onNav={setActiveView} />;
+      default:           return <ExtractionView onNav={setActiveView} loggedInUser={loggedInUser} />;
     }
   };
 
