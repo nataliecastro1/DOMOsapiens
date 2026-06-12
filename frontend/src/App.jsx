@@ -8,6 +8,7 @@ import ClientsView from './views/ClientsView';
 import HelpView from './views/HelpView';
 import LoginView from './views/LoginView';
 import TutorialOverlay, { shouldShowTutorial } from './components/TutorialOverlay';
+import ClientFolderGate from './components/ClientFolderGate';
 import './index.css';
 
 const VIEW_META = {
@@ -23,12 +24,26 @@ export default function App() {
   const [loggedInUser, setLoggedInUser] = useState('');
   const [activeView, setActiveView]     = useState('extract');
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showClientGate, setShowClientGate] = useState(false);
+  const [clients, setClients]           = useState(null);
+  const [clientHandles, setClientHandles] = useState(null);
   const [extractionKey, setExtractionKey] = useState(0);
   const meta = VIEW_META[activeView] || VIEW_META.extract;
 
   const handleLogin = (username) => {
     setLoggedIn(true);
     setLoggedInUser(username);
+    setShowClientGate(true);   // ask to load the client list before the app loads
+  };
+
+  // Called when the client-folder gate finishes — either with a loaded list or
+  // a skip (result === null). Tutorial follows once the gate is dismissed.
+  const finishClientGate = (result) => {
+    if (result && result.clients && result.clients.length) {
+      setClients(result.clients);
+      setClientHandles(result.handles);
+    }
+    setShowClientGate(false);
     if (shouldShowTutorial()) setShowTutorial(true);
   };
 
@@ -36,14 +51,23 @@ export default function App() {
     return <LoginView onLogin={handleLogin} />;
   }
 
+  if (showClientGate) {
+    return (
+      <ClientFolderGate
+        onLoaded={finishClientGate}
+        onSkip={() => finishClientGate(null)}
+      />
+    );
+  }
+
   const renderView = () => {
     switch (activeView) {
-      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} loggedInUser={loggedInUser} />;
+      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} />;
       case 'dashboards': return <DashboardsView />;
       case 'tracker':    return <TrackerView loggedInUser={loggedInUser} />;
       case 'clients':    return <ClientsView />;
       case 'help':       return <HelpView />;
-      default:           return <ExtractionView onNav={setActiveView} loggedInUser={loggedInUser} />;
+      default:           return <ExtractionView onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} />;
     }
   };
 

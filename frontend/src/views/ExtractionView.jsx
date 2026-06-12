@@ -65,10 +65,10 @@ function JourneyBar({ currentStep, onStep }) {
 }
 
 // ─── Screen 0: Request ────────────────────────────────────────────────────────
-function ScreenRequest({ onNext, onUploaded }) {
+function ScreenRequest({ onNext, onUploaded, clients }) {
   const [client, setClient]   = useState('');
-  const [year, setYear]       = useState(YEARS[0]);
-  const [publisher, setPub]   = useState(PUBLISHERS[0]);
+  const [year, setYear]       = useState('');
+  const [publisher, setPub]   = useState('');
 
   // Upload card state — up to 4 files
   const MAX_FILES = 4;
@@ -143,18 +143,20 @@ function ScreenRequest({ onNext, onUploaded }) {
         </div>
         <div className="field-group">
           <label className="field-label" htmlFor="req-client">Client</label>
-          <ClientSelect value={client} onChange={setClient} />
+          <ClientSelect value={client} onChange={setClient} clients={clients} />
         </div>
         <div className="grid-2">
           <div className="field-group">
             <label className="field-label" htmlFor="req-year">Year</label>
             <select id="req-year" value={year} onChange={e => setYear(e.target.value)}>
+              <option value="">Any year</option>
               {YEARS.map(y => <option key={y}>{y}</option>)}
             </select>
           </div>
           <div className="field-group">
             <label className="field-label" htmlFor="req-publisher">Publisher</label>
             <select id="req-publisher" value={publisher} onChange={e => setPub(e.target.value)}>
+              <option value="">Any publisher</option>
               {PUBLISHERS.map(p => <option key={p}>{p}</option>)}
             </select>
           </div>
@@ -251,7 +253,7 @@ function ScreenRequest({ onNext, onUploaded }) {
         {/* Client / Publisher / Year — manually set for this upload */}
         <div className="field-group">
           <label className="field-label">Client</label>
-          <ClientSelect value={upClient} onChange={setUpClient} />
+          <ClientSelect value={upClient} onChange={setUpClient} clients={clients} />
         </div>
         <div className="grid-2">
           <div className="field-group">
@@ -294,20 +296,169 @@ function ScreenRequest({ onNext, onUploaded }) {
 }
 
 // ─── Screen 1: Files ──────────────────────────────────────────────────────────
-function ScreenFiles({ filters = {}, onSelect, onBack }) {
-  const [files, setFiles]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
+// Recursively walk a picked directory, yielding each file handle plus the
+// relative folder path it was found in. Lets ScreenFiles search a whole client
+// folder locally (e.g. a OneDrive-synced "Client Delivery" folder) with no
+// backend — it reads file NAMES while walking, so cloud "online-only" files
+// still show up without being downloaded.
+async function* walkDirectory(dirHandle, pathPrefix = '') {
+  for await (const entry of dirHandle.values()) {
+    const entryPath = pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name;
+    if (entry.kind === 'file') {
+      yield { handle: entry, path: pathPrefix };
+    } else if (entry.kind === 'directory') {
+      yield* walkDirectory(entry, entryPath);
+    }
+  }
+}
 
-  useEffect(() => {
-    setLoading(true);
-    searchDocuments(filters)
-      .then(res => { setFiles(res.files || []); setLoading(false); })
-      .catch(err => { setError(err.message); setLoading(false); });
-  }, []);
+// A filename counts as a deliverable only if "ROAR" or "ELP" appears as a
+// standalone token. Underscores, spaces and dots count as separators, so a
+// name like "help_notes.xlsx" does NOT match on "elp".
+const DELIVERABLE_RE = /(?:^|[^a-z])(roar|elp)(?:[^a-z]|$)/i;
+
+const formatBytes = (n) => {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const formatModified = (ms) =>
+  new Date(ms)
+    .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    .replace(',', '');
+
+// Rank a filename by version so the current copy of a deliverable wins: a
+// "final" beats any numbered draft, otherwise the highest "v<n>" wins.
+const versionRank = (nm) => {
+  const lower = nm.toLowerCase();
+  const nums  = [...lower.matchAll(/(?:v|ver|version|rev|revision)\.?\s*(\d+)/g)].map(m => Number(m[1]));
+  const versionNum = nums.length ? Math.max(...nums) : 0;
+  const isFinal = /final/.test(lower) ? 1 : 0;
+  return isFinal * 100000 + versionNum;
+};
+
+// Collapse v1/v2/v3 of the same document to one key so they group together.
+// Strips version tokens, "final"/"draft" labels, full dates and the extension.
+// The year is kept on purpose — a 2024 ROAR and a 2025 ROAR are different docs.
+const deliverableKey = (nm) =>
+  nm.toLowerCase()
+    .replace(/\.[a-z0-9]+$/, '')
+    .replace(/\d{2,4}[-_.]\d{2}[-_.]\d{2,4}/g, '')
+    .replace(/[_\-\s]*\(?\s*final\s*\)?/g, '')
+    .replace(/[_\-\s]*draft/g, '')
+    .replace(/[_\-\s]*(?:v|ver|version|rev|revision)\.?\s*\d+/g, '')
+    .replace(/[_\-\s]+/g, ' ')
+    .trim();
+
+function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
+  const [files, setFiles]           = useState([]);
+  const [scanning, setScanning]     = useState(Boolean(clientDir));
+  const [scanned, setScanned]       = useState(false);
+  const [error, setError]           = useState(null);
+  const [folderName, setFolderName] = useState(clientDir ? clientDir.name : '');
 
   const { client = '', year = '', publisher = '' } = filters;
-  const subtitle = [client, publisher, year].filter(Boolean).join(' / ') || 'all documents';
+
+  // The local folder picker is a Chromium-only browser capability. When it is
+  // unavailable (Firefox/Safari) we show a hint instead of a broken button.
+  const supported = typeof window !== 'undefined' && 'showDirectoryPicker' in window;
+
+  // Scan a directory handle for ROAR/ELP deliverables and populate the list.
+  // Shared by the manual picker and by the automatic scan of the client folder
+  // that was already chosen (via its loaded handle) on the Request step.
+  const runScan = async (dirHandle) => {
+    setError(null);
+    setFolderName(dirHandle.name);
+    setFiles([]);
+    setScanned(false);
+    setScanning(true);
+
+    try {
+      const matches = [];
+      const pub = (publisher || '').toLowerCase();
+      const yr  = year ? String(year).toLowerCase() : '';
+      for await (const { handle, path } of walkDirectory(dirHandle)) {
+        const name      = handle.name;
+        const lowerName = name.toLowerCase();
+        const lowerPath = `${path}/${name}`.toLowerCase();
+        // ── Filters: a file must satisfy every criterion the SME actually set ──
+        if (!DELIVERABLE_RE.test(name)) continue;        // must be a ROAR/ELP file
+        if (yr  && !lowerName.includes(yr))  continue;   // year, when chosen
+        if (pub && !lowerPath.includes(pub)) continue;   // publisher, when chosen
+        // Passed the filters — open the file. Only matches are read, so a large
+        // folder of cloud files is never bulk-downloaded just to search it.
+        const file    = await handle.getFile();
+        const docType = /(?:^|[^a-z])elp(?:[^a-z]|$)/i.test(name) ? 'ELP' : 'ROAR';
+        matches.push({
+          name,
+          modified:  formatModified(file.lastModified),
+          size:      formatBytes(file.size),
+          extension: (name.split('.').pop() || '').toUpperCase(),
+          path,
+          docType,
+          publisher,
+          year,
+          _mtime:    file.lastModified,
+        });
+      }
+      // Group the versions of each deliverable, then mark only the top version
+      // of each group as a "best match" — highest version (or "final"), with the
+      // most recently modified file breaking ties. One badge per distinct
+      // deliverable, instead of lighting up every file that shares the same
+      // client / publisher / year in its name.
+      const groups = {};
+      matches.forEach(f => {
+        f._rank  = versionRank(f.name);
+        f._draft = /draft/i.test(f.name);   // a draft is never a best match
+        f._best  = false;
+        const key = deliverableKey(f.name);
+        (groups[key] = groups[key] || []).push(f);
+      });
+      Object.values(groups).forEach(group => {
+        // Only non-draft files are eligible. If a deliverable has only drafts so
+        // far, none of them is highlighted as the best match.
+        const candidates = group.filter(f => !f._draft);
+        if (!candidates.length) return;
+        const top = candidates.reduce((best, f) =>
+          (f._rank > best._rank || (f._rank === best._rank && f._mtime > best._mtime)) ? f : best
+        );
+        top._best = true;
+      });
+      // Best (current) versions first, then most recently modified.
+      matches.sort((a, b) => (b._best - a._best) || (b._mtime - a._mtime));
+      setFiles(matches);
+    } catch (err) {
+      setError(err.message || 'Could not read the selected folder.');
+    } finally {
+      setScanning(false);
+      setScanned(true);
+    }
+  };
+
+  // Open the OS folder picker (a user gesture), then scan the chosen folder.
+  const handlePick = async () => {
+    setError(null);
+    let dirHandle;
+    try {
+      dirHandle = await window.showDirectoryPicker();
+    } catch (err) {
+      // User dismissed the picker — not an error, leave the screen untouched.
+      if (err && err.name === 'AbortError') return;
+      setError(err.message || 'Could not open the folder picker.');
+      return;
+    }
+    runScan(dirHandle);
+  };
+
+  // If the chosen client already has a known folder (loaded at login), scan it
+  // automatically so the SME doesn't have to pick a folder a second time.
+  useEffect(() => {
+    if (clientDir) runScan(clientDir);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientDir]);
+
+  const rankNote = [publisher, year].filter(Boolean).join(' · ');
 
   return (
     <div className="card">
@@ -316,37 +467,63 @@ function ScreenFiles({ filters = {}, onSelect, onBack }) {
         Matched Files
       </div>
 
-      <p className="files-subtitle">
-        {loading ? 'Searching…' : (
-          <>
-            <strong>{files.length}</strong>
-            {' '}file{files.length !== 1 ? 's' : ''} found for{' '}
-            <strong>{subtitle}</strong>.
-            {files.length > 0 && ' Select one to continue.'}
-          </>
-        )}
-      </p>
+      {!supported && (
+        <div className="files-unsupported">
+          <i className="ti ti-browser-x" aria-hidden="true" />
+          Local folder search needs Chrome or Microsoft Edge. Open DOMOsapiens in one of those, or upload a file manually on the previous step.
+        </div>
+      )}
+
+      {supported && !clientDir && !scanned && !scanning && (
+        <div className="files-pick">
+          <i className="ti ti-folder-search files-pick-icon" aria-hidden="true" />
+          <p className="files-pick-text">
+            Choose the client folder on your computer — for example your synced{' '}
+            <strong>Client Delivery</strong> folder. DOMOsapiens scans it for ROAR and ELP files.
+            Your files never leave your machine.
+          </p>
+          <button className="btn primary" onClick={handlePick}>
+            <i className="ti ti-folder-open" aria-hidden="true" /> Choose client folder
+          </button>
+        </div>
+      )}
+
+      {scanning && (
+        <p className="files-subtitle">
+          <i className="ti ti-loader-2 files-scanning-icon" aria-hidden="true" />
+          {' '}Scanning <strong>{folderName}</strong>…
+        </p>
+      )}
 
       {error && (
         <div className="files-error">
-          <i className="ti ti-alert-triangle" />
-          Could not reach backend: {error}
+          <i className="ti ti-alert-triangle" aria-hidden="true" />
+          {' '}{error}
         </div>
       )}
 
-      {!loading && files.length === 0 && !error && (
+      {scanned && !scanning && !error && (
+        <p className="files-subtitle">
+          <strong>{files.length}</strong>
+          {' '}ROAR/ELP file{files.length !== 1 ? 's' : ''} found in <strong>{folderName}</strong>
+          {rankNote && <> matching <strong>{rankNote}</strong></>}
+          {files.length > 0 && '. Select one to continue.'}
+        </p>
+      )}
+
+      {scanned && !scanning && files.length === 0 && !error && (
         <div className="files-empty">
-          <i className="ti ti-folder-off files-empty-icon" />
-          No documents found for these filters.
+          <i className="ti ti-folder-off files-empty-icon" aria-hidden="true" />
+          No ROAR or ELP files matched your search in that folder.
           <br />
-          <span className="files-empty-hint">Try different filters or upload a file manually.</span>
+          <span className="files-empty-hint">Try a broader search (clear the year or publisher), pick a different folder, or upload a file manually on the previous step.</span>
         </div>
       )}
 
-      {files.map((f, i) => (
-        <div className={`file-card ${i === 0 ? 'featured' : ''}`} key={f.name}>
+      {files.map((f) => (
+        <div className={`file-card ${f._best ? 'featured' : ''}`} key={`${f.path}/${f.name}`}>
           <i
-            className={`ti ti-file-description file-card-icon ${i === 0 ? 'featured' : ''}`}
+            className={`ti ti-file-description file-card-icon ${f._best ? 'featured' : ''}`}
             aria-hidden="true"
           />
           <div className="file-card-body">
@@ -355,12 +532,13 @@ function ScreenFiles({ filters = {}, onSelect, onBack }) {
               <span>{f.modified}</span>
               <span>·</span>
               <span>{f.size}</span>
-              <Badge color={i === 0 ? 'green' : 'navy'}>{i === 0 ? 'Best match' : f.extension}</Badge>
+              {f.path && (<><span>·</span><span>{f.path}</span></>)}
+              <Badge color={f._best ? 'green' : 'navy'}>{f._best ? 'Best match' : f.docType}</Badge>
             </div>
           </div>
           <button
-            className={`btn small ${i === 0 ? 'primary' : 'ghost'}`}
-            onClick={() => onSelect({ ...f, version: f.modified, source: 'local' })}
+            className={`btn small ${f._best ? 'primary' : 'ghost'}`}
+            onClick={() => onSelect({ ...f, version: f.modified, source: 'local', client: client || folderName })}
           >
             Select
           </button>
@@ -371,6 +549,11 @@ function ScreenFiles({ filters = {}, onSelect, onBack }) {
         <button className="btn ghost" onClick={onBack}>
           <i className="ti ti-arrow-left" aria-hidden="true" /> Back
         </button>
+        {supported && scanned && (
+          <button className="btn" onClick={handlePick}>
+            <i className="ti ti-folder-open" aria-hidden="true" /> Choose a different folder
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1717,7 +1900,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
 }
 
 // ─── ExtractionView ───────────────────────────────────────────────────────────
-export default function ExtractionView({ onNav, loggedInUser = '' }) {
+export default function ExtractionView({ onNav, clients, clientHandles, loggedInUser = '' }) {
   const [step, setStep]               = useState(0);
   const [selectedFile, setFile]       = useState(null);
   const [smeName, setSmeName]         = useState('');
@@ -1769,9 +1952,15 @@ export default function ExtractionView({ onNav, loggedInUser = '' }) {
     setScriptData(null);
   };
 
+  // Resolve the loaded folder handle for the chosen client, if we have one,
+  // so the Files step can scan it automatically (Phase 2).
+  const clientDir = (clientHandles && filters.client)
+    ? (clientHandles.get(filters.client) || null)
+    : null;
+
   const screens = [
-    <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFileSelect} />,
-    <ScreenFiles    key={1} filters={filters} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
+<ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFileSelect} clients={clients} />,
+    <ScreenFiles    key={1} filters={filters} clientDir={clientDir} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} defaultName={loggedInUser} />,
     <ScreenExtract  key={3} selectedFile={selectedFile}   onScriptData={setScriptData} onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
     <ScreenCompare  key={4} fields={finalFields} scriptData={scriptData} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
@@ -1786,4 +1975,3 @@ export default function ExtractionView({ onNav, loggedInUser = '' }) {
     </>
   );
 }
-
