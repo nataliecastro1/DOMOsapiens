@@ -66,6 +66,16 @@ export async function extractFromUpload(file) {
   return res.json();
 }
 
+/** Save an extracted ROI record to the tracker (upserts by source_file). */
+export async function saveRecord(record) {
+  return post('/records', record);
+}
+
+/** Return all saved ROI records. */
+export async function getRecords() {
+  return get('/records');
+}
+
 /** Return the client roster (sorted names) for the dropdown. */
 export async function getClients() {
   return get('/clients');

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
-import { extractROAR, extractFromFile, uploadFile, searchDocuments } from '../services/api';
+import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord } from '../services/api';
 import {
   PUBLISHERS, YEARS,
   SAMPLE_FILES, EXTRACTED_FIELDS, EXTRACTION_STEPS,
@@ -377,9 +377,9 @@ function ScreenFiles({ filters = {}, onSelect, onBack }) {
 }
 
 // ─── Screen 2: SME Validate ───────────────────────────────────────────────────
-function ScreenValidate({ selectedFile, onConfirm, onBack }) {
+function ScreenValidate({ selectedFile, onConfirm, onBack, defaultName = '' }) {
   const [decision, setDecision] = useState('approve');
-  const [smeName, setSmeName]   = useState('');
+  const [smeName, setSmeName]   = useState(defaultName);
   const [smeNotes, setSmeNotes] = useState('');
   const timestamp = useRef(new Date().toLocaleString());
 
@@ -1717,7 +1717,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
 }
 
 // ─── ExtractionView ───────────────────────────────────────────────────────────
-export default function ExtractionView({ onNav }) {
+export default function ExtractionView({ onNav, loggedInUser = '' }) {
   const [step, setStep]               = useState(0);
   const [selectedFile, setFile]       = useState(null);
   const [smeName, setSmeName]         = useState('');
@@ -1727,7 +1727,35 @@ export default function ExtractionView({ onNav }) {
 
   const handleFileSelect = file              => { setFile(file);    setStep(2); };
   const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n);    setStep(3); };
-  const handleStore      = fields            => { setFinalFields(fields); setStep(6); };
+  const handleStore = (fields) => {
+    setFinalFields(fields);
+    setStep(6);
+
+    const getValue = (label) => {
+      const f = fields.find(x => x.label === label);
+      const n = parseFloat((f?.value || '').toString().replace(/,/g, ''));
+      return isNaN(n) ? null : n;
+    };
+
+    const record = {
+      client:                selectedFile?.client    || selectedFile?.upClient    || '',
+      publisher:             selectedFile?.publisher || selectedFile?.upPublisher || '',
+      year:                  parseInt(selectedFile?.year || selectedFile?.upYear  || new Date().getFullYear()),
+      identified_risk:       getValue('Identified Risk'),
+      id_cost_avoidance:     getValue('Identified Cost Avoidance'),
+      acc_cost_avoidance:    getValue('Accomplished Cost Avoidance'),
+      id_cost_optimization:  getValue('Identified Cost Optimization'),
+      acc_cost_optimization: getValue('Accomplished Cost Optimization'),
+      realized_savings:      getValue('Identified Cost Savings'),
+      contract_spend:        getValue('Realized Cost Savings'),
+      confidence:            fields.find(x => x.confidence != null)?.confidence ?? null,
+      source_file:           selectedFile?.filename || selectedFile?.name || selectedFile?.file_path || '',
+      stored_name:           selectedFile?.stored_name || '',
+      sme:                   smeName || loggedInUser || '',
+    };
+
+    saveRecord(record).catch(err => console.error('[Store] saveRecord failed:', err));
+  };
 
   // Reset the entire pipeline so a new extraction starts clean — resetting only
   // the step would leave selectedFile, smeName, finalFields, filters, and
@@ -1744,7 +1772,7 @@ export default function ExtractionView({ onNav }) {
   const screens = [
     <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFileSelect} />,
     <ScreenFiles    key={1} filters={filters} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
-    <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} />,
+    <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} defaultName={loggedInUser} />,
     <ScreenExtract  key={3} selectedFile={selectedFile}   onScriptData={setScriptData} onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
     <ScreenCompare  key={4} fields={finalFields} scriptData={scriptData} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
     <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(4)} />,

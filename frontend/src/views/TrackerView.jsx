@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Badge from '../components/Badge';
-import { ROI_ROWS, AUDIT_ROWS, SOURCE_FILE_ROWS, ROW_DETAILS } from '../data';
+import { getRecords } from '../services/api';
 
 // ─── Row Detail Panel ─────────────────────────────────────────────────────────
 function RowDetailPanel({ detail, onClose }) {
@@ -54,14 +54,46 @@ function RowDetailPanel({ detail, onClose }) {
 
 // ─── Tab: ROI Data ────────────────────────────────────────────────────────────
 function TabROIData() {
-  const [detailIdx, setDetailIdx] = useState(null);
+  const [records, setRecords]     = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [detailRow, setDetailRow] = useState(null);
 
-  const statusColor = (s) => s === 'Stored' ? 'green' : 'amber';
-  const confColor   = (c) => parseInt(c) >= 90 ? 'green' : parseInt(c) >= 75 ? 'amber' : 'red';
+  useEffect(() => {
+    getRecords()
+      .then(data => setRecords(Array.isArray(data) ? data : []))
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const fmt = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
+  const confColor = (c) => c >= 90 ? 'green' : c >= 75 ? 'amber' : 'red';
+
+  const totalSavings = (r) => {
+    const sum = [r.id_cost_avoidance, r.acc_cost_avoidance, r.id_cost_optimization,
+                 r.acc_cost_optimization, r.realized_savings].reduce((a, v) => a + (v || 0), 0);
+    return sum > 0 ? `$${sum.toLocaleString()}` : '—';
+  };
+
+  const toDetail = (r) => ({
+    title:      r.client,
+    file:       r.source_file || '—',
+    ver:        '1.0',
+    mod:        r.saved_at ? new Date(r.saved_at).toLocaleDateString() : '—',
+    size:       '—',
+    path:       r.source_file || '—',
+    sme:        r.sme || '—',
+    sme_ts:     r.saved_at ? new Date(r.saved_at).toLocaleString() : '—',
+    decision:   'Approved',
+    notes:      r.notes || '',
+    extract_ts: r.saved_at ? new Date(r.saved_at).toLocaleString() : '—',
+    stored_ts:  r.saved_at ? new Date(r.saved_at).toLocaleString() : '—',
+  });
+
+  if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading records…</p>;
 
   return (
     <>
-      <p style={{ fontSize: 12, color: 'var(--blue)', marginBottom: 10, cursor: 'pointer' }} onClick={() => setDetailIdx(0)}>
+      <p style={{ fontSize: 12, color: 'var(--blue)', marginBottom: 10 }}>
         <i className="ti ti-info-circle" aria-hidden="true" /> Click any row to view full audit detail
       </p>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -70,23 +102,28 @@ function TabROIData() {
             <thead>
               <tr>
                 <th>#</th><th>Client</th><th>Publisher</th><th>Year</th>
-                <th>Total Savings</th><th>Net ROI</th><th>Confidence</th>
+                <th>Total Savings</th><th>Confidence</th>
                 <th>SME</th><th>Source File</th><th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {ROI_ROWS.map((row, i) => (
-                <tr key={row.id} className="clickable" onClick={() => setDetailIdx(i)}>
-                  <td style={{ color: 'var(--text-faint)' }}>{row.id}</td>
-                  <td>{row.client}</td>
-                  <td>{row.publisher}</td>
-                  <td>{row.year}</td>
-                  <td style={{ fontWeight: 600 }}>{row.savings}</td>
-                  <td style={{ fontWeight: 600 }}>{row.roi}</td>
-                  <td><Badge color={confColor(row.confidence)}>{row.confidence}</Badge></td>
-                  <td>{row.sme}</td>
-                  <td style={{ color: 'var(--blue)', fontSize: 11 }}>{row.sourceFile}</td>
-                  <td><Badge color={statusColor(row.status)}>{row.status}</Badge></td>
+              {records.length === 0 ? (
+                <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No records yet. Complete an extraction to see data here.</td></tr>
+              ) : records.map((r, i) => (
+                <tr key={i} className="clickable" onClick={() => setDetailRow(toDetail(r))}>
+                  <td style={{ color: 'var(--text-faint)' }}>{i + 1}</td>
+                  <td>{r.client}</td>
+                  <td>{r.publisher}</td>
+                  <td>{r.year}</td>
+                  <td style={{ fontWeight: 600 }}>{totalSavings(r)}</td>
+                  <td>{r.confidence != null ? <Badge color={confColor(r.confidence)}>{r.confidence}%</Badge> : '—'}</td>
+                  <td>{r.sme || '—'}</td>
+                  <td style={{ fontSize: 11 }}>
+                    {r.stored_name
+                      ? <a href={`http://localhost:8000/api/uploads/${r.stored_name}`} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>{r.source_file || r.stored_name}</a>
+                      : <span style={{ color: 'var(--text-muted)' }}>{r.source_file || '—'}</span>}
+                  </td>
+                  <td><Badge color="green">Stored</Badge></td>
                 </tr>
               ))}
             </tbody>
@@ -94,8 +131,8 @@ function TabROIData() {
         </div>
       </div>
 
-      {detailIdx !== null && (
-        <RowDetailPanel detail={ROW_DETAILS[detailIdx]} onClose={() => setDetailIdx(null)} />
+      {detailRow && (
+        <RowDetailPanel detail={detailRow} onClose={() => setDetailRow(null)} />
       )}
     </>
   );
@@ -103,6 +140,18 @@ function TabROIData() {
 
 // ─── Tab: Audit Log ───────────────────────────────────────────────────────────
 function TabAuditLog() {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getRecords()
+      .then(data => setRecords(Array.isArray(data) ? data : []))
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>;
+
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       <div className="table-wrap">
@@ -111,16 +160,18 @@ function TabAuditLog() {
             <tr><th>Timestamp</th><th>Client</th><th>Publisher</th><th>Year</th><th>SME</th><th>Decision</th><th>File selected</th><th>Notes</th></tr>
           </thead>
           <tbody>
-            {AUDIT_ROWS.map((r, i) => (
+            {records.length === 0 ? (
+              <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No audit entries yet.</td></tr>
+            ) : records.map((r, i) => (
               <tr key={i}>
-                <td style={{ color: 'var(--text-faint)' }}>{r.ts}</td>
+                <td style={{ color: 'var(--text-faint)' }}>{r.saved_at ? new Date(r.saved_at).toLocaleString() : '—'}</td>
                 <td>{r.client}</td>
                 <td>{r.publisher}</td>
                 <td>{r.year}</td>
-                <td>{r.sme}</td>
-                <td><Badge color={r.decisionColor}>{r.decision}</Badge></td>
-                <td style={{ fontSize: 11 }}>{r.file}</td>
-                <td style={{ color: 'var(--text-muted)', fontSize: 11 }}>{r.notes}</td>
+                <td>{r.sme || '—'}</td>
+                <td><Badge color="green">Approved</Badge></td>
+                <td style={{ fontSize: 11 }}>{r.source_file || '—'}</td>
+                <td style={{ color: 'var(--text-muted)', fontSize: 11 }}>{r.notes || '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -132,25 +183,40 @@ function TabAuditLog() {
 
 // ─── Tab: Source Files ────────────────────────────────────────────────────────
 function TabSourceFiles() {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getRecords()
+      .then(data => setRecords(Array.isArray(data) ? data : []))
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>;
+
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       <div className="table-wrap">
         <table className="data-table">
           <thead>
-            <tr><th>Filename</th><th>Client</th><th>Publisher</th><th>Year</th><th>Version</th><th>Modified</th><th>Size</th><th>Used on</th><th>SME</th></tr>
+            <tr><th>Filename</th><th>Client</th><th>Publisher</th><th>Year</th><th>Used on</th><th>SME</th></tr>
           </thead>
           <tbody>
-            {SOURCE_FILE_ROWS.map((r, i) => (
+            {records.length === 0 ? (
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No source files yet.</td></tr>
+            ) : records.map((r, i) => (
               <tr key={i}>
-                <td style={{ fontWeight: 500, color: 'var(--blue)' }}>{r.filename}</td>
+                <td style={{ fontWeight: 500 }}>
+                    {r.stored_name
+                      ? <a href={`http://localhost:8000/api/uploads/${r.stored_name}`} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>{r.source_file || r.stored_name}</a>
+                      : <span style={{ color: 'var(--text-muted)' }}>{r.source_file || '—'}</span>}
+                  </td>
                 <td>{r.client}</td>
                 <td>{r.publisher}</td>
                 <td>{r.year}</td>
-                <td>{r.version}</td>
-                <td>{r.modified}</td>
-                <td>{r.size}</td>
-                <td style={{ color: 'var(--text-faint)' }}>{r.usedOn}</td>
-                <td>{r.sme}</td>
+                <td style={{ color: 'var(--text-faint)' }}>{r.saved_at ? new Date(r.saved_at).toLocaleDateString() : '—'}</td>
+                <td>{r.sme || '—'}</td>
               </tr>
             ))}
           </tbody>

@@ -9,7 +9,7 @@ export default function LoginView({ onLogin }) {
     e.preventDefault();
     if (username === 'christina' && password === '123456') {
       setError('');
-      onLogin();
+      onLogin(username);
     } else {
       setError('Incorrect username or password.');
     }
