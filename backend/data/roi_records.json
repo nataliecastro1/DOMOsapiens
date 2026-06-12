@@ -1,0 +1,22 @@
+[
+  {
+    "year": 2025,
+    "client": "Encova Insurance",
+    "publisher": "Oracle",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 1080000.0,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": 1080000.0,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": 6150000.0,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 95,
+    "source_file": "test.pptx",
+    "saved_at": "2026-06-02T22:45:08.273838"
+  }
+]

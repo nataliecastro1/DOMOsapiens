@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Encova Insurance",
+    "added_at": null
+  },
+  {
+    "name": "Northgate LLC",
+    "added_at": null
+  },
+  {
+    "name": "Acme Corp",
+    "added_at": null
+  },
+  {
+    "name": "UPS",
+    "added_at": "2026-06-03T22:33:21.429083+00:00"
+  },
+  {
+    "name": "FedEx",
+    "added_at": "2026-06-10T22:55:39.220244+00:00"
+  },
+  {
+    "name": "OneMain",
+    "added_at": "2026-06-10T23:41:26.937287+00:00"
+  },
+  {
+    "name": "Regeneron",
+    "added_at": "2026-06-10T23:45:43.977867+00:00"
+  }
+]
