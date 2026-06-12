@@ -24,6 +24,8 @@ class ROIRecord(BaseModel):
     elevate_deliverable:     Optional[str]   = None
     confidence:              Optional[int]   = None   # 0–100
     source_file:             Optional[str]   = None
+    sme:                     Optional[str]   = None
+    stored_name:             Optional[str]   = None
 
 AuthState = Literal[
     "unauthenticated",

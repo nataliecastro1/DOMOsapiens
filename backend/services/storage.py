@@ -34,10 +34,18 @@ def _save(records: list[dict]):
 
 
 def save_record(record: ROIRecord) -> dict:
-    """Add a new ROI record. Returns the saved record with a timestamp."""
+    """Upsert an ROI record by source_file — prevents duplicates."""
     records = _load()
     entry = record.model_dump()
     entry["saved_at"] = datetime.utcnow().isoformat()
+
+    if entry.get("source_file"):
+        for i, r in enumerate(records):
+            if r.get("source_file") == entry["source_file"]:
+                records[i] = entry
+                _save(records)
+                return entry
+
     records.append(entry)
     _save(records)
     return entry

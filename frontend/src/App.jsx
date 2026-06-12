@@ -21,6 +21,7 @@ const VIEW_META = {
 
 export default function App() {
   const [loggedIn, setLoggedIn]         = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState('');
   const [activeView, setActiveView]     = useState('extract');
   const [showTutorial, setShowTutorial] = useState(false);
   const [showClientGate, setShowClientGate] = useState(false);
@@ -29,8 +30,9 @@ export default function App() {
   const [extractionKey, setExtractionKey] = useState(0);
   const meta = VIEW_META[activeView] || VIEW_META.extract;
 
-  const handleLogin = () => {
+  const handleLogin = (username) => {
     setLoggedIn(true);
+    setLoggedInUser(username);
     setShowClientGate(true);   // ask to load the client list before the app loads
   };
 
@@ -60,12 +62,12 @@ export default function App() {
 
   const renderView = () => {
     switch (activeView) {
-      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} clients={clients} clientHandles={clientHandles} />;
+      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} />;
       case 'dashboards': return <DashboardsView />;
-      case 'tracker':    return <TrackerView />;
+      case 'tracker':    return <TrackerView loggedInUser={loggedInUser} />;
       case 'clients':    return <ClientsView />;
       case 'help':       return <HelpView />;
-      default:           return <ExtractionView onNav={setActiveView} clients={clients} clientHandles={clientHandles} />;
+      default:           return <ExtractionView onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} />;
     }
   };
 
