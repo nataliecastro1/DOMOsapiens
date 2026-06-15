@@ -746,6 +746,7 @@ textarea { resize: vertical; }
   .store-grid { grid-template-columns: 1fr; }
   .field-cards { grid-template-columns: 1fr; }
   .request-grid { grid-template-columns: 1fr; }
+  .files-columns { grid-template-columns: 1fr; }
   .sme-two-col { grid-template-columns: 1fr; }
   .content { padding: 20px 16px; }
 }
@@ -1143,3 +1144,26 @@ textarea { resize: vertical; }
 .compare-resolve-hint{font-size:12px;color:var(--red-text)}
 .done-badge-right{margin-left:auto}
 .done-actions{display:flex;gap:10px;flex-wrap:wrap}
+
+/* ─── Results columns (ROAR / ELP) ─────────── */
+.files-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.files-column-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted); margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 2px solid var(--border);
+}
+.files-column-empty { font-size: 13px; color: var(--text-faint); font-style: italic; padding: 8px 2px; }
+
+/* No-client modal body text */
+.modal-text { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 18px; }
+
+/* ─── Drafts disclosure (Files step) ───────── */
+.files-drafts { margin-top: 18px; }
+.files-drafts-toggle {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 13px; font-weight: 600; color: var(--blue);
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 0;
+}
+.files-drafts-toggle:hover { text-decoration: underline; }
+.files-drafts-toggle i { font-size: 16px; }
+.files-drafts-list { margin-top: 10px; }

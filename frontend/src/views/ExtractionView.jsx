@@ -69,6 +69,7 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
   const [client, setClient]   = useState('');
   const [year, setYear]       = useState('');
   const [publisher, setPub]   = useState('');
+  const [showNoClient, setShowNoClient] = useState(false);
 
   // Upload card state — up to 4 files
   const MAX_FILES = 4;
@@ -162,7 +163,13 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
           </div>
         </div>
         <div className="btn-row">
-          <button className="btn primary" onClick={() => onNext({ client, year, publisher })}>
+          <button
+            className="btn primary"
+            onClick={() => {
+              if (!client.trim()) { setShowNoClient(true); return; }
+              onNext({ client, year, publisher });
+            }}
+          >
             Find Files <i className="ti ti-arrow-right" aria-hidden="true" />
           </button>
         </div>
@@ -291,6 +298,21 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
         </div>
       </div>
 
+      {showNoClient && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <i className="ti ti-alert-triangle modal-icon" aria-hidden="true" />
+            <div className="modal-title">No client selected</div>
+            <p className="modal-text">Choose a client before searching for files.</p>
+            <div className="modal-btn-row">
+              <button className="btn primary" onClick={() => setShowNoClient(false)}>
+                Back to search
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -316,6 +338,16 @@ async function* walkDirectory(dirHandle, pathPrefix = '') {
 // standalone token. Underscores, spaces and dots count as separators, so a
 // name like "help_notes.xlsx" does NOT match on "elp".
 const DELIVERABLE_RE = /(?:^|[^a-z])(roar|elp)(?:[^a-z]|$)/i;
+
+// A filename is treated as a TEMPLATE (and hidden from results) if it contains
+// "template", or carries date-placeholder tokens like YYYY / MM / DD (e.g.
+// "Client_ROAR_YYYY-MM-DD.xlsx"). YYYY is matched case-sensitively (no real word
+// has it); MM/DD must appear as their own uppercase token so words like
+// "ADDENDUM" aren't caught.
+const isTemplateName = (name) =>
+  /template/i.test(name) ||
+  /YYYY/.test(name) ||
+  /(?:^|[^A-Za-z])(MM|DD)(?:[^A-Za-z]|$)/.test(name);
 
 const formatBytes = (n) => {
   if (n < 1024) return `${n} B`;
@@ -351,12 +383,41 @@ const deliverableKey = (nm) =>
     .replace(/[_\-\s]+/g, ' ')
     .trim();
 
+// One file result card — shared by the ROAR and ELP columns.
+function FileCard({ f, client, folderName, onSelect }) {
+  return (
+    <div className={`file-card ${f._best ? 'featured' : ''}`}>
+      <i
+        className={`ti ti-file-description file-card-icon ${f._best ? 'featured' : ''}`}
+        aria-hidden="true"
+      />
+      <div className="file-card-body">
+        <div className="file-card-name">{f.name}</div>
+        <div className="file-card-meta">
+          <span>{f.modified}</span>
+          <span>·</span>
+          <span>{f.size}</span>
+          {f.path && (<><span>·</span><span>{f.path}</span></>)}
+          <Badge color={f._best ? 'green' : 'navy'}>{f._best ? 'Best match' : f.docType}</Badge>
+        </div>
+      </div>
+      <button
+        className={`btn small ${f._best ? 'primary' : 'ghost'}`}
+        onClick={() => onSelect({ ...f, version: f.modified, source: 'local', client: client || folderName })}
+      >
+        Select
+      </button>
+    </div>
+  );
+}
+
 function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
   const [files, setFiles]           = useState([]);
   const [scanning, setScanning]     = useState(Boolean(clientDir));
   const [scanned, setScanned]       = useState(false);
   const [error, setError]           = useState(null);
   const [folderName, setFolderName] = useState(clientDir ? clientDir.name : '');
+  const [showDrafts, setShowDrafts] = useState(false);
 
   const { client = '', year = '', publisher = '' } = filters;
 
@@ -384,6 +445,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
         const lowerPath = `${path}/${name}`.toLowerCase();
         // ── Filters: a file must satisfy every criterion the SME actually set ──
         if (!DELIVERABLE_RE.test(name)) continue;        // must be a ROAR/ELP file
+        if (isTemplateName(name)) continue;              // hide template files entirely
         if (yr  && !lowerName.includes(yr))  continue;   // year, when chosen
         if (pub && !lowerPath.includes(pub)) continue;   // publisher, when chosen
         // Passed the filters — open the file. Only matches are read, so a large
@@ -410,7 +472,8 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
       const groups = {};
       matches.forEach(f => {
         f._rank  = versionRank(f.name);
-        f._draft = /draft/i.test(f.name);   // a draft is never a best match
+        f._draft = /draft|internal/i.test(f.name);   // drafts and "internal" files are never a best match
+        f._isDraft = /draft/i.test(f.name);          // drafts are tucked into a separate "See drafts" section
         f._best  = false;
         const key = deliverableKey(f.name);
         (groups[key] = groups[key] || []).push(f);
@@ -520,30 +583,59 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
         </div>
       )}
 
-      {files.map((f) => (
-        <div className={`file-card ${f._best ? 'featured' : ''}`} key={`${f.path}/${f.name}`}>
-          <i
-            className={`ti ti-file-description file-card-icon ${f._best ? 'featured' : ''}`}
-            aria-hidden="true"
-          />
-          <div className="file-card-body">
-            <div className="file-card-name">{f.name}</div>
-            <div className="file-card-meta">
-              <span>{f.modified}</span>
-              <span>·</span>
-              <span>{f.size}</span>
-              {f.path && (<><span>·</span><span>{f.path}</span></>)}
-              <Badge color={f._best ? 'green' : 'navy'}>{f._best ? 'Best match' : f.docType}</Badge>
-            </div>
+      {files.length > 0 && (
+        <div className="files-columns">
+          <div className="files-column">
+            <div className="files-column-title">ROAR</div>
+            {files.filter(f => f.docType === 'ROAR' && !f._isDraft).length === 0
+              ? <div className="files-column-empty">No ROAR files</div>
+              : files.filter(f => f.docType === 'ROAR' && !f._isDraft).map(f => (
+                  <FileCard key={`${f.path}/${f.name}`} f={f} client={client} folderName={folderName} onSelect={onSelect} />
+                ))}
           </div>
-          <button
-            className={`btn small ${f._best ? 'primary' : 'ghost'}`}
-            onClick={() => onSelect({ ...f, version: f.modified, source: 'local', client: client || folderName })}
-          >
-            Select
-          </button>
+          <div className="files-column">
+            <div className="files-column-title">ELP</div>
+            {files.filter(f => f.docType === 'ELP' && !f._isDraft).length === 0
+              ? <div className="files-column-empty">No ELP files</div>
+              : files.filter(f => f.docType === 'ELP' && !f._isDraft).map(f => (
+                  <FileCard key={`${f.path}/${f.name}`} f={f} client={client} folderName={folderName} onSelect={onSelect} />
+                ))}
+          </div>
         </div>
-      ))}
+      )}
+
+      {files.some(f => f._isDraft) && (
+        <div className="files-drafts">
+          <button
+            className="files-drafts-toggle"
+            onClick={() => setShowDrafts(s => !s)}
+            aria-expanded={showDrafts}
+          >
+            <i className={`ti ti-chevron-${showDrafts ? 'down' : 'right'}`} aria-hidden="true" />
+            See drafts ({files.filter(f => f._isDraft).length})
+          </button>
+          {showDrafts && (
+            <div className="files-columns files-drafts-list">
+              <div className="files-column">
+                <div className="files-column-title">ROAR</div>
+                {files.filter(f => f.docType === 'ROAR' && f._isDraft).length === 0
+                  ? <div className="files-column-empty">No ROAR drafts</div>
+                  : files.filter(f => f.docType === 'ROAR' && f._isDraft).map(f => (
+                      <FileCard key={`${f.path}/${f.name}`} f={f} client={client} folderName={folderName} onSelect={onSelect} />
+                    ))}
+              </div>
+              <div className="files-column">
+                <div className="files-column-title">ELP</div>
+                {files.filter(f => f.docType === 'ELP' && f._isDraft).length === 0
+                  ? <div className="files-column-empty">No ELP drafts</div>
+                  : files.filter(f => f.docType === 'ELP' && f._isDraft).map(f => (
+                      <FileCard key={`${f.path}/${f.name}`} f={f} client={client} folderName={folderName} onSelect={onSelect} />
+                    ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="btn-row">
         <button className="btn ghost" onClick={onBack}>
