@@ -67,13 +67,12 @@ export default function ClientSelect({ value, onChange, clients }) {
           type="text"
           className="client-select-input"
           value={display}
-          placeholder="Type or select a client…"
+          placeholder="Type a client name…"
           aria-label="Client"
           onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); setActive(0); }}
           onFocus={() => { setQuery(value || ''); setOpen(true); setActive(0); }}
           onKeyDown={handleKeyDown}
         />
-        <i className={`ti ti-chevron-down client-select-caret${open ? ' open' : ''}`} aria-hidden="true" />
       </div>
 
       {open && (
