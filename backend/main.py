@@ -6,6 +6,7 @@ from routes import (
     client_scopes,
     clients,
     documents,
+    executive_summary,
     extraction,
     records,
     uploads,
@@ -29,6 +30,7 @@ app.include_router(documents.router)
 app.include_router(uploads.router)
 app.include_router(clients.router)
 app.include_router(roar.router)
+app.include_router(executive_summary.router)
 
 
 @app.get("/api/health")

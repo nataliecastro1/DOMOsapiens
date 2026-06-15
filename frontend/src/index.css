@@ -1167,3 +1167,7 @@ textarea { resize: vertical; }
 .files-drafts-toggle:hover { text-decoration: underline; }
 .files-drafts-toggle i { font-size: 16px; }
 .files-drafts-list { margin-top: 10px; }
+.client-select-add{color:var(--blue);font-weight:500}
+.client-select-add:hover{background:var(--blue-pale)}
+@media print{.no-print{display:none!important}}
+.card,.metric-card,.metric-grid,.done-hero{page-break-inside:avoid;break-inside:avoid}
