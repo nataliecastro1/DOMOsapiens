@@ -76,6 +76,11 @@ export async function getRecords() {
   return get('/records');
 }
 
+/** Generate an executive summary via Claude for the given extraction data. */
+export async function generateExecutiveSummary(data) {
+  return post('/executive-summary', data);
+}
+
 /** Return the client roster (sorted names) for the dropdown. */
 export async function getClients() {
   return get('/clients');

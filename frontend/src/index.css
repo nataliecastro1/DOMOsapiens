@@ -1143,3 +1143,7 @@ textarea { resize: vertical; }
 .compare-resolve-hint{font-size:12px;color:var(--red-text)}
 .done-badge-right{margin-left:auto}
 .done-actions{display:flex;gap:10px;flex-wrap:wrap}
+.client-select-add{color:var(--blue);font-weight:500}
+.client-select-add:hover{background:var(--blue-pale)}
+@media print{.no-print{display:none!important}}
+.card,.metric-card,.metric-grid,.done-hero{page-break-inside:avoid;break-inside:avoid}
