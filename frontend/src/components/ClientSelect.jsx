@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CLIENTS } from '../data';
+import { addClient } from '../services/api';
 
 // Typable client picker. The list comes from `clients` (loaded from the SME's
 // real folders at login); if that hasn't been loaded it falls back to the
@@ -12,7 +13,8 @@ export default function ClientSelect({ value, onChange, clients }) {
   const [open, setOpen]     = useState(false);
   const [query, setQuery]   = useState('');
   const [active, setActive] = useState(0);
-  const wrapRef = useRef(null);
+  const wrapRef  = useRef(null);
+  const inputRef = useRef(null);
 
   // Close the dropdown when clicking outside the component.
   useEffect(() => {
@@ -35,10 +37,11 @@ export default function ClientSelect({ value, onChange, clients }) {
     : list
   ).slice(0, 50);   // cap the visible list; keep typing to narrow further
 
-  const choose = (name) => {
+  const choose = (name, isNew = false) => {
     onChange(name);
     setQuery(name);
     setOpen(false);
+    if (isNew) addClient(name).catch(() => {});
   };
 
   const handleKeyDown = (e) => {
@@ -48,7 +51,7 @@ export default function ClientSelect({ value, onChange, clients }) {
     else if (e.key === 'Enter')     {
       e.preventDefault();
       if (filtered[active]) choose(filtered[active]);
-      else if (query.trim()) choose(query.trim());
+      else if (query.trim()) choose(query.trim(), true);
     }
     else if (e.key === 'Escape')    { setOpen(false); }
   };
@@ -60,6 +63,7 @@ export default function ClientSelect({ value, onChange, clients }) {
     <div className="client-select" ref={wrapRef}>
       <div className={`client-select-field${open ? ' open' : ''}`}>
         <input
+          ref={inputRef}
           type="text"
           className="client-select-input"
           value={display}
@@ -72,7 +76,7 @@ export default function ClientSelect({ value, onChange, clients }) {
         <i className={`ti ti-chevron-down client-select-caret${open ? ' open' : ''}`} aria-hidden="true" />
       </div>
 
-      {open && filtered.length > 0 && (
+      {open && (
         <ul className="client-select-list" role="listbox">
           {filtered.map((c, i) => (
             <li
@@ -86,13 +90,27 @@ export default function ClientSelect({ value, onChange, clients }) {
               {c}
             </li>
           ))}
+          {q && !filtered.find(c => c.toLowerCase() === q) ? (
+            <li
+              role="option"
+              className="client-select-option client-select-add"
+              onMouseDown={(e) => { e.preventDefault(); choose(query.trim(), true); }}
+            >
+              <i className="ti ti-plus" style={{ marginRight: 6, color: 'var(--blue)' }} />
+              Add &ldquo;{query.trim()}&rdquo;
+            </li>
+          ) : (
+            <li
+              role="option"
+              className="client-select-option client-select-add"
+              onMouseDown={(e) => { e.preventDefault(); setQuery(''); setOpen(true); setTimeout(() => inputRef.current?.focus(), 0); }}
+              style={{ borderTop: filtered.length ? '1px solid var(--border-light)' : 'none' }}
+            >
+              <i className="ti ti-plus" style={{ marginRight: 6, color: 'var(--blue)' }} />
+              Add new…
+            </li>
+          )}
         </ul>
-      )}
-
-      {open && q && filtered.length === 0 && (
-        <div className="client-select-empty">
-          No matches — press Enter to use &ldquo;{query.trim()}&rdquo;.
-        </div>
       )}
     </div>
   );

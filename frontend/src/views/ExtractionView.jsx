@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
-import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord } from '../services/api';
+import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, generateExecutiveSummary } from '../services/api';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
+} from 'recharts';
 import {
   PUBLISHERS, YEARS,
   SAMPLE_FILES, EXTRACTED_FIELDS, EXTRACTION_STEPS,
@@ -264,9 +268,7 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
           </div>
           <div className="field-group">
             <label className="field-label">Publisher</label>
-            <select value={upPublisher} onChange={e => setUpPublisher(e.target.value)}>
-              {PUBLISHERS.map(p => <option key={p}>{p}</option>)}
-            </select>
+            <ClientSelect value={upPublisher} onChange={setUpPublisher} clients={PUBLISHERS} />
           </div>
         </div>
 
@@ -1785,8 +1787,31 @@ function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
 }
 
 // ─── Screen 5: Done ───────────────────────────────────────────────────────────
+// ─── Custom Recharts tooltip ──────────────────────────────────────────────────
+function DollarTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  const fmtM = (n) => {
+    if (!n) return '—';
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}K`;
+    return `$${n.toLocaleString()}`;
+  };
+  return (
+    <div style={{ background: '#fff', border: '1px solid #dce3ef', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+      <div style={{ fontWeight: 600, color: '#001941', marginBottom: 4 }}>{label}</div>
+      {payload.map(p => (
+        <div key={p.name} style={{ color: p.fill || p.color }}>{p.name}: {fmtM(p.value)}</div>
+      ))}
+    </div>
+  );
+}
+
 function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onDashboards }) {
-  // Parse a dollar string like "$1,080,000" → number
+  const [summary, setSummary]       = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError]     = useState(null);
+  const doneRef = useRef(null);
+
   const parseDollar = (v) => {
     if (!v) return 0;
     return parseFloat(String(v).replace(/[$,]/g, '')) || 0;
@@ -1802,32 +1827,88 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   const fields = finalFields || [];
   const get = (label) => parseDollar(fields.find(f => f.label === label)?.value);
 
-  const totalSavings   = get('Identified Cost Savings') || get('Identified Risk') || 0;
-  const netROI         = get('Accomplished Cost Avoidance') + get('Accomplished Cost Optimization') || get('Realized Cost Savings') || 0;
+  const idRisk         = get('Identified Risk');
   const idAvoidance    = get('Identified Cost Avoidance');
   const accAvoidance   = get('Accomplished Cost Avoidance');
   const idOptimization = get('Identified Cost Optimization');
+  const accOptimization= get('Accomplished Cost Optimization');
+  const realizedSavings= get('Identified Cost Savings');
+  const contractSpend  = get('Realized Cost Savings');
+
+  const totalSavings = idAvoidance + idOptimization + realizedSavings || idRisk || 0;
+  const netROI       = accAvoidance + accOptimization || 0;
 
   const confidenceVals = fields.filter(f => f.confidence > 0).map(f => f.confidence);
   const avgConfidence  = confidenceVals.length
     ? Math.round(confidenceVals.reduce((a, b) => a + b, 0) / confidenceVals.length)
     : null;
 
-  const client    = selectedFile?.client    || selectedFile?.upClient    || '—';
-  const publisher = selectedFile?.publisher || selectedFile?.upPublisher || '—';
-  const year      = selectedFile?.year      || selectedFile?.upYear      || '—';
-  const subtitle  = [client, publisher, year].filter(v => v && v !== '—').join(' · ');
+  const client    = selectedFile?.client    || selectedFile?.upClient    || '';
+  const publisher = selectedFile?.publisher || selectedFile?.upPublisher || '';
+  const year      = selectedFile?.year      || selectedFile?.upYear      || '';
+  const subtitle  = [client, publisher, year].filter(Boolean).join(' · ');
 
-  // Build breakdown bars from real data
-  const breakdownTotal = idAvoidance + idOptimization || 1;
-  const breakdown = [
-    { label: 'Identified Cost Avoidance',   val: idAvoidance,    color: 'var(--blue)'       },
-    { label: 'Identified Cost Optimization', val: idOptimization, color: 'var(--blue-light)' },
-    { label: 'Accomplished Cost Avoidance',  val: accAvoidance,   color: 'var(--gold)'       },
-  ].filter(b => b.val > 0);
+  // Bar chart data
+  const COLORS = ['#005f86', '#0089af', '#ffad00', '#2d9e5c', '#001941', '#4a6a9c'];
+  const barData = [
+    { name: 'Id. Risk',      value: idRisk },
+    { name: 'Id. Avoidance', value: idAvoidance },
+    { name: 'Acc. Avoidance',value: accAvoidance },
+    { name: 'Id. Optim.',    value: idOptimization },
+    { name: 'Acc. Optim.',   value: accOptimization },
+    { name: 'Realized',      value: realizedSavings },
+  ].filter(d => d.value > 0);
+
+  // Donut chart: Identified vs Accomplished
+  const donutData = [
+    { name: 'Accomplished', value: netROI },
+    { name: 'Remaining',    value: Math.max(0, totalSavings - netROI) },
+  ].filter(d => d.value > 0);
+  const DONUT_COLORS = ['#005f86', '#e6e8ec'];
+
+  // Fetch executive summary once on mount
+  useEffect(() => {
+    if (!fields.length) return;
+    setSummaryLoading(true);
+    generateExecutiveSummary({
+      client, publisher,
+      year:                  parseInt(year) || null,
+      identified_risk:       idRisk          || null,
+      id_cost_avoidance:     idAvoidance     || null,
+      acc_cost_avoidance:    accAvoidance    || null,
+      id_cost_optimization:  idOptimization  || null,
+      acc_cost_optimization: accOptimization || null,
+      realized_savings:      realizedSavings || null,
+      contract_spend:        contractSpend   || null,
+      confidence:            avgConfidence   || null,
+      stored_name:           selectedFile?.stored_name || null,
+      file_path:             selectedFile?.file_path   || null,
+    })
+      .then(data => setSummary(data))
+      .catch(() => setSummaryError('Could not generate summary. Check your API key.'))
+      .finally(() => setSummaryLoading(false));
+  }, []);
+
+  const handleDownloadPDF = () => {
+    import('html2pdf.js').then(mod => {
+      const html2pdf = mod.default;
+      html2pdf()
+        .set({
+          margin: [12, 12, 12, 12],
+          filename: `${[client, publisher, year].filter(Boolean).join('_') || 'ROI'}_Summary.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        })
+        .from(doneRef.current)
+        .save();
+    });
+  };
 
   return (
-    <>
+    <div ref={doneRef}>
+      {/* Header */}
       <div className="done-hero">
         <div className="done-check">
           <i className="ti ti-check" aria-hidden="true" />
@@ -1838,13 +1919,17 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
             {subtitle ? `${subtitle} — ` : ''}All records stored successfully
           </div>
         </div>
-        <div className="done-badge-right">
+        <div className="done-badge-right" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Badge color="green">
             <i className="ti ti-circle-check" aria-hidden="true" /> All records stored
           </Badge>
+          <button className="btn ghost small no-print" onClick={handleDownloadPDF}>
+            <i className="ti ti-file-type-pdf" aria-hidden="true" /> Download PDF
+          </button>
         </div>
       </div>
 
+      {/* KPI Cards */}
       <div className="metric-grid">
         <div className="metric-card">
           <div className="metric-label">Total Identified Savings</div>
@@ -1863,28 +1948,129 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
         </div>
       </div>
 
-      {breakdown.length > 0 && (
-        <div className="card">
-          <div className="card-title">
-            <i className="ti ti-chart-bar" aria-hidden="true" />
-            Savings Breakdown
-          </div>
-          {breakdown.map(b => (
-            <div className="bar-row" key={b.label}>
-              <span className="bar-label">{b.label}</span>
-              <div className="bar-bg">
-                <div className="bar-fill" style={{
-                  '--bar-w': `${Math.round((b.val / breakdownTotal) * 100)}%`,
-                  '--bar-color': b.color,
-                }} />
-              </div>
-              <span className="bar-val">{fmtM(b.val)}</span>
+      {/* Charts */}
+      {barData.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: donutData.length > 1 ? '1fr 1fr' : '1fr', gap: 16, marginBottom: 16 }}>
+
+          {/* Bar chart */}
+          <div className="card">
+            <div className="card-title">
+              <i className="ti ti-chart-bar" aria-hidden="true" />
+              ROI Breakdown{client ? ` — ${client}` : ''}
             </div>
-          ))}
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#5a6e8c' }} />
+                <YAxis tickFormatter={v => v >= 1e6 ? `$${(v/1e6).toFixed(0)}M` : v >= 1e3 ? `$${(v/1e3).toFixed(0)}K` : `$${v}`} tick={{ fontSize: 10, fill: '#5a6e8c' }} width={52} />
+                <Tooltip content={<DollarTooltip />} />
+                <Bar dataKey="value" name="Value" radius={[4, 4, 0, 0]}>
+                  {barData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Donut chart */}
+          {donutData.length > 1 && (
+            <div className="card">
+              <div className="card-title">
+                <i className="ti ti-chart-donut" aria-hidden="true" />
+                Accomplished vs Remaining
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={donutData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} dataKey="value" paddingAngle={2}>
+                    {donutData.map((_, i) => <Cell key={i} fill={DONUT_COLORS[i]} />)}
+                  </Pie>
+                  <Tooltip content={<DollarTooltip />} />
+                  <Legend formatter={(v) => <span style={{ fontSize: 12, color: '#001941' }}>{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       )}
 
-      <div className="done-actions">
+      {/* Executive Summary */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title" style={{ marginBottom: 12 }}>
+          <i className="ti ti-file-description" aria-hidden="true" />
+          Executive Summary{subtitle ? ` — ${subtitle}` : ''}
+        </div>
+
+        {summaryLoading && (
+          <div style={{ color: 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} />
+            Generating executive summary with Claude AI…
+          </div>
+        )}
+
+        {summaryError && (
+          <div style={{ color: 'var(--red)', fontSize: 13 }}>{summaryError}</div>
+        )}
+
+        {summary && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Objective */}
+            <div style={{ background: 'var(--navy)', borderRadius: 8, padding: '14px 18px', color: '#fff' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 6 }}>Engagement Objective</div>
+              <p style={{ fontSize: 14, lineHeight: 1.6, margin: 0 }}>{summary.objective}</p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {/* Accomplishments */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--blue)', marginBottom: 10 }}>
+                  <i className="ti ti-circle-check" /> Accomplishments
+                </div>
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(summary.accomplishments || []).map((item, i) => (
+                    <li key={i} style={{ display: 'flex', gap: 10, fontSize: 13, lineHeight: 1.5 }}>
+                      <span style={{ color: 'var(--green)', fontWeight: 700, flexShrink: 0 }}>✓</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Recommendations */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--blue)', marginBottom: 10 }}>
+                  <i className="ti ti-bulb" /> Recommendations
+                </div>
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(summary.recommendations || []).map((item, i) => (
+                    <li key={i} style={{ display: 'flex', gap: 10, fontSize: 13, lineHeight: 1.5 }}>
+                      <span style={{ color: 'var(--gold)', fontWeight: 700, flexShrink: 0 }}>→</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Highlights */}
+            {summary.highlights?.length > 0 && (
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {summary.highlights.map((h, i) => (
+                  <div key={i} style={{ background: 'var(--blue-pale)', borderRadius: 8, padding: '10px 16px', flex: '1 1 140px' }}>
+                    <div style={{ fontSize: 11, color: 'var(--blue)', fontWeight: 600 }}>{h.label}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)' }}>{h.value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+              Generated by Claude AI · Anglepoint ROI Extraction Platform · {new Date().toLocaleDateString()}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="done-actions no-print">
         <button className="btn primary" onClick={onNewExtraction}>
           <i className="ti ti-plus" aria-hidden="true" /> New Extraction
         </button>
@@ -1895,7 +2081,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
           <i className="ti ti-layout-dashboard" aria-hidden="true" /> Build Dashboard
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
