@@ -760,11 +760,13 @@ textarea { resize: vertical; }
 }
 
 /* ─── Missing-fields Modal ──────────────────── */
+@keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(226, 232, 245, 0.92);
+  background: rgba(226, 232, 245, 0.88);
   display: flex; align-items: center; justify-content: center;
   z-index: 200;
+  animation: modalFade 0.15s ease-out;
 }
 .modal-box {
   background: #ffffff;
@@ -1171,3 +1173,65 @@ textarea { resize: vertical; }
 .client-select-add:hover{background:var(--blue-pale)}
 @media print{.no-print{display:none!important}}
 .card,.metric-card,.metric-grid,.done-hero{page-break-inside:avoid;break-inside:avoid}
+
+/* ─── Multi-file batch ──────────────────────── */
+/* Batch progress indicator — shown above per-file Extract/Compare screens */
+.batch-progress{
+  display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;
+  padding:5px 12px;border-radius:999px;
+  background:var(--blue-pale);color:var(--blue);
+  font-size:12px;font-weight:700;letter-spacing:.02em;
+}
+.batch-progress i{font-size:14px}
+
+/* File cards are clickable checkboxes in the multi-select Files step */
+.file-card{cursor:pointer;outline:none}
+.file-card.selected{border-color:var(--blue);background:var(--blue-pale)}
+.file-card:focus-visible{border-color:var(--blue-light)}
+.file-card-check{font-size:22px;color:var(--navy-faint);flex-shrink:0}
+.file-card-check.is-checked{color:var(--blue)}
+
+/* Batch file list on the SME Validate checkpoint */
+.sme-batch-files{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.sme-batch-file{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;background:var(--surface-2);
+  border:1px solid var(--border-light);border-radius:var(--radius-xs);
+}
+.sme-batch-file i{font-size:16px;color:var(--blue);flex-shrink:0}
+.sme-batch-file-name{font-size:13px;font-weight:600;color:var(--navy);flex:1;word-break:break-all}
+.sme-batch-file-meta{font-size:12px;color:var(--text-muted);flex-shrink:0}
+
+/* Mixed-batch warning + aggregate toggle on Store */
+.batch-warning{
+  display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;
+  padding:10px 12px;border-radius:6px;font-size:12px;
+  background:var(--amber-pale);border:1px solid var(--amber-border);color:var(--amber-text);
+}
+.batch-warning-icon{font-size:14px;margin-top:1px;flex-shrink:0}
+.batch-aggregate-toggle{
+  display:flex;align-items:center;gap:8px;margin-bottom:14px;
+  font-size:13px;color:var(--navy);cursor:pointer;
+}
+.batch-aggregate-toggle input{width:16px;height:16px;accent-color:var(--blue);cursor:pointer}
+
+/* Per-file breakdown on Store */
+.batch-file-list{display:flex;flex-direction:column;gap:10px;margin:10px 0 18px}
+.batch-file-row{
+  padding:12px 14px;background:var(--surface-2);
+  border:1px solid var(--border-light);border-radius:var(--radius-sm);
+}
+.batch-file-name{
+  display:flex;align-items:center;gap:6px;margin-bottom:8px;
+  font-size:13px;font-weight:700;color:var(--navy);
+}
+.batch-file-name i{font-size:15px;color:var(--blue)}
+.batch-file-fields{display:flex;flex-wrap:wrap;gap:6px 14px}
+.batch-file-field{display:inline-flex;align-items:baseline;gap:5px;font-size:12px;color:var(--navy)}
+.batch-file-field-label{color:var(--text-muted)}
+.batch-file-field strong{font-family:monospace}
+
+/* Compare footer — keep Back + Exclude grouped on the left */
+.compare-footer-left{display:flex;align-items:center;gap:8px}
+.compare-exclude-btn{color:var(--red-text);border-color:var(--border)}
+.compare-exclude-btn:hover{border-color:var(--red);color:var(--red);background:var(--red-pale)}
