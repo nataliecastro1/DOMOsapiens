@@ -2,80 +2,108 @@ import React, { useState, useRef, useEffect } from 'react';
 import { CLIENTS } from '../data';
 import { addClient } from '../services/api';
 
-// Typable client picker. The list comes from `clients` (loaded from the SME's
-// real folders at login); if that hasn't been loaded it falls back to the
-// CLIENTS mock so the field is never empty. Filtering matches anywhere in the
-// name but sorts names that start with the query first. Free text is allowed —
-// the SME can type a client that isn't in the list — so nothing is ever forced.
 export default function ClientSelect({ value, onChange, clients }) {
   const list = (clients && clients.length) ? clients : CLIENTS;
 
   const [open, setOpen]     = useState(false);
   const [query, setQuery]   = useState('');
   const [active, setActive] = useState(0);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [saving, setSaving]   = useState(false);
   const wrapRef  = useRef(null);
-  const inputRef = useRef(null);
+  const addRef   = useRef(null);
 
-  // Close the dropdown when clicking outside the component.
   useEffect(() => {
     const onDocClick = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false);
+        setAdding(false);
+        setNewName('');
+      }
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
+  useEffect(() => {
+    if (adding && addRef.current) addRef.current.focus();
+  }, [adding]);
+
   const q = query.trim().toLowerCase();
   const filtered = (q
-    ? list
-        .filter(c => c.toLowerCase().includes(q))
-        .sort((a, b) => {
-          const ap = a.toLowerCase().startsWith(q) ? 0 : 1;   // prefix matches first
-          const bp = b.toLowerCase().startsWith(q) ? 0 : 1;
-          return ap - bp || a.localeCompare(b, undefined, { sensitivity: 'base' });
-        })
+    ? list.filter(c => c.toLowerCase().includes(q)).sort((a, b) => {
+        const ap = a.toLowerCase().startsWith(q) ? 0 : 1;
+        const bp = b.toLowerCase().startsWith(q) ? 0 : 1;
+        return ap - bp || a.localeCompare(b, undefined, { sensitivity: 'base' });
+      })
     : list
-  ).slice(0, 50);   // cap the visible list; keep typing to narrow further
+  ).slice(0, 50);
 
-  const choose = (name, isNew = false) => {
+  const choose = (name) => {
     onChange(name);
     setQuery(name);
     setOpen(false);
-    if (isNew) addClient(name).catch(() => {});
+  };
+
+  const handleSaveNew = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    setSaving(true);
+    try { await addClient(name); } catch (_) {}
+    onChange(name);
+    setQuery(name);
+    setAdding(false);
+    setNewName('');
+    setOpen(false);
+    setSaving(false);
   };
 
   const handleKeyDown = (e) => {
     if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) { setOpen(true); return; }
-    if (e.key === 'ArrowDown')      { e.preventDefault(); setActive(a => Math.min(a + 1, filtered.length - 1)); }
-    else if (e.key === 'ArrowUp')   { e.preventDefault(); setActive(a => Math.max(a - 1, 0)); }
-    else if (e.key === 'Enter')     {
-      e.preventDefault();
-      if (filtered[active]) choose(filtered[active]);
-      else if (query.trim()) choose(query.trim(), true);
-    }
-    else if (e.key === 'Escape')    { setOpen(false); }
+    if (e.key === 'ArrowDown')    { e.preventDefault(); setActive(a => Math.min(a + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => Math.max(a - 1, 0)); }
+    else if (e.key === 'Enter')   { e.preventDefault(); if (filtered[active]) choose(filtered[active]); }
+    else if (e.key === 'Escape')  { setOpen(false); }
   };
 
-  // Show the committed value when closed; show what the SME is typing when open.
   const display = open ? query : (value || '');
 
   return (
-    <div className="client-select" ref={wrapRef}>
-      <div className={`client-select-field${open ? ' open' : ''}`}>
-        <input
-          ref={inputRef}
-          type="text"
-          className="client-select-input"
-          value={display}
-          placeholder="Type a client name…"
-          aria-label="Client"
-          onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); setActive(0); }}
-          onFocus={() => { setQuery(value || ''); setOpen(true); setActive(0); }}
-          onKeyDown={handleKeyDown}
-        />
+    <div ref={wrapRef} className="client-select">
+      {/* Input row with "+" button */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div className={`client-select-field${open ? ' open' : ''}`} style={{ flex: 1 }}>
+          <input
+            type="text"
+            className="client-select-input"
+            value={display}
+            placeholder="Type or select a client…"
+            aria-label="Client"
+            onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); setActive(0); }}
+            onFocus={() => { setQuery(value || ''); setOpen(true); setActive(0); }}
+            onKeyDown={handleKeyDown}
+          />
+          <i className={`ti ti-chevron-down client-select-caret${open ? ' open' : ''}`} aria-hidden="true" />
+        </div>
+
+        <button
+          type="button"
+          title="Add new client"
+          onClick={() => { setAdding(a => !a); setOpen(false); setNewName(''); }}
+          style={{
+            flexShrink: 0, width: 42, height: 42, borderRadius: 10,
+            border: '1.5px solid var(--blue)', background: adding ? 'var(--blue)' : 'var(--blue-pale)',
+            color: adding ? '#fff' : 'var(--blue)', fontSize: 20, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <i className={`ti ${adding ? 'ti-x' : 'ti-plus'}`} />
+        </button>
       </div>
 
-      {open && (
+      {/* Dropdown list */}
+      {open && filtered.length > 0 && (
         <ul className="client-select-list" role="listbox">
           {filtered.map((c, i) => (
             <li
@@ -89,27 +117,42 @@ export default function ClientSelect({ value, onChange, clients }) {
               {c}
             </li>
           ))}
-          {q && !filtered.find(c => c.toLowerCase() === q) ? (
-            <li
-              role="option"
-              className="client-select-option client-select-add"
-              onMouseDown={(e) => { e.preventDefault(); choose(query.trim(), true); }}
-            >
-              <i className="ti ti-plus" style={{ marginRight: 6, color: 'var(--blue)' }} />
-              Add &ldquo;{query.trim()}&rdquo;
-            </li>
-          ) : (
-            <li
-              role="option"
-              className="client-select-option client-select-add"
-              onMouseDown={(e) => { e.preventDefault(); setQuery(''); setOpen(true); setTimeout(() => inputRef.current?.focus(), 0); }}
-              style={{ borderTop: filtered.length ? '1px solid var(--border-light)' : 'none' }}
-            >
-              <i className="ti ti-plus" style={{ marginRight: 6, color: 'var(--blue)' }} />
-              Add new…
-            </li>
-          )}
         </ul>
+      )}
+
+      {/* Inline add form */}
+      {adding && (
+        <div style={{
+          marginTop: 6, padding: '10px 12px',
+          border: '1.5px solid var(--blue)', borderRadius: 10,
+          background: 'var(--blue-pale)', display: 'flex', gap: 8, alignItems: 'center',
+        }}>
+          <input
+            ref={addRef}
+            type="text"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleSaveNew();
+              if (e.key === 'Escape') { setAdding(false); setNewName(''); }
+            }}
+            placeholder="Type new client name…"
+            style={{ flex: 1, border: '1.5px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 14 }}
+          />
+          <button
+            type="button"
+            onClick={handleSaveNew}
+            disabled={!newName.trim() || saving}
+            style={{
+              background: newName.trim() ? 'var(--blue)' : 'var(--border)',
+              color: '#fff', border: 'none', borderRadius: 8,
+              padding: '8px 16px', fontSize: 13, fontWeight: 700,
+              cursor: newName.trim() ? 'pointer' : 'not-allowed',
+            }}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
       )}
     </div>
   );
