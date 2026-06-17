@@ -21,7 +21,7 @@
   },
   {
     "year": 2026,
-    "client": "OneMain",
+    "client": "one",
     "publisher": "IBM",
     "date_delivered": null,
     "currency": "USD",
@@ -35,10 +35,11 @@
     "pricing_available": null,
     "notes": null,
     "elevate_deliverable": null,
-    "confidence": 65,
+    "confidence": 72,
     "source_file": "OneMain - ROAR.pptx",
-    "sme": "",
-    "saved_at": "2026-06-12T18:31:14.941695"
+    "sme": "christina",
+    "stored_name": "54bb09309ba34c48ad9bf9f887c2d2c6.pptx",
+    "saved_at": "2026-06-16T21:47:39.008886"
   },
   {
     "year": 2025,
