@@ -2233,6 +2233,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError]     = useState(null);
   const doneRef = useRef(null);
+  const summaryRef = useRef(null);
 
   const parseDollar = (v) => {
     if (!v) return 0;
@@ -2317,13 +2318,13 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
       html2pdf()
         .set({
           margin: [12, 12, 12, 12],
-          filename: `${[client, publisher, year].filter(Boolean).join('_') || 'ROI'}_Summary.pdf`,
+          filename: `${[client, publisher, year].filter(Boolean).join('_') || 'ROI'}_Executive_Summary.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
         })
-        .from(doneRef.current)
+        .from(summaryRef.current)
         .save();
     });
   };
@@ -2346,7 +2347,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
             <i className="ti ti-circle-check" aria-hidden="true" /> All records stored
           </Badge>
           <button className="btn ghost small no-print" onClick={handleDownloadPDF}>
-            <i className="ti ti-file-type-pdf" aria-hidden="true" /> Download PDF
+            <i className="ti ti-file-type-pdf" aria-hidden="true" /> Download Executive Summary PDF
           </button>
         </div>
       </div>
@@ -2414,7 +2415,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
       )}
 
       {/* Executive Summary */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card" style={{ marginBottom: 16 }} ref={summaryRef}>
         <div className="card-title" style={{ marginBottom: 12 }}>
           <i className="ti ti-file-description" aria-hidden="true" />
           Executive Summary{subtitle ? ` — ${subtitle}` : ''}
