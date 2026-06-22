@@ -20,15 +20,15 @@
     "saved_at": "2026-06-02T22:45:08.273838"
   },
   {
-    "year": 2026,
-    "client": "one",
+    "year": 2025,
+    "client": "one main",
     "publisher": "IBM",
     "date_delivered": null,
     "currency": "USD",
     "identified_risk": null,
     "id_cost_avoidance": null,
     "acc_cost_avoidance": null,
-    "id_cost_optimization": null,
+    "id_cost_optimization": 330000.0,
     "acc_cost_optimization": null,
     "realized_savings": null,
     "contract_spend": null,
@@ -38,8 +38,8 @@
     "confidence": 72,
     "source_file": "OneMain - ROAR.pptx",
     "sme": "christina",
-    "stored_name": "54bb09309ba34c48ad9bf9f887c2d2c6.pptx",
-    "saved_at": "2026-06-16T21:47:39.008886"
+    "stored_name": "c4ac347a474043459f53cd66a595c544.pptx",
+    "saved_at": "2026-06-22T21:35:40.314131"
   },
   {
     "year": 2025,
@@ -88,7 +88,7 @@
   {
     "year": 2025,
     "client": "",
-    "publisher": "Oracle",
+    "publisher": "Quest",
     "date_delivered": null,
     "currency": "USD",
     "identified_risk": null,
@@ -104,7 +104,7 @@
     "confidence": 85,
     "source_file": "2025 06 - Regeneron - Quest ROAR v.1_FINAL.pptx",
     "sme": "christina",
-    "stored_name": "e2b83c2bfba548a7b694e15e5d18c975.pptx",
-    "saved_at": "2026-06-12T22:51:16.930674"
+    "stored_name": "2f9507e156df402c9a1df7512a964027.pptx",
+    "saved_at": "2026-06-16T21:53:18.060681"
   }
 ]
