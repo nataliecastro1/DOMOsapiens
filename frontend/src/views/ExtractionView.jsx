@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
 import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, generateExecutiveSummary } from '../services/api';
@@ -117,19 +118,24 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
     setUploading(true);
     setUploadError(null);
     try {
-      // Upload first file and proceed — the rest can be queued in future iterations
-      const meta = await uploadFile(selectedFiles[0]);
-      onUploaded({
-        ...meta,
-        name: meta.filename,
-        version: 'Uploaded',
-        docType,
-        client: upClient,
-        publisher: upPublisher,
-        year: upYear,
-        source: 'uploaded',
-        file: selectedFiles[0],   // raw File retained so the Extract step can run the script extractor
-      });
+      // Upload every selected file and start the batch. Each file keeps its raw
+      // File object so the Extract step can run the deterministic script extractor.
+      const batch = [];
+      for (const file of selectedFiles) {
+        const meta = await uploadFile(file);
+        batch.push({
+          ...meta,
+          name: meta.filename,
+          version: 'Uploaded',
+          docType,
+          client: upClient,
+          publisher: upPublisher,
+          year: upYear,
+          source: 'uploaded',
+          file,   // raw File retained so the Extract step can run the script extractor
+        });
+      }
+      onUploaded(batch);
     } catch (err) {
       setUploadError(err.message);
     } finally {
@@ -294,7 +300,7 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
           >
             {uploading
               ? <><i className="ti ti-loader-2 spinning" aria-hidden="true" /> Uploading…</>
-              : <>Upload &amp; Use This File <i className="ti ti-arrow-right" aria-hidden="true" /></>
+              : <>Upload &amp; Use {selectedFiles.length > 1 ? `These ${selectedFiles.length} Files` : 'This File'} <i className="ti ti-arrow-right" aria-hidden="true" /></>
             }
           </button>
         </div>
@@ -385,10 +391,23 @@ const deliverableKey = (nm) =>
     .replace(/[_\-\s]+/g, ' ')
     .trim();
 
-// One file result card — shared by the ROAR and ELP columns.
-function FileCard({ f, client, folderName, onSelect }) {
+// One file result card — shared by the ROAR and ELP columns. Cards are
+// multi-select: clicking toggles the file's membership in the batch. The
+// "Continue with N files" action in ScreenFiles finalizes the selection.
+function FileCard({ f, selected, onToggle }) {
   return (
-    <div className={`file-card ${f._best ? 'featured' : ''}`}>
+    <div
+      className={`file-card ${f._best ? 'featured' : ''} ${selected ? 'selected' : ''}`}
+      onClick={() => onToggle(f)}
+      role="checkbox"
+      aria-checked={selected}
+      tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(f); } }}
+    >
+      <i
+        className={`ti ti-${selected ? 'square-check-filled' : 'square'} file-card-check ${selected ? 'is-checked' : ''}`}
+        aria-hidden="true"
+      />
       <i
         className={`ti ti-file-description file-card-icon ${f._best ? 'featured' : ''}`}
         aria-hidden="true"
@@ -403,12 +422,6 @@ function FileCard({ f, client, folderName, onSelect }) {
           <Badge color={f._best ? 'green' : 'navy'}>{f._best ? 'Best match' : f.docType}</Badge>
         </div>
       </div>
-      <button
-        className={`btn small ${f._best ? 'primary' : 'ghost'}`}
-        onClick={() => onSelect({ ...f, version: f.modified, source: 'local', client: client || folderName })}
-      >
-        Select
-      </button>
     </div>
   );
 }
@@ -420,8 +433,38 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
   const [error, setError]           = useState(null);
   const [folderName, setFolderName] = useState(clientDir ? clientDir.name : '');
   const [showDrafts, setShowDrafts] = useState(false);
+  // Multi-select: a Set of file keys (`${path}/${name}`) chosen for the batch.
+  const [selected, setSelected]     = useState(new Set());
+  const [preparing, setPreparing]   = useState(false);
 
   const { client = '', year = '', publisher = '' } = filters;
+
+  const fileKey = (f) => `${f.path}/${f.name}`;
+
+  const toggleFile = (f) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      const key = fileKey(f);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  // Read the raw File for each chosen match (via its retained handle) so the
+  // script extractor can run, then hand the whole batch to the parent.
+  const handleContinue = async () => {
+    const chosen = files.filter(f => selected.has(fileKey(f)));
+    if (!chosen.length) return;
+    setPreparing(true);
+    const batch = [];
+    for (const f of chosen) {
+      let raw;
+      try { raw = f._handle ? await f._handle.getFile() : undefined; } catch { raw = undefined; }
+      batch.push({ ...f, version: f.modified, source: 'local', client: client || folderName, file: raw });
+    }
+    setPreparing(false);
+    onSelect(batch);
+  };
 
   // The local folder picker is a Chromium-only browser capability. When it is
   // unavailable (Firefox/Safari) we show a hint instead of a broken button.
@@ -434,6 +477,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
     setError(null);
     setFolderName(dirHandle.name);
     setFiles([]);
+    setSelected(new Set());
     setScanned(false);
     setScanning(true);
 
@@ -464,6 +508,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
           publisher,
           year,
           _mtime:    file.lastModified,
+          _handle:   handle,   // retained so the raw File can be read on selection (for the script extractor)
         });
       }
       // Group the versions of each deliverable, then mark only the top version
@@ -572,7 +617,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
           <strong>{files.length}</strong>
           {' '}ROAR/ELP file{files.length !== 1 ? 's' : ''} found in <strong>{folderName}</strong>
           {rankNote && <> matching <strong>{rankNote}</strong></>}
-          {files.length > 0 && '. Select one to continue.'}
+          {files.length > 0 && '. Select one or more to continue.'}
         </p>
       )}
 
@@ -592,7 +637,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
             {files.filter(f => f.docType === 'ROAR' && !f._isDraft).length === 0
               ? <div className="files-column-empty">No ROAR files</div>
               : files.filter(f => f.docType === 'ROAR' && !f._isDraft).map(f => (
-                  <FileCard key={`${f.path}/${f.name}`} f={f} client={client} folderName={folderName} onSelect={onSelect} />
+                  <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={toggleFile} />
                 ))}
           </div>
           <div className="files-column">
@@ -600,7 +645,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
             {files.filter(f => f.docType === 'ELP' && !f._isDraft).length === 0
               ? <div className="files-column-empty">No ELP files</div>
               : files.filter(f => f.docType === 'ELP' && !f._isDraft).map(f => (
-                  <FileCard key={`${f.path}/${f.name}`} f={f} client={client} folderName={folderName} onSelect={onSelect} />
+                  <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={toggleFile} />
                 ))}
           </div>
         </div>
@@ -623,7 +668,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
                 {files.filter(f => f.docType === 'ROAR' && f._isDraft).length === 0
                   ? <div className="files-column-empty">No ROAR drafts</div>
                   : files.filter(f => f.docType === 'ROAR' && f._isDraft).map(f => (
-                      <FileCard key={`${f.path}/${f.name}`} f={f} client={client} folderName={folderName} onSelect={onSelect} />
+                      <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={toggleFile} />
                     ))}
               </div>
               <div className="files-column">
@@ -631,7 +676,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
                 {files.filter(f => f.docType === 'ELP' && f._isDraft).length === 0
                   ? <div className="files-column-empty">No ELP drafts</div>
                   : files.filter(f => f.docType === 'ELP' && f._isDraft).map(f => (
-                      <FileCard key={`${f.path}/${f.name}`} f={f} client={client} folderName={folderName} onSelect={onSelect} />
+                      <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={toggleFile} />
                     ))}
               </div>
             </div>
@@ -648,17 +693,33 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
             <i className="ti ti-folder-open" aria-hidden="true" /> Choose a different folder
           </button>
         )}
+        {files.length > 0 && (
+          <button
+            className="btn primary is-gated"
+            disabled={selected.size === 0 || preparing}
+            onClick={handleContinue}
+          >
+            {preparing
+              ? <><i className="ti ti-loader-2 spinning" aria-hidden="true" /> Preparing…</>
+              : <>Continue with {selected.size || 0} file{selected.size !== 1 ? 's' : ''} <i className="ti ti-arrow-right" aria-hidden="true" /></>
+            }
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 // ─── Screen 2: SME Validate ───────────────────────────────────────────────────
-function ScreenValidate({ selectedFile, onConfirm, onBack, defaultName = '' }) {
+// A single batch checkpoint: one SME decision covers every file in the batch.
+// For a single-file batch this renders exactly like the original one-file view.
+function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultName = '' }) {
   const [decision, setDecision] = useState('approve');
   const [smeName, setSmeName]   = useState(defaultName);
   const [smeNotes, setSmeNotes] = useState('');
   const timestamp = useRef(new Date().toLocaleString());
+  const batch = files.length ? files : (selectedFile ? [selectedFile] : []);
+  const isMulti = batch.length > 1;
 
   const handleConfirm = () => {
     if (decision === 'flag') { onBack(); return; }
@@ -692,34 +753,62 @@ function ScreenValidate({ selectedFile, onConfirm, onBack, defaultName = '' }) {
         <span className="sme-gate-badge">SME Checkpoint</span>
         <div>
           <div className="sme-gate-title">Subject Matter Expert Validation</div>
-          <div className="sme-gate-sub">Review the file before extraction proceeds</div>
+          <div className="sme-gate-sub">
+            {isMulti
+              ? `Review the ${batch.length} files before extraction proceeds`
+              : 'Review the file before extraction proceeds'}
+          </div>
         </div>
       </div>
 
       <div className="sme-two-col">
         <div className="sme-col-left">
-          <div className="sme-info-box">
-            <div className="sme-info-row">
-              <span className="sme-info-key">File</span>
-              <span className="sme-info-val">{selectedFile?.name || '—'}</span>
+          {isMulti ? (
+            <div className="sme-info-box">
+              <div className="sme-info-row">
+                <span className="sme-info-key">Files</span>
+                <span className="sme-info-val">{batch.length} selected for this batch</span>
+              </div>
+              <div className="sme-batch-files">
+                {batch.map((f, i) => (
+                  <div className="sme-batch-file" key={i}>
+                    <i className="ti ti-file-description" aria-hidden="true" />
+                    <span className="sme-batch-file-name">{f?.name || `File ${i + 1}`}</span>
+                    <span className="sme-batch-file-meta">
+                      {[f?.client, f?.publisher, f?.year].filter(Boolean).join(' · ') || '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="sme-info-row">
+                <span className="sme-info-key">Timestamp</span>
+                <span className="sme-info-val">{timestamp.current}</span>
+              </div>
             </div>
-            <div className="sme-info-row">
-              <span className="sme-info-key">Version</span>
-              <span className="sme-info-val">{selectedFile?.version || '—'}</span>
+          ) : (
+            <div className="sme-info-box">
+              <div className="sme-info-row">
+                <span className="sme-info-key">File</span>
+                <span className="sme-info-val">{selectedFile?.name || '—'}</span>
+              </div>
+              <div className="sme-info-row">
+                <span className="sme-info-key">Version</span>
+                <span className="sme-info-val">{selectedFile?.version || '—'}</span>
+              </div>
+              <div className="sme-info-row">
+                <span className="sme-info-key">Client / Publisher / Year</span>
+                <span className="sme-info-val">
+                  {(selectedFile?.client || selectedFile?.publisher || selectedFile?.year)
+                    ? [selectedFile?.client, selectedFile?.publisher, selectedFile?.year].map(v => v || '—').join(' · ')
+                    : '— · — · —'}
+                </span>
+              </div>
+              <div className="sme-info-row">
+                <span className="sme-info-key">Timestamp</span>
+                <span className="sme-info-val">{timestamp.current}</span>
+              </div>
             </div>
-            <div className="sme-info-row">
-              <span className="sme-info-key">Client / Publisher / Year</span>
-              <span className="sme-info-val">
-                {(selectedFile?.client || selectedFile?.publisher || selectedFile?.year)
-                  ? [selectedFile?.client, selectedFile?.publisher, selectedFile?.year].map(v => v || '—').join(' · ')
-                  : '— · — · —'}
-              </span>
-            </div>
-            <div className="sme-info-row">
-              <span className="sme-info-key">Timestamp</span>
-              <span className="sme-info-val">{timestamp.current}</span>
-            </div>
-          </div>
+          )}
         </div>
 
         <div className="sme-col-right">
@@ -803,6 +892,75 @@ function formatDollar(n) {
   const abs = Math.abs(n);
   const formatted = abs.toLocaleString('en-US', { maximumFractionDigits: 0 });
   return (n < 0 ? '-' : '') + '$' + formatted;
+}
+
+// ─── Batch aggregation helpers ────────────────────────────────────────────────
+// Canonical field schema (label + variant) used to build the aggregate row.
+const CANON_FIELDS = EXTRACTED_FIELDS.map(f => ({ label: f.label, variant: f.variant }));
+
+// Sum each ROI field across every non-excluded file in the batch. A field that
+// was skipped (or absent) in a file contributes 0; a field skipped in EVERY
+// file stays skipped in the aggregate rather than showing a misleading $0.
+function aggregateFinalFields(results) {
+  const active = results.filter(r => !r.excluded && r.finalFields && r.finalFields.length);
+  if (active.length === 0) return BLANK_FIELDS;
+  if (active.length === 1) return active[0].finalFields;   // single file → its own values verbatim
+  return CANON_FIELDS.map(({ label, variant }) => {
+    let sum = 0, anyValue = false;
+    active.forEach(r => {
+      const f = r.finalFields.find(x => x.label === label);
+      if (!f || f.flag === 'SME skipped — data not available') return;
+      const n = parseDollar(f.value);
+      if (!isNaN(n)) { sum += n; anyValue = true; }
+    });
+    if (!anyValue) {
+      return { label, value: null, confidence: null, variant, source: null, flag: 'SME skipped — data not available', entryMode: null };
+    }
+    const value = sum === 0 ? '$0' : formatDollar(sum);
+    return { label, value, confidence: null, variant, source: `Summed across ${active.length} files`, flag: null, entryMode: 'aggregated' };
+  });
+}
+
+// Derive the shared client / publisher / year for a batch, flagging when files
+// disagree so the Store step can warn before writing a combined record.
+function deriveCommonMeta(results) {
+  const metas = results.filter(r => !r.excluded).map(r => r.fileMeta || {});
+  const distinct = (k, upK) => [...new Set(metas.map(m => m[k] || m[upK] || '').filter(Boolean))];
+  const clients = distinct('client', 'upClient');
+  const pubs    = distinct('publisher', 'upPublisher');
+  const years   = distinct('year', 'upYear');
+  return {
+    client:      clients.length === 1 ? clients[0] : '',
+    publisher:   pubs.length === 1 ? pubs[0] : '',
+    year:        years.length === 1 ? years[0] : '',
+    mixedClient: clients.length > 1,
+    mixedYear:   years.length > 1,
+  };
+}
+
+// Build the flat ROI record the backend expects from a file's meta + fields.
+function buildRecord(meta, fields, sme) {
+  const getValue = (label) => {
+    const f = fields.find(x => x.label === label);
+    const n = parseDollar(f?.value);
+    return isNaN(n) ? null : n;
+  };
+  return {
+    client:                meta?.client    || meta?.upClient    || '',
+    publisher:             meta?.publisher || meta?.upPublisher || '',
+    year:                  parseInt(meta?.year || meta?.upYear || new Date().getFullYear()),
+    identified_risk:       getValue('Identified Risk'),
+    id_cost_avoidance:     getValue('Identified Cost Avoidance'),
+    acc_cost_avoidance:    getValue('Accomplished Cost Avoidance'),
+    id_cost_optimization:  getValue('Identified Cost Optimization'),
+    acc_cost_optimization: getValue('Accomplished Cost Optimization'),
+    realized_savings:      getValue('Identified Cost Savings'),
+    contract_spend:        getValue('Realized Cost Savings'),
+    confidence:            fields.find(x => x.confidence != null)?.confidence ?? null,
+    source_file:           meta?.filename || meta?.name || meta?.file_path || '',
+    stored_name:           meta?.stored_name || '',
+    sme:                   sme || '',
+  };
 }
 
 // ─── Script extractor (/api/roar/extract) → Compare "Script" column ───────────
@@ -999,14 +1157,35 @@ const ROI_FIELD_META = {
   },
 };
 
-// ─── Screen 3: Extract ────────────────────────────────────────────────────────
-function ScreenExtract({ selectedFile, onNext, onScriptData }) {
-  const [stepStatuses, setStepStatuses] = useState(EXTRACTION_STEPS.map(() => 'pending'));
-  const [extractedData, setExtractedData] = useState(null);
-  const [error, setError] = useState(null);
+// ─── Claude extractor response → canonical 7-field array ──────────────────────
+// When no data came back, fall back to the honest blank template (no mock numbers).
+function buildClaudeFields(extractedData) {
+  if (!extractedData) return BLANK_FIELDS;
+  const fmt  = (n)   => n != null ? `$${Number(n).toLocaleString()}` : null;
+  const conf = (key) => extractedData?.confidences?.[key] ?? extractedData?.confidence ?? null;
+  return [
+    { label: 'Identified Risk',                value: fmt(extractedData.identified_risk),         variant: 'green', confidence: conf('identified_risk'),         source: null, flag: null, entryMode: extractedData.identified_risk         != null ? 'extracted' : null },
+    { label: 'Identified Cost Avoidance',      value: fmt(extractedData.id_cost_avoidance),       variant: 'green', confidence: conf('id_cost_avoidance'),       source: null, flag: null, entryMode: extractedData.id_cost_avoidance       != null ? 'extracted' : null },
+    { label: 'Accomplished Cost Avoidance',    value: fmt(extractedData.acc_cost_avoidance),      variant: 'green', confidence: conf('acc_cost_avoidance'),      source: null, flag: null, entryMode: extractedData.acc_cost_avoidance      != null ? 'extracted' : null },
+    { label: 'Identified Cost Optimization',   value: fmt(extractedData.id_cost_optimization),    variant: 'blue',  confidence: conf('id_cost_optimization'),    source: null, flag: null, entryMode: extractedData.id_cost_optimization    != null ? 'extracted' : null },
+    { label: 'Accomplished Cost Optimization', value: fmt(extractedData.acc_cost_optimization),   variant: 'blue',  confidence: conf('acc_cost_optimization'),   source: null, flag: null, entryMode: extractedData.acc_cost_optimization   != null ? 'extracted' : null },
+    { label: 'Identified Cost Savings',        value: fmt(extractedData.identified_cost_savings), variant: 'green', confidence: conf('identified_cost_savings'), source: null, flag: null, entryMode: extractedData.identified_cost_savings != null ? 'extracted' : null },
+    { label: 'Realized Cost Savings',          value: fmt(extractedData.realized_savings),        variant: 'green', confidence: conf('realized_savings'),        source: null, flag: null, entryMode: extractedData.realized_savings        != null ? 'extracted' : null },
+  ];
+}
 
-  // Modal + fallback form state
-  const [showModal, setShowModal]         = useState(false);
+// ─── Screen 3: Extract — per-file missing-field review (modal + Q&A fallback) ──
+// Extraction itself now runs up front in BatchExtract; this screen receives the
+// pre-extracted data for ONE file and lets the SME fill in or skip any missing
+// fields before that file moves on to Compare.
+function ScreenExtract({ selectedFile, extractedData = null, batchInfo = null, onNext }) {
+  // Modal + fallback form state.
+  // Initialize showModal synchronously so the overlay is present on the very
+  // first paint when fields are missing — otherwise the card paints once and the
+  // overlay pops in a frame later, making the dialog appear to jump.
+  const [showModal, setShowModal]         = useState(
+    () => buildClaudeFields(extractedData).some(f => !f.value)
+  );
   const [fallbackMode, setFallbackMode]   = useState(false);
   const [fallbackIndex, setFallbackIndex] = useState(0);
   // answers keyed by field label — each value is an array of strings (one per question)
@@ -1021,94 +1200,15 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
   // Q&A accordion — collapsed by default, resets when advancing to next field
   const [qaOpen, setQaOpen] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function runExtraction() {
-      for (let i = 0; i < EXTRACTION_STEPS.length; i++) {
-        if (cancelled) return;
-        setStepStatuses(prev => prev.map((s, idx) => idx === i ? 'running' : s));
-
-        if (i === EXTRACTION_STEPS.length - 1) {
-          // Run both extractions in parallel:
-          // 1. Script extractor (deterministic parser) → Compare "Script" column
-          // 2. Claude AI → Compare "Claude AI" column
-          const tasks = [];
-
-          if (selectedFile?.file) {
-            tasks.push(
-              extractROAR(selectedFile.file)
-                .then(roar => { if (!cancelled) onScriptData?.(buildScriptData(roar)); })
-                .catch(() => {})
-            );
-          }
-
-          // Pass the full selectedFile object so extractFromFile can use id/stored_name/path
-          if (selectedFile) {
-            const fileRef = selectedFile.path || selectedFile.id
-              ? selectedFile
-              : (selectedFile.name || '');
-            tasks.push(
-              extractFromFile(fileRef)
-                .then(res => { if (!cancelled) setExtractedData(res.data || res); })
-                .catch(err => { if (!cancelled) setError(err.message); })
-            );
-          }
-
-          if (tasks.length) await Promise.all(tasks);
-        } else {
-          await new Promise(r => setTimeout(r, 700));
-        }
-
-        if (!cancelled) {
-          setStepStatuses(prev => prev.map((s, idx) => idx === i ? 'done' : s));
-          await new Promise(r => setTimeout(r, 200));
-        }
-      }
-    }
-
-    runExtraction();
-    return () => { cancelled = true; };
-  }, []);
-
-  const isDone = stepStatuses.every(s => s === 'done');
-
-  const fmt = (n) => n != null ? `$${Number(n).toLocaleString()}` : null;
-
-  // Per-field confidence: prefer a field-specific score if the backend ever returns one
-  // (via a `confidences` map keyed by the field's response key), otherwise fall back to the
-  // single top-level confidence, otherwise null. Today only the top-level value exists, so
-  // this preserves current behavior without discarding per-field data the backend may add later.
-  const confidenceFor = (key) =>
-    extractedData?.confidences?.[key] ?? extractedData?.confidence ?? null;
-
-  // When extraction returns no data (e.g. the Claude extractor failed), fall back to the
-  // honest blank-field template rather than substituting mock numbers from data.js. The
-  // empty values route the SME into the existing manual-entry / skip flow.
-  const displayFields = extractedData ? [
-    { label: 'Identified Risk',                value: fmt(extractedData.identified_risk),       variant: 'green', confidence: confidenceFor('identified_risk'),       source: null, flag: null, entryMode: extractedData.identified_risk       != null ? 'extracted' : null },
-    { label: 'Identified Cost Avoidance',      value: fmt(extractedData.id_cost_avoidance),     variant: 'green', confidence: confidenceFor('id_cost_avoidance'),     source: null, flag: null, entryMode: extractedData.id_cost_avoidance     != null ? 'extracted' : null },
-    { label: 'Accomplished Cost Avoidance',    value: fmt(extractedData.acc_cost_avoidance),    variant: 'green', confidence: confidenceFor('acc_cost_avoidance'),    source: null, flag: null, entryMode: extractedData.acc_cost_avoidance    != null ? 'extracted' : null },
-    { label: 'Identified Cost Optimization',   value: fmt(extractedData.id_cost_optimization),  variant: 'blue',  confidence: confidenceFor('id_cost_optimization'),  source: null, flag: null, entryMode: extractedData.id_cost_optimization  != null ? 'extracted' : null },
-    { label: 'Accomplished Cost Optimization', value: fmt(extractedData.acc_cost_optimization), variant: 'blue',  confidence: confidenceFor('acc_cost_optimization'), source: null, flag: null, entryMode: extractedData.acc_cost_optimization != null ? 'extracted' : null },
-    // identified_cost_savings is intentionally absent from the Claude AI extractor prompt, so the backend
-    // never returns it — this will always be null/undefined here and correctly triggers the manual entry fallback.
-    { label: 'Identified Cost Savings',        value: fmt(extractedData.identified_cost_savings), variant: 'green', confidence: confidenceFor('identified_cost_savings'), source: null, flag: null, entryMode: extractedData.identified_cost_savings != null ? 'extracted' : null },
-    { label: 'Realized Cost Savings',          value: fmt(extractedData.realized_savings),        variant: 'green', confidence: confidenceFor('realized_savings'),        source: null, flag: null, entryMode: extractedData.realized_savings        != null ? 'extracted' : null },
-  ] : BLANK_FIELDS;
+  // Pre-extracted data arrives via props; map it to the canonical 7-field array.
+  // Falls back to the honest blank template when the extractor returned nothing.
+  const displayFields = buildClaudeFields(extractedData);
 
   const confidence = extractedData?.confidence ?? null;
   const confClass = c => c >= 90 ? 'conf-high' : c >= 75 ? 'conf-mid' : 'conf-low';
 
   // Fields with no extracted value
   const missingFields = displayFields.filter(f => !f.value);
-
-  // Show modal once extraction finishes (only if there are missing fields)
-  useEffect(() => {
-    if (isDone && missingFields.length > 0 && !showModal && !fallbackMode && !mergedFields) {
-      setShowModal(true);
-    }
-  }, [isDone]);
 
   // ── Modal handlers ──
   const handleSkipAll = () => {
@@ -1220,6 +1320,12 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
 
     return (
       <div className="card">
+        {batchInfo?.total > 1 && (
+          <div className="batch-progress">
+            <i className="ti ti-files" aria-hidden="true" />
+            File {batchInfo.index + 1} of {batchInfo.total}{batchInfo.name ? ` — ${batchInfo.name}` : ''}
+          </div>
+        )}
         <div className="fallback-progress">
           <i className="ti ti-edit" aria-hidden="true" />
           Field {fallbackIndex + 1} of {missingFields.length} — Manual Entry
@@ -1376,48 +1482,24 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
     );
   }
 
-  // ── Render: extraction progress + results ──
+  // ── Render: extracted results + missing-field review ──
   return (
     <div className="card">
-      <div className="card-title">
-        <i className="ti ti-cpu" aria-hidden="true" />
-        ROI Extraction
-      </div>
-      <p className="extract-sub">
-        Processing validated file against extraction schema…
-      </p>
-
-      <div className="extract-steps">
-        {EXTRACTION_STEPS.map((step, i) => {
-          const status = stepStatuses[i];
-          return (
-            <div className={`extract-step ${status}`} key={i}>
-              <div className="extract-step-icon">
-                {status === 'done'    && <i className="ti ti-check" aria-hidden="true" />}
-                {status === 'running' && (
-                  <i
-                    className="ti ti-loader-2 spinning"
-                    aria-hidden="true"
-                  />
-                )}
-                {status === 'pending' && <i className="ti ti-circle" aria-hidden="true" />}
-              </div>
-              <span className="extract-step-label">{step}</span>
-              {status === 'done'    && <Badge color="green"><i className="ti ti-check" /> Done</Badge>}
-              {status === 'running' && <Badge color="blue">Running…</Badge>}
-              {status === 'pending' && <Badge color="navy">Pending</Badge>}
-            </div>
-          );
-        })}
-      </div>
-
-      {error && (
-        <div className="extract-error">
-          <strong>Extraction failed:</strong> no values were returned. Enter the fields manually or skip them below. ({error})
+      {batchInfo?.total > 1 && (
+        <div className="batch-progress">
+          <i className="ti ti-files" aria-hidden="true" />
+          File {batchInfo.index + 1} of {batchInfo.total}{batchInfo.name ? ` — ${batchInfo.name}` : ''}
         </div>
       )}
+      <div className="card-title">
+        <i className="ti ti-cpu" aria-hidden="true" />
+        ROI Extraction{selectedFile?.name ? ` — ${selectedFile.name}` : ''}
+      </div>
+      <p className="extract-sub">
+        Review the extracted values. Fill in or skip anything the extractor could not find.
+      </p>
 
-      {isDone && (
+      {(
         <div className="extract-results">
           <div className="extract-results-title">Extracted Fields</div>
           <div className="extract-chips">
@@ -1437,7 +1519,7 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
           {!showModal && missingFields.length === 0 && (
             <div className="btn-row">
               <button className="btn primary" onClick={() => onNext(displayFields)}>
-                Review &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
+                Continue to Compare <i className="ti ti-arrow-right" aria-hidden="true" />
               </button>
             </div>
           )}
@@ -1445,7 +1527,13 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
       )}
 
       {/* ── Missing-fields modal ── */}
-      {showModal && (
+      {/* Rendered through a portal to document.body so it escapes the card's
+          screenIn entrance animation. A `transform` on any ancestor makes a
+          position:fixed child anchor to that ancestor instead of the viewport,
+          which caused the overlay to appear offset and then jump to center when
+          the animation finished. The portal keeps it viewport-centered from the
+          first frame, so the overlay and dialog appear together. */}
+      {showModal && createPortal(
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
           <div className="modal-box">
             <div className="modal-icon">
@@ -1471,6 +1559,118 @@ function ScreenExtract({ selectedFile, onNext, onScriptData }) {
               </button>
             </div>
           </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// ─── Screen 3 (host): Batch Extract ───────────────────────────────────────────
+// Runs the deterministic script extractor + Claude AI across EVERY file in the
+// batch up front, on one progress screen. Each file's results are collected and
+// handed to the per-file review (Compare) step. A single-file batch behaves like
+// the original flow — one file processed, one progress row.
+function BatchExtract({ files = [], onComplete }) {
+  const [statuses, setStatuses] = useState(() => files.map(() => 'pending'));
+  const [done, setDone] = useState(false);
+  const resultsRef = useRef([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      const results = [];
+      for (let i = 0; i < files.length; i++) {
+        if (cancelled) return;
+        setStatuses(prev => prev.map((s, idx) => idx === i ? 'running' : s));
+
+        const file = files[i];
+        let extractedData = null;
+        let scriptData = null;
+        const tasks = [];
+
+        // Script extractor — only runs when a raw File is available (uploads and
+        // folder-scanned files); skipped on the SharePoint-search path.
+        if (file?.file) {
+          tasks.push(
+            extractROAR(file.file)
+              .then(roar => { scriptData = buildScriptData(roar); })
+              .catch(() => {})
+          );
+        }
+
+        // Claude AI extractor — pass the whole file object so it can use
+        // id / stored_name / path, falling back to the filename.
+        const fileRef = (file?.path || file?.id) ? file : (file?.name || '');
+        tasks.push(
+          extractFromFile(fileRef)
+            .then(res => { extractedData = res.data || res; })
+            .catch(() => {})
+        );
+
+        await Promise.all(tasks);
+        if (cancelled) return;
+
+        results.push({ fileMeta: file, extractedData, scriptData });
+        setStatuses(prev => prev.map((s, idx) => idx === i ? 'done' : s));
+        await new Promise(r => setTimeout(r, 150));
+      }
+      if (!cancelled) {
+        resultsRef.current = results;
+        setDone(true);
+      }
+    }
+
+    run();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!files.length) {
+    return (
+      <div className="card">
+        <div className="card-title">
+          <i className="ti ti-cpu" aria-hidden="true" /> ROI Extraction
+        </div>
+        <p className="extract-sub">No files selected. Go back and choose one or more files to extract.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="card-title">
+        <i className="ti ti-cpu" aria-hidden="true" /> ROI Extraction
+      </div>
+      <p className="extract-sub">
+        Running the script extractor and Claude AI across {files.length} file{files.length !== 1 ? 's' : ''}…
+      </p>
+
+      <div className="extract-steps">
+        {files.map((f, i) => {
+          const status = statuses[i];
+          return (
+            <div className={`extract-step ${status}`} key={i}>
+              <div className="extract-step-icon">
+                {status === 'done'    && <i className="ti ti-check" aria-hidden="true" />}
+                {status === 'running' && <i className="ti ti-loader-2 spinning" aria-hidden="true" />}
+                {status === 'pending' && <i className="ti ti-circle" aria-hidden="true" />}
+              </div>
+              <span className="extract-step-label">{f.name || `File ${i + 1}`}</span>
+              {status === 'done'    && <Badge color="green"><i className="ti ti-check" /> Done</Badge>}
+              {status === 'running' && <Badge color="blue">Running…</Badge>}
+              {status === 'pending' && <Badge color="navy">Pending</Badge>}
+            </div>
+          );
+        })}
+      </div>
+
+      {done && (
+        <div className="btn-row">
+          <button className="btn primary" onClick={() => onComplete(resultsRef.current)}>
+            Review {files.length > 1 ? `${files.length} Files` : 'File'} <i className="ti ti-arrow-right" aria-hidden="true" />
+          </button>
         </div>
       )}
     </div>
@@ -1668,7 +1868,8 @@ function CompareRow({ field, onResolve }) {
   );
 }
 
-function ScreenCompare({ fields, scriptData, onNext, onBack }) {
+function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null, onNext, onBack }) {
+  const isMulti = batchInfo?.total > 1;
   // Build rows from live extracted fields + the script extractor's values.
   // script = deterministic .pptx extractor — real values only (null when no file was
   //          uploaded, e.g. the SharePoint search path, where the Script column shows —).
@@ -1727,6 +1928,12 @@ function ScreenCompare({ fields, scriptData, onNext, onBack }) {
 
       {/* Header */}
       <div className="compare-head">
+        {isMulti && (
+          <div className="batch-progress">
+            <i className="ti ti-files" aria-hidden="true" />
+            File {batchInfo.index + 1} of {batchInfo.total}{batchInfo.name ? ` — ${batchInfo.name}` : ''}
+          </div>
+        )}
         <div className="card-title compare-title">
           <i className="ti ti-git-compare" aria-hidden="true" />
           Script vs. Claude AI — Field Comparison
@@ -1772,9 +1979,16 @@ function ScreenCompare({ fields, scriptData, onNext, onBack }) {
 
       {/* Footer */}
       <div className="compare-footer">
-        <button className="btn ghost" onClick={onBack}>
-          <i className="ti ti-arrow-left" aria-hidden="true" /> Back
-        </button>
+        <div className="compare-footer-left">
+          <button className="btn ghost" onClick={onBack}>
+            <i className="ti ti-arrow-left" aria-hidden="true" /> Back
+          </button>
+          {isMulti && onExclude && (
+            <button className="btn ghost compare-exclude-btn" onClick={onExclude}>
+              <i className="ti ti-file-off" aria-hidden="true" /> Exclude this file
+            </button>
+          )}
+        </div>
         <div className="compare-footer-actions">
           {!allDone && (
             <span className="compare-resolve-hint">
@@ -1786,7 +2000,12 @@ function ScreenCompare({ fields, scriptData, onNext, onBack }) {
             disabled={!allDone}
             onClick={handleNext}
           >
-            Confirm &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" />
+            {isMulti
+              ? (batchInfo.isLast
+                  ? <>Confirm &amp; Aggregate <i className="ti ti-arrow-right" aria-hidden="true" /></>
+                  : <>Confirm &amp; Next File <i className="ti ti-arrow-right" aria-hidden="true" /></>)
+              : <>Confirm &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" /></>
+            }
           </button>
         </div>
       </div>
@@ -1794,16 +2013,70 @@ function ScreenCompare({ fields, scriptData, onNext, onBack }) {
   );
 }
 
+// ─── Screen 4 (host): per-file review ─────────────────────────────────────────
+// For the current file: first let the SME fill/skip any missing fields (the
+// ScreenExtract review), then resolve the Script-vs-Claude comparison. Remounted
+// per file by the parent (keyed on the file index) so each file starts clean.
+function FileReview({ fileResult, fileIndex, total, isLast, onConfirm, onExclude, onBack }) {
+  const [phase, setPhase] = useState('fill');
+  const [filledFields, setFilledFields] = useState(null);
+
+  if (!fileResult) {
+    return (
+      <div className="card">
+        <div className="card-title">
+          <i className="ti ti-git-compare" aria-hidden="true" /> Compare
+        </div>
+        <p className="extract-sub">No extraction data yet. Run the Extract step first.</p>
+        <div className="btn-row">
+          <button className="btn ghost" onClick={onBack}>
+            <i className="ti ti-arrow-left" aria-hidden="true" /> Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const batchInfo = { index: fileIndex, total, isLast, name: fileResult.fileMeta?.name };
+
+  if (phase === 'fill') {
+    return (
+      <ScreenExtract
+        selectedFile={fileResult.fileMeta}
+        extractedData={fileResult.extractedData}
+        batchInfo={batchInfo}
+        onNext={(fields) => { setFilledFields(fields); setPhase('compare'); }}
+      />
+    );
+  }
+
+  return (
+    <ScreenCompare
+      fields={filledFields}
+      scriptData={fileResult.scriptData}
+      batchInfo={batchInfo}
+      onExclude={total > 1 ? onExclude : null}
+      onNext={onConfirm}
+      onBack={() => setPhase('fill')}
+    />
+  );
+}
+
 // ─── Screen 5: Store ──────────────────────────────────────────────────────────
-function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
+// For a single-file batch this is the original review-and-store screen. For a
+// multi-file batch it adds the per-file breakdown, the combined annual aggregate
+// (the editable cards), an aggregate-record toggle, and a mixed-batch warning.
+function ScreenStore({ fileResults = [], aggregateFields, commonMeta = {}, storeAggregate, onToggleAggregate, smeName, multi = false, onNext, onBack }) {
   // Defensive default for reaching Store directly (e.g. jumping via the Journey Bar)
   // without any extracted fields — show the honest blank-field template, not mock numbers.
-  const sourceFields = fields && fields.length > 0 ? fields : BLANK_FIELDS;
+  const sourceFields = aggregateFields && aggregateFields.length > 0 ? aggregateFields : BLANK_FIELDS;
+  const active = fileResults.filter(r => !r.excluded && r.finalFields);
 
   const [editValues, setEditValues] = useState(
     () => Object.fromEntries(sourceFields.map(f => [f.label, f.value]))
   );
   const [editingLabel, setEditingLabel] = useState(null);
+  const [showFiles, setShowFiles] = useState(true);
 
   const commitEdit = (label, val) => {
     setEditValues(prev => ({ ...prev, [label]: val }));
@@ -1821,6 +2094,8 @@ function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
 
   const manualCount = sourceFields.filter(f => f.entryMode === 'manual').length;
   const skippedCount = sourceFields.filter(f => f.flag === 'SME skipped — data not available').length;
+  const mixed = commonMeta.mixedClient || commonMeta.mixedYear;
+  const recordCount = active.length + (multi && storeAggregate ? 1 : 0);
 
   return (
     <div className="card">
@@ -1829,10 +2104,65 @@ function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
         Store Results
       </div>
       <p className="store-sub">
-        Review values before writing to the ROI Tracker. Click the pencil icon to correct a value.
+        {multi
+          ? <>Combined annual total from <strong>{active.length}</strong> file{active.length !== 1 ? 's' : ''}. <strong>{recordCount}</strong> record{recordCount !== 1 ? 's' : ''} will be written to the ROI Tracker. Click the pencil icon to correct a value.</>
+          : <>Review values before writing to the ROI Tracker. Click the pencil icon to correct a value.</>}
         {manualCount > 0 && <> <span className="field-card-manual-tag">Manually entered</span> fields were filled in by the SME.</>}
         {skippedCount > 0 && <> Greyed-out fields were skipped and will be stored as not available.</>}
       </p>
+
+      {multi && (
+        <>
+          {mixed && (
+            <div className="batch-warning">
+              <i className="ti ti-alert-triangle batch-warning-icon" aria-hidden="true" />
+              <span>
+                The selected files span{commonMeta.mixedClient ? ' different clients' : ''}
+                {commonMeta.mixedClient && commonMeta.mixedYear ? ' and' : ''}
+                {commonMeta.mixedYear ? ' different years' : ''}. Confirm you want to combine them into one annual aggregate before storing it.
+              </span>
+            </div>
+          )}
+
+          <label className="batch-aggregate-toggle">
+            <input
+              type="checkbox"
+              checked={storeAggregate}
+              onChange={e => onToggleAggregate(e.target.checked)}
+            />
+            <span>Store the combined annual aggregate as its own record{mixed ? ' (review the warning above)' : ''}</span>
+          </label>
+
+          <button
+            className="files-drafts-toggle"
+            onClick={() => setShowFiles(s => !s)}
+            aria-expanded={showFiles}
+          >
+            <i className={`ti ti-chevron-${showFiles ? 'down' : 'right'}`} aria-hidden="true" />
+            Per-file breakdown ({active.length})
+          </button>
+          {showFiles && (
+            <div className="batch-file-list">
+              {active.map((r, i) => (
+                <div className="batch-file-row" key={i}>
+                  <div className="batch-file-name">
+                    <i className="ti ti-file-description" aria-hidden="true" /> {r.fileMeta?.name || `File ${i + 1}`}
+                  </div>
+                  <div className="batch-file-fields">
+                    {r.finalFields.map(f => (
+                      <span className="batch-file-field" key={f.label}>
+                        <span className="batch-file-field-label">{f.label.split(' ')[0]}</span>
+                        <strong>{f.value ?? '—'}</strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <label className="field-label store-what-label">Combined annual total</label>
+        </>
+      )}
 
       <div className="field-cards">
         {sourceFields.map(f => (
@@ -1851,9 +2181,9 @@ function ScreenStore({ selectedFile, smeName, fields, onNext, onBack }) {
       <label className="field-label store-what-label">What gets stored</label>
       <div className="store-grid">
         {[
-          { icon: 'ti-table',            title: 'ROI values',      sub: 'Client_ROI_Tracker.xlsx · sheet: All_ROI_Data' },
+          { icon: 'ti-table',            title: multi ? `${recordCount} ROI records` : 'ROI values', sub: 'Client_ROI_Tracker.xlsx · sheet: All_ROI_Data' },
           { icon: 'ti-shield-check',     title: 'Audit record',    sub: 'Client_ROI_Tracker.xlsx · sheet: SME_Audit_Log' },
-          { icon: 'ti-file-spreadsheet', title: 'Source file ref', sub: selectedFile?.name || '—' },
+          { icon: 'ti-file-spreadsheet', title: 'Source file ref', sub: multi ? `${active.length} file${active.length !== 1 ? 's' : ''}` : (active[0]?.fileMeta?.name || '—') },
           { icon: 'ti-user-check',       title: 'SME checkpoint',  sub: `Approved · ${smeName || '—'}` },
         ].map(t => (
           <div className="store-tile" key={t.title}>
@@ -1903,6 +2233,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError]     = useState(null);
   const doneRef = useRef(null);
+  const summaryRef = useRef(null);
 
   const parseDollar = (v) => {
     if (!v) return 0;
@@ -1987,13 +2318,13 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
       html2pdf()
         .set({
           margin: [12, 12, 12, 12],
-          filename: `${[client, publisher, year].filter(Boolean).join('_') || 'ROI'}_Summary.pdf`,
+          filename: `${[client, publisher, year].filter(Boolean).join('_') || 'ROI'}_Executive_Summary.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
         })
-        .from(doneRef.current)
+        .from(summaryRef.current)
         .save();
     });
   };
@@ -2016,7 +2347,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
             <i className="ti ti-circle-check" aria-hidden="true" /> All records stored
           </Badge>
           <button className="btn ghost small no-print" onClick={handleDownloadPDF}>
-            <i className="ti ti-file-type-pdf" aria-hidden="true" /> Download PDF
+            <i className="ti ti-file-type-pdf" aria-hidden="true" /> Download Executive Summary PDF
           </button>
         </div>
       </div>
@@ -2084,7 +2415,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
       )}
 
       {/* Executive Summary */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card" style={{ marginBottom: 16 }} ref={summaryRef}>
         <div className="card-title" style={{ marginBottom: 12 }}>
           <i className="ti ti-file-description" aria-hidden="true" />
           Executive Summary{subtitle ? ` — ${subtitle}` : ''}
@@ -2178,72 +2509,155 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
 }
 
 // ─── ExtractionView ───────────────────────────────────────────────────────────
+// Orchestrates the batch as a thin layer over the per-file screens. A single
+// file is simply a batch of length one, so the original flow is preserved.
 export default function ExtractionView({ onNav, clients, clientHandles, loggedInUser = '' }) {
-  const [step, setStep]               = useState(0);
-  const [selectedFile, setFile]       = useState(null);
-  const [smeName, setSmeName]         = useState('');
-  const [finalFields, setFinalFields] = useState(null);
-  const [filters, setFilters]         = useState({});
-  const [scriptData, setScriptData] = useState(null);
+  const [step, setStep]                         = useState(0);
+  const [files, setFiles]                       = useState([]);            // the batch
+  const [currentFileIndex, setCurrentFileIndex] = useState(0);            // file under review at Compare
+  const [fileResults, setFileResults]           = useState([]);          // [{ fileMeta, extractedData, scriptData, finalFields, excluded }]
+  const [smeName, setSmeName]                   = useState('');
+  const [aggregateFields, setAggregateFields]   = useState(null);
+  const [storeAggregate, setStoreAggregate]     = useState(true);
+  const [filters, setFilters]                   = useState({});
 
-  const handleFileSelect = file              => { setFile(file);    setStep(2); };
-  const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n);    setStep(3); };
-  const handleStore = (fields) => {
-    setFinalFields(fields);
-    setStep(6);
-
-    const getValue = (label) => {
-      const f = fields.find(x => x.label === label);
-      const n = parseFloat((f?.value || '').toString().replace(/,/g, ''));
-      return isNaN(n) ? null : n;
-    };
-
-    const record = {
-      client:                selectedFile?.client    || selectedFile?.upClient    || '',
-      publisher:             selectedFile?.publisher || selectedFile?.upPublisher || '',
-      year:                  parseInt(selectedFile?.year || selectedFile?.upYear  || new Date().getFullYear()),
-      identified_risk:       getValue('Identified Risk'),
-      id_cost_avoidance:     getValue('Identified Cost Avoidance'),
-      acc_cost_avoidance:    getValue('Accomplished Cost Avoidance'),
-      id_cost_optimization:  getValue('Identified Cost Optimization'),
-      acc_cost_optimization: getValue('Accomplished Cost Optimization'),
-      realized_savings:      getValue('Identified Cost Savings'),
-      contract_spend:        getValue('Realized Cost Savings'),
-      confidence:            fields.find(x => x.confidence != null)?.confidence ?? null,
-      source_file:           selectedFile?.filename || selectedFile?.name || selectedFile?.file_path || '',
-      stored_name:           selectedFile?.stored_name || '',
-      sme:                   smeName || loggedInUser || '',
-    };
-
-    saveRecord(record).catch(err => console.error('[Store] saveRecord failed:', err));
+  // Both the upload card and the Files scan hand back an array of files.
+  const handleFilesSelected = (picked) => {
+    const arr = Array.isArray(picked) ? picked : [picked];
+    setFiles(arr);
+    setCurrentFileIndex(0);
+    setStep(2);
   };
 
-  // Reset the entire pipeline so a new extraction starts clean — resetting only
-  // the step would leave selectedFile, smeName, finalFields, filters, and
-  // scriptData populated with stale data from the previous run.
+  const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n); setStep(3); };
+
+  // Extraction finished for every file — seed the per-file review.
+  const handleBatchExtracted = (results) => {
+    setFileResults(results.map(r => ({ ...r, finalFields: null, excluded: false })));
+    setCurrentFileIndex(0);
+    setStep(4);
+  };
+
+  // Advance to the next file, or — once the last file is handled — compute the
+  // aggregate and move on to Store.
+  const advanceAfterFile = (results) => {
+    const next = currentFileIndex + 1;
+    setFileResults(results);
+    if (next < results.length) {
+      setCurrentFileIndex(next);
+    } else {
+      setAggregateFields(aggregateFinalFields(results));
+      setStoreAggregate(results.filter(r => !r.excluded).length > 1);
+      setStep(5);
+    }
+  };
+
+  const handleFileConfirm = (resolvedFields) => {
+    advanceAfterFile(
+      fileResults.map((r, i) => i === currentFileIndex ? { ...r, finalFields: resolvedFields, excluded: false } : r)
+    );
+  };
+
+  const handleFileExclude = () => {
+    advanceAfterFile(
+      fileResults.map((r, i) => i === currentFileIndex ? { ...r, excluded: true, finalFields: null } : r)
+    );
+  };
+
+  const commonMeta = deriveCommonMeta(fileResults);
+
+  // Write a record per (non-excluded) file, plus the aggregate row when storing
+  // a real multi-file batch. A single-file batch stores exactly one record, with
+  // any Store-screen edits applied — matching the original behavior.
+  const handleStore = (editedAggregateFields) => {
+    const sme = smeName || loggedInUser || '';
+    const active = fileResults.filter(r => !r.excluded && r.finalFields);
+    const isMulti = active.length > 1;
+
+    if (!isMulti) {
+      const only = active[0];
+      const meta = only?.fileMeta || files[0] || {};
+      saveRecord(buildRecord(meta, editedAggregateFields, sme))
+        .catch(err => console.error('[Store] saveRecord failed:', err));
+    } else {
+      active.forEach(r => {
+        saveRecord(buildRecord(r.fileMeta, r.finalFields, sme))
+          .catch(err => console.error('[Store] saveRecord failed:', err));
+      });
+      if (storeAggregate) {
+        const aggMeta = {
+          client:    commonMeta.client,
+          publisher: commonMeta.publisher,
+          year:      commonMeta.year,
+        };
+        const aggRecord = buildRecord(aggMeta, editedAggregateFields, sme);
+        aggRecord.source_file = `Aggregate — ${commonMeta.client || 'Multi-client'} ${commonMeta.year || ''}`.trim();
+        saveRecord(aggRecord).catch(err => console.error('[Store] aggregate saveRecord failed:', err));
+      }
+    }
+
+    setAggregateFields(editedAggregateFields);
+    setStep(6);
+  };
+
+  // Reset the entire pipeline so a new extraction starts clean.
   const handleReset = () => {
     setStep(0);
-    setFile(null);
+    setFiles([]);
+    setCurrentFileIndex(0);
+    setFileResults([]);
     setSmeName('');
-    setFinalFields(null);
+    setAggregateFields(null);
+    setStoreAggregate(true);
     setFilters({});
-    setScriptData(null);
   };
 
   // Resolve the loaded folder handle for the chosen client, if we have one,
-  // so the Files step can scan it automatically (Phase 2).
+  // so the Files step can scan it automatically.
   const clientDir = (clientHandles && filters.client)
     ? (clientHandles.get(filters.client) || null)
     : null;
 
+  // A representative meta for the Done summary (common client/publisher/year,
+  // first file's stored reference for the executive-summary call).
+  const activeResults = fileResults.filter(r => !r.excluded);
+  const doneMeta = {
+    client:      commonMeta.client,
+    publisher:   commonMeta.publisher,
+    year:        commonMeta.year,
+    stored_name: activeResults[0]?.fileMeta?.stored_name || null,
+    file_path:   activeResults[0]?.fileMeta?.file_path   || null,
+    name:        activeResults.length > 1 ? `${activeResults.length} files` : (activeResults[0]?.fileMeta?.name || ''),
+  };
+
   const screens = [
-<ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFileSelect} clients={clients} />,
-    <ScreenFiles    key={1} filters={filters} clientDir={clientDir} onSelect={handleFileSelect} onBack={() => setStep(0)} />,
-    <ScreenValidate key={2} selectedFile={selectedFile}   onConfirm={handleSMEConfirm} onBack={() => setStep(1)} defaultName={loggedInUser} />,
-    <ScreenExtract  key={3} selectedFile={selectedFile}   onScriptData={setScriptData} onNext={(fields) => { setFinalFields(fields); setStep(4); }} />,
-    <ScreenCompare  key={4} fields={finalFields} scriptData={scriptData} onNext={(resolvedFields) => { setFinalFields(resolvedFields); setStep(5); }} onBack={() => setStep(3)} />,
-    <ScreenStore    key={5} selectedFile={selectedFile}   smeName={smeName} fields={finalFields} onNext={handleStore} onBack={() => setStep(4)} />,
-    <ScreenDone     key={6} finalFields={finalFields} selectedFile={selectedFile} onNewExtraction={handleReset} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
+    <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFilesSelected} clients={clients} />,
+    <ScreenFiles    key={1} filters={filters} clientDir={clientDir} onSelect={handleFilesSelected} onBack={() => setStep(0)} />,
+    <ScreenValidate key={2} selectedFile={files[0]} files={files} onConfirm={handleSMEConfirm} onBack={() => setStep(1)} defaultName={loggedInUser} />,
+    <BatchExtract   key={3} files={files} onComplete={handleBatchExtracted} />,
+    <FileReview
+      key={`4-${currentFileIndex}`}
+      fileResult={fileResults[currentFileIndex]}
+      fileIndex={currentFileIndex}
+      total={files.length}
+      isLast={currentFileIndex === files.length - 1}
+      onConfirm={handleFileConfirm}
+      onExclude={handleFileExclude}
+      onBack={() => setStep(3)}
+    />,
+    <ScreenStore
+      key={5}
+      fileResults={fileResults}
+      aggregateFields={aggregateFields}
+      commonMeta={commonMeta}
+      storeAggregate={storeAggregate}
+      onToggleAggregate={setStoreAggregate}
+      smeName={smeName}
+      multi={activeResults.length > 1}
+      onNext={handleStore}
+      onBack={() => { setCurrentFileIndex(Math.max(0, files.length - 1)); setStep(4); }}
+    />,
+    <ScreenDone     key={6} finalFields={aggregateFields} selectedFile={doneMeta} onNewExtraction={handleReset} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
 
   return (
@@ -2253,3 +2667,4 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     </>
   );
 }
+// (multi-file batch extraction + aggregation)
