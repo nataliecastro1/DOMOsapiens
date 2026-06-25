@@ -53,6 +53,69 @@ body {
   --radius-lg:     20px;
 }
 
+/* ─── Dark Mode Tokens ─────────────────────── */
+[data-theme="dark"] {
+  --navy:          #e8edf5;   /* text that uses var(--navy) becomes readable */
+  --navy-light:    #c8d4e8;
+  --navy-muted:    #8aa4cc;
+  --navy-faint:    #4a6a9c;
+  --navy-pale:     #0d1f3c;
+  --navy-5:        #080e1f;
+  --navy-10:       #0d1a32;
+  --blue-pale:     #0a2a3a;
+  --gold-pale:     #1e1500;
+  --gold-text:     #ffad00;
+  --green-pale:    #0a2018;
+  --green-text:    #2db870;
+  --red-pale:      #2a0a0a;
+  --red-text:      #e05555;
+  --amber-pale:    #1e1200;
+  --amber-text:    #f0a000;
+  --text:          #e8edf5;
+  --text-muted:    #8aa4cc;
+  --text-faint:    #4a6a9c;
+  --border:        rgba(255,255,255,0.09);
+  --border-light:  rgba(255,255,255,0.04);
+  --surface:       #0d1f3c;
+  --surface-2:     #0a1628;
+  --surface-3:     #112040;
+}
+
+[data-theme="dark"] body {
+  background: #080e1f;
+  color: #e8edf5;
+}
+
+/* Sidebar & topbar keep their dark navy background regardless of --navy token */
+[data-theme="dark"] .sidebar    { background: #001941; }
+[data-theme="dark"] .topbar     { background: #001941; }
+[data-theme="dark"] .main       { background: #080e1f; }
+
+[data-theme="dark"] .topstrip {
+  background: #0d1f3c;
+  border-bottom-color: rgba(255,255,255,0.08);
+}
+
+[data-theme="dark"] .card {
+  background: #0d1f3c;
+  border-color: rgba(255,255,255,0.09);
+}
+
+[data-theme="dark"] .field-input,
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: #0a1628 !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  color: #e8edf5 !important;
+}
+
+[data-theme="dark"] .field-input::placeholder,
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder { color: #4a6a9c; }
+
+[data-theme="dark"] .journey-bar { background: #0d1f3c; border-color: rgba(255,255,255,0.08); }
+
 /* ─── Keyframes ────────────────────────────── */
 @keyframes spin {
   from { transform: rotate(0deg); }

@@ -33,7 +33,7 @@ export default function Sidebar({ activeView, onNav }) {
           <button
             key={item.id}
             className={`nav-item ${activeView === item.id ? 'active' : ''}`}
-            onClick={() => item.id !== 'settings' && onNav(item.id)}
+            onClick={() => onNav(item.id)}
           >
             <i className={`ti ${item.icon}`} aria-hidden="true" />
             <span>{item.label}</span>
