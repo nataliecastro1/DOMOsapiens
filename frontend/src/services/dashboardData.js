@@ -82,3 +82,113 @@ export function groupSum(records, groupKey, metricKey) {
     .map(([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value);
 }
+
+// ─── Storytelling aggregations ───────────────────────────────────────────────
+// Shared math for the richer dashboard visuals (ROI journey, trend, contribution).
+// Used identically by the in-app preview and the exported HTML so the two stay in sync.
+
+/**
+ * Sum a metric by calendar year, in CHRONOLOGICAL (ascending) order.
+ * Unlike groupSum, records without a real numeric year are dropped — a time
+ * axis needs actual years, not an 'Unassigned' bucket.
+ * Returns [{ year, value }].
+ */
+export function yearSeries(records, metricKey) {
+  const map = new Map();
+  for (const r of records) {
+    const yr = num(r.year);
+    if (yr == null) continue;
+    map.set(yr, (map.get(yr) || 0) + (num(r[metricKey]) || 0));
+  }
+  return [...map.entries()]
+    .map(([year, value]) => ({ year, value }))
+    .sort((a, b) => a.year - b.year);
+}
+
+/**
+ * Annotate a yearSeries with year-over-year change.
+ * deltaPct is null for the first point and whenever the prior value is 0
+ * (avoids Infinity/NaN). deltaDir is 'up' | 'down' | 'flat' | null.
+ * Returns [{ year, value, deltaPct, deltaDir }].
+ */
+export function yearDeltas(series) {
+  return series.map((point, i) => {
+    if (i === 0) return { ...point, deltaPct: null, deltaDir: null };
+    const prev = series[i - 1].value;
+    if (!(prev > 0)) {
+      return { ...point, deltaPct: null, deltaDir: point.value > prev ? 'up' : point.value < prev ? 'down' : 'flat' };
+    }
+    const deltaPct = Math.round(((point.value - prev) / prev) * 100);
+    const deltaDir = deltaPct > 0 ? 'up' : deltaPct < 0 ? 'down' : 'flat';
+    return { ...point, deltaPct, deltaDir };
+  });
+}
+
+// Which metric keys roll up into each stage of the Identified → Accomplished →
+// Realized pipeline. Edit here to include/exclude a metric from the journey.
+const JOURNEY_STAGES = [
+  { key: 'identified',   label: 'Identified',   metrics: ['id_cost_avoidance', 'id_cost_optimization', 'identified_risk'] },
+  { key: 'accomplished', label: 'Accomplished', metrics: ['acc_cost_avoidance', 'acc_cost_optimization'] },
+  { key: 'realized',     label: 'Realized',     metrics: ['realized_savings'] },
+];
+
+/**
+ * Totals for the value pipeline. Always returns the 3 stages in order, even
+ * when a stage is 0, so callers decide visibility.
+ * `count` = records contributing any non-null value to the stage.
+ * Returns [{ key, label, value, count }].
+ */
+export function journeyStages(records) {
+  return JOURNEY_STAGES.map(({ key, label, metrics }) => {
+    const value = metrics.reduce((acc, m) => acc + sum(records, m), 0);
+    const count = records.reduce(
+      (n, r) => n + (metrics.some(m => num(r[m]) != null) ? 1 : 0),
+      0,
+    );
+    return { key, label, value, count };
+  });
+}
+
+/**
+ * Realization ratios between pipeline stages, as 0–1 fractions.
+ * Any ratio whose denominator is <= 0 is null (divide-by-zero guard).
+ * `accToId` is the headline realization rate.
+ */
+export function realizationRate(stages) {
+  const by = Object.fromEntries(stages.map(s => [s.key, s.value]));
+  const ratio = (numer, denom) => (denom > 0 ? numer / denom : null);
+  return {
+    accToId:  ratio(by.accomplished, by.identified),
+    realToAcc: ratio(by.realized, by.accomplished),
+    realToId:  ratio(by.realized, by.identified),
+  };
+}
+
+/**
+ * Annotate groupSum output with each row's share of the total and flag the top
+ * contributor. `pct` is unrounded (round at render). When the total is <= 0 all
+ * pct are 0 and nothing is flagged top.
+ * Returns [{ label, value, pct, isTop }].
+ */
+export function withPercent(chartData) {
+  const total = chartData.reduce((acc, d) => acc + (num(d.value) || 0), 0);
+  let topIdx = -1;
+  chartData.forEach((d, i) => { if (d.value > 0 && (topIdx < 0 || d.value > chartData[topIdx].value)) topIdx = i; });
+  return chartData.map((d, i) => ({
+    ...d,
+    pct: total > 0 ? (d.value / total) * 100 : 0,
+    isTop: i === topIdx,
+  }));
+}
+
+/**
+ * Format a 0–1 fraction as a percent string: 0.63 → '63%'.
+ * With { signed: true }: 0.12 → '+12%', -0.12 → '-12%'.
+ * null/NaN → '—'.
+ */
+export function formatPct(fraction, { signed = false } = {}) {
+  const v = num(fraction);
+  if (v == null) return '—';
+  const pct = Math.round(v * 100);
+  return signed && pct > 0 ? `+${pct}%` : `${pct}%`;
+}
