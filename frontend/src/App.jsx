@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
 import ExtractionView from './views/ExtractionView';
@@ -7,6 +7,7 @@ import TrackerView from './views/TrackerView';
 import ClientsView from './views/ClientsView';
 import HelpView from './views/HelpView';
 import LoginView from './views/LoginView';
+import SettingsView from './views/SettingsView';
 import TutorialOverlay, { shouldShowTutorial } from './components/TutorialOverlay';
 import ClientFolderGate from './components/ClientFolderGate';
 import './index.css';
@@ -17,12 +18,19 @@ const VIEW_META = {
   tracker:    { title: 'ROI Tracker',            sub: 'Client_ROI_Tracker.xlsx — All_ROI_Data · SME_Audit_Log · Source_File_Log', ctx: '/ ROI Tracker'    },
   clients:    { title: 'Clients',                sub: 'Manage active client accounts',                                             ctx: '/ Clients'        },
   help:       { title: 'Help & Docs',            sub: 'Quick reference and documentation',                                         ctx: '/ Help'           },
+  settings:   { title: 'Settings',               sub: 'Appearance and account preferences',                                        ctx: '/ Settings'       },
 };
 
 export default function App() {
   const [loggedIn, setLoggedIn]         = useState(false);
   const [loggedInUser, setLoggedInUser] = useState('');
   const [activeView, setActiveView]     = useState('extract');
+  const [theme, setTheme]               = useState(() => localStorage.getItem('theme') || 'light');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showClientGate, setShowClientGate] = useState(false);
   const [clients, setClients]           = useState(null);
@@ -67,6 +75,7 @@ export default function App() {
       case 'tracker':    return <TrackerView loggedInUser={loggedInUser} />;
       case 'clients':    return <ClientsView />;
       case 'help':       return <HelpView />;
+      case 'settings':   return <SettingsView theme={theme} onThemeChange={setTheme} />;
       default:           return <ExtractionView onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} />;
     }
   };
