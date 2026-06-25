@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
-import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, generateExecutiveSummary } from '../services/api';
+import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, generateExecutiveSummary, saveExecutiveSummary } from '../services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -2288,7 +2288,14 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
       stored_name:           selectedFile?.stored_name || null,
       file_path:             selectedFile?.file_path   || null,
     })
-      .then(data => setSummary(data))
+      .then(data => {
+        setSummary(data);
+        // Persist the summary onto the saved record so the Tracker can show it without re-generating
+        const sourceFile = selectedFile?.stored_name || selectedFile?.name || selectedFile?.file_path;
+        if (sourceFile) {
+          saveExecutiveSummary(sourceFile, data).catch(() => {});
+        }
+      })
       .catch(() => setSummaryError('Could not generate summary. Check your API key.'))
       .finally(() => setSummaryLoading(false));
   }, []);
@@ -2461,7 +2468,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
   // Write a record per (non-excluded) file, plus the aggregate row when storing
   // a real multi-file batch. A single-file batch stores exactly one record, with
   // any Store-screen edits applied — matching the original behavior.
-  const handleStore = (editedAggregateFields) => {
+  const handleStore = async (editedAggregateFields) => {
     const sme = smeName || loggedInUser || '';
     const active = fileResults.filter(r => !r.excluded && r.finalFields);
     const isMulti = active.length > 1;
@@ -2469,13 +2476,13 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     if (!isMulti) {
       const only = active[0];
       const meta = only?.fileMeta || files[0] || {};
-      saveRecord(buildRecord(meta, editedAggregateFields, sme))
+      await saveRecord(buildRecord(meta, editedAggregateFields, sme))
         .catch(err => console.error('[Store] saveRecord failed:', err));
     } else {
-      active.forEach(r => {
+      await Promise.all(active.map(r =>
         saveRecord(buildRecord(r.fileMeta, r.finalFields, sme))
-          .catch(err => console.error('[Store] saveRecord failed:', err));
-      });
+          .catch(err => console.error('[Store] saveRecord failed:', err))
+      ));
       if (storeAggregate) {
         const aggMeta = {
           client:    commonMeta.client,
@@ -2484,7 +2491,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
         };
         const aggRecord = buildRecord(aggMeta, editedAggregateFields, sme);
         aggRecord.source_file = `Aggregate — ${commonMeta.client || 'Multi-client'} ${commonMeta.year || ''}`.trim();
-        saveRecord(aggRecord).catch(err => console.error('[Store] aggregate saveRecord failed:', err));
+        await saveRecord(aggRecord).catch(err => console.error('[Store] aggregate saveRecord failed:', err));
       }
     }
 

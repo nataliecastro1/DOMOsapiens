@@ -51,6 +51,19 @@ def save_record(record: ROIRecord) -> dict:
     return entry
 
 
+def patch_executive_summary(identifier: str, summary: dict) -> dict | None:
+    """Attach an executive summary to an existing record.
+    Matches by stored_name first (the UUID filename), then by source_file (original name).
+    """
+    records = _load()
+    for i, r in enumerate(records):
+        if r.get("stored_name") == identifier or r.get("source_file") == identifier:
+            records[i]["executive_summary"] = summary
+            _save(records)
+            return records[i]
+    return None
+
+
 def get_all_records() -> list[dict]:
     return _load()
 
