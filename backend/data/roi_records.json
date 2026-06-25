@@ -5,7 +5,7 @@
     "publisher": "Oracle",
     "date_delivered": null,
     "currency": "USD",
-    "identified_risk": 1080000.0,
+    "identified_risk": 108000,
     "id_cost_avoidance": null,
     "acc_cost_avoidance": 1080000.0,
     "id_cost_optimization": null,
@@ -17,7 +17,9 @@
     "elevate_deliverable": null,
     "confidence": 95,
     "source_file": "test.pptx",
-    "saved_at": "2026-06-02T22:45:08.273838"
+    "saved_at": "2026-06-02T22:45:08.273838",
+    "record_id": "r_e11878082db1",
+    "updated_at": "2026-06-25T15:15:50.855618"
   },
   {
     "year": 2025,
@@ -39,7 +41,8 @@
     "source_file": "OneMain - ROAR.pptx",
     "sme": "christina",
     "stored_name": "c4ac347a474043459f53cd66a595c544.pptx",
-    "saved_at": "2026-06-22T21:35:40.314131"
+    "saved_at": "2026-06-22T21:35:40.314131",
+    "record_id": "r_d956cd671c4d"
   },
   {
     "year": 2025,
@@ -61,7 +64,8 @@
     "source_file": "2025 06 - Regeneron - Quest ROAR v.1_FINAL (1).pptx",
     "sme": "christina",
     "stored_name": "c7792a5c367649ad8068c292ecfb17ef.pptx",
-    "saved_at": "2026-06-12T18:48:31.026177"
+    "saved_at": "2026-06-12T18:48:31.026177",
+    "record_id": "r_5d65de1d5b91"
   },
   {
     "year": 2026,
@@ -83,7 +87,8 @@
     "source_file": "UPS_IBM_ROAR_2025.pdf",
     "sme": "christina",
     "stored_name": "",
-    "saved_at": "2026-06-12T22:15:31.399394"
+    "saved_at": "2026-06-12T22:15:31.399394",
+    "record_id": "r_2aee38903ea0"
   },
   {
     "year": 2025,
@@ -105,6 +110,277 @@
     "source_file": "2025 06 - Regeneron - Quest ROAR v.1_FINAL.pptx",
     "sme": "christina",
     "stored_name": "2f9507e156df402c9a1df7512a964027.pptx",
-    "saved_at": "2026-06-16T21:53:18.060681"
+    "saved_at": "2026-06-16T21:53:18.060681",
+    "record_id": "r_f07312a69521"
+  },
+  {
+    "record_id": "r_8e830bcdda5c",
+    "year": 2024,
+    "client": "OneMain Financial",
+    "publisher": "IBM",
+    "date_delivered": "August 2024",
+    "currency": "USD",
+    "identified_risk": null,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": 21100.0,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": 398000.0,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 77,
+    "source_file": "2024 08 OneMain_IBM_ROAR.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "contract_spend": {
+        "source_slide": 12,
+        "confidence": 92.0,
+        "alternates": null
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 61.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.274733"
+  },
+  {
+    "record_id": "r_2cc46a833b73",
+    "year": 2026,
+    "client": "Encova Insurance",
+    "publisher": "IBM",
+    "date_delivered": "January 2026",
+    "currency": "USD",
+    "identified_risk": 222000.0,
+    "id_cost_avoidance": 222000.0,
+    "acc_cost_avoidance": 222000.0,
+    "id_cost_optimization": 507000.0,
+    "acc_cost_optimization": 282000.0,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 91,
+    "source_file": "2025 December_Encova Insurance_IBM_ROAR_v1.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 89.0,
+        "alternates": null
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": null
+      },
+      "acc_cost_optimization": {
+        "source_slide": 13,
+        "confidence": 95.0,
+        "alternates": [
+          {
+            "value": "$507,000",
+            "confidence": 62
+          }
+        ]
+      },
+      "id_cost_optimization": {
+        "source_slide": 12,
+        "confidence": 92.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.285693"
+  },
+  {
+    "record_id": "r_b3c6f4845738",
+    "year": 2026,
+    "client": "KeyBank",
+    "publisher": "IBM",
+    "date_delivered": "2026",
+    "currency": "USD",
+    "identified_risk": 31600.0,
+    "id_cost_avoidance": 31600.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 5200000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 79,
+    "source_file": "2026 04 KeyBank_IBMRH_ROAR_Draft_v2.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "id_cost_optimization": {
+        "source_slide": 12,
+        "confidence": 75.0,
+        "alternates": [
+          {
+            "value": "$714,300",
+            "confidence": 55
+          }
+        ]
+      },
+      "identified_risk": {
+        "source_slide": 11,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 79.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.293955"
+  },
+  {
+    "record_id": "r_7e346cfc8760",
+    "year": 2026,
+    "client": "Walmart",
+    "publisher": "Oracle",
+    "date_delivered": "May 2026",
+    "currency": "USD",
+    "identified_risk": 9300000.0,
+    "id_cost_avoidance": 9300000.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 85,
+    "source_file": "2026 05 06 - Walmart - Oracle ROAR.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 15,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 14,
+        "confidence": 88.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.298934"
+  },
+  {
+    "record_id": "r_84ef007ffbf7",
+    "year": 2025,
+    "client": "NASDAQ (IASP)",
+    "publisher": "IBM",
+    "date_delivered": "May 2025",
+    "currency": "USD",
+    "identified_risk": 0.0,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 82,
+    "source_file": "NASDAQ IBM ROAR 20250501.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 10,
+        "confidence": 82.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.301765"
+  },
+  {
+    "record_id": "r_53501fdbf057",
+    "year": 2023,
+    "client": "Nike",
+    "publisher": "Microsoft",
+    "date_delivered": "May 2023",
+    "currency": "USD",
+    "identified_risk": 685000.0,
+    "id_cost_avoidance": 5400000.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 81,
+    "source_file": "Nike_ROAR_5.5.23.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 11,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 79.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.314733"
+  },
+  {
+    "record_id": "r_685460c42924",
+    "year": 2024,
+    "client": "State of Utah",
+    "publisher": "IBM Risk & Opportunity Assessment Report (ROAR)",
+    "date_delivered": "July 2024",
+    "currency": "USD",
+    "identified_risk": 2800000.0,
+    "id_cost_avoidance": 2100000.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 81,
+    "source_file": "State of Utah_IBM_ROAR 2024 2024.07.18.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 10,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 10,
+        "confidence": 79.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.327597"
   }
 ]

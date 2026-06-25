@@ -17,6 +17,8 @@
 
 No external UI framework (MUI, Chakra, etc.) is used.
 
+> Secure tracker records can be fetched from `GET /api/records/secure` using `Authorization: Bearer <TRACKER_API_KEY>` or `X-Tracker-Api-Key: <TRACKER_API_KEY>`. Set `TRACKER_API_KEY` in `backend/.env`.
+
 ---
 
 ## 2. Component & File Inventory

@@ -1,4 +1,4 @@
-"""ROAR routes: accept a .pptx upload and return extracted ROI fields."""
+"""ROAR routes: accept a PPTX or PDF upload and return extracted ROI fields."""
 
 import os
 import tempfile
@@ -13,9 +13,9 @@ router = APIRouter(prefix="/api", tags=["roar"])
 
 @router.post("/roar/extract")
 async def roar_extract(file: UploadFile = File(...)):
-    """Extract ROI fields from an uploaded ROAR .pptx file."""
-    if not file.filename.lower().endswith((".pptx", ".ppt")):
-        raise HTTPException(status_code=400, detail="Please upload a .pptx file.")
+    """Extract ROI fields from an uploaded ROAR PPTX or PDF file."""
+    if not file.filename.lower().endswith((".pptx", ".ppt", ".pdf")):
+        raise HTTPException(status_code=400, detail="Please upload a .pptx or .pdf file.")
 
     # extract_roar() takes a path, so spool the upload to a temp file.
     suffix = os.path.splitext(file.filename)[1] or ".pptx"
