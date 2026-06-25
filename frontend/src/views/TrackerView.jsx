@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Badge from '../components/Badge';
 import { getRecords } from '../services/api';
+import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
 
 // ─── Row Detail Panel ─────────────────────────────────────────────────────────
 function RowDetailPanel({ detail, onClose }) {
@@ -52,11 +53,125 @@ function RowDetailPanel({ detail, onClose }) {
   );
 }
 
+// ─── Executive Summary Drawer ─────────────────────────────────────────────────
+function ExecSummaryDrawer({ record, onClose }) {
+  const summary  = record?.executive_summary || null;
+  const printRef = useRef(null);
+
+  const handleDownloadPDF = () => {
+    import('html2pdf.js').then(mod => {
+      const html2pdf = mod.default;
+      const name = [record.client, record.publisher, record.year].filter(Boolean).join('_') || 'ROI';
+      html2pdf()
+        .set({
+          margin: [12, 12, 12, 12],
+          filename: `${name}_Executive_Summary.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        })
+        .from(printRef.current)
+        .save();
+    });
+  };
+
+  if (!record) return null;
+
+  const subtitle = [record.client, record.publisher, record.year].filter(Boolean).join(' · ');
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,25,65,0.45)',
+          zIndex: 200, backdropFilter: 'blur(2px)',
+        }}
+      />
+
+      {/* Drawer */}
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0,
+        width: 'min(780px, 92vw)',
+        background: 'var(--bg)',
+        zIndex: 201,
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '-8px 0 40px rgba(0,0,0,0.25)',
+        animation: 'slideInRight 0.25s ease',
+      }}>
+        {/* Drawer header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '16px 24px', borderBottom: '1px solid var(--border)',
+          background: 'var(--surface)', flexShrink: 0,
+        }}>
+          <i className="ti ti-file-description" style={{ fontSize: 20, color: 'var(--blue)' }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--navy)' }}>Executive Summary</div>
+            {subtitle && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{subtitle}</div>}
+          </div>
+          <button
+            onClick={handleDownloadPDF}
+            disabled={!summary}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: summary ? 'var(--blue)' : 'var(--border)',
+              color: '#fff', border: 'none', borderRadius: 8,
+              padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: summary ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <i className="ti ti-file-type-pdf" /> Download PDF
+          </button>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', fontSize: 22, color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1 }}
+          >
+            <i className="ti ti-x" />
+          </button>
+        </div>
+
+        {/* Drawer body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+          {summary ? (
+            <ExecutiveSummaryReport
+              summary={summary}
+              subtitle={subtitle}
+              client={record.client || ''}
+              publisher={record.publisher || ''}
+              innerRef={printRef}
+            />
+          ) : (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', height: 240, gap: 14, color: 'var(--text-muted)',
+              textAlign: 'center',
+            }}>
+              <i className="ti ti-file-off" style={{ fontSize: 40, opacity: 0.35 }} />
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6, color: 'var(--navy)' }}>
+                  No executive summary saved yet
+                </div>
+                <div style={{ fontSize: 13 }}>
+                  Complete the full extraction flow for this record —<br />
+                  the summary is generated and saved automatically at the Done step.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Tab: ROI Data ────────────────────────────────────────────────────────────
 function TabROIData() {
-  const [records, setRecords]     = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [detailRow, setDetailRow] = useState(null);
+  const [records, setRecords]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [detailRow, setDetailRow]   = useState(null);
+  const [summaryRecord, setSummaryRecord] = useState(null);
 
   useEffect(() => {
     getRecords()
@@ -104,6 +219,7 @@ function TabROIData() {
                 <th>#</th><th>Client</th><th>Publisher</th><th>Year</th>
                 <th>Total Savings</th><th>Confidence</th>
                 <th>SME</th><th>Source File</th><th>Status</th>
+                <th>Exec. Summary</th>
               </tr>
             </thead>
             <tbody>
@@ -124,6 +240,20 @@ function TabROIData() {
                       : <span style={{ color: 'var(--text-muted)' }}>{r.source_file || '—'}</span>}
                   </td>
                   <td><Badge color="green">Stored</Badge></td>
+                  <td onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => setSummaryRecord(r)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        background: 'var(--blue-pale)', color: 'var(--blue)',
+                        border: '1.5px solid var(--blue)', borderRadius: 8,
+                        padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <i className="ti ti-file-description" /> View
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -133,6 +263,10 @@ function TabROIData() {
 
       {detailRow && (
         <RowDetailPanel detail={detailRow} onClose={() => setDetailRow(null)} />
+      )}
+
+      {summaryRecord && (
+        <ExecSummaryDrawer record={summaryRecord} onClose={() => setSummaryRecord(null)} />
       )}
     </>
   );

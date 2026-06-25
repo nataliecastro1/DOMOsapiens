@@ -26,6 +26,7 @@ class ROIRecord(BaseModel):
     source_file:             Optional[str]   = None
     sme:                     Optional[str]   = None
     stored_name:             Optional[str]   = None
+    executive_summary:       Optional[dict]  = None
 
 AuthState = Literal[
     "unauthenticated",

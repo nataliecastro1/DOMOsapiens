@@ -576,7 +576,7 @@ export default function ExecutiveSummaryReport({
       </div>
 
       {/* ── PDF-captured report starts here ─────────────────────────────────── */}
-      <div ref={innerRef}>
+      <div ref={innerRef} style={{ background: '#ffffff', borderRadius: 14, padding: '4px 0' }}>
 
       {/* ── Report header ───────────────────────────────────────────────────── */}
       <div style={{
