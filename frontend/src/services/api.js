@@ -81,6 +81,11 @@ export async function generateExecutiveSummary(data) {
   return post('/executive-summary', data);
 }
 
+/** Augment an existing summary with additional user-provided text via Claude. */
+export async function augmentExecutiveSummary(data) {
+  return post('/executive-summary/augment', data);
+}
+
 /** Return the client roster (sorted names) for the dropdown. */
 export async function getClients() {
   return get('/clients');

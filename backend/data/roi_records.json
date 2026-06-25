@@ -20,7 +20,7 @@
     "saved_at": "2026-06-02T22:45:08.273838"
   },
   {
-    "year": 2025,
+    "year": 2026,
     "client": "one main",
     "publisher": "IBM",
     "date_delivered": null,
@@ -38,8 +38,8 @@
     "confidence": 72,
     "source_file": "OneMain - ROAR.pptx",
     "sme": "christina",
-    "stored_name": "c4ac347a474043459f53cd66a595c544.pptx",
-    "saved_at": "2026-06-22T21:35:40.314131"
+    "stored_name": "b25eb74e561c4f888f9cb69bdaacb624.pptx",
+    "saved_at": "2026-06-25T20:19:35.235447"
   },
   {
     "year": 2025,
@@ -64,26 +64,26 @@
     "saved_at": "2026-06-12T18:48:31.026177"
   },
   {
-    "year": 2026,
-    "client": "",
-    "publisher": "",
+    "year": 2025,
+    "client": "UPS",
+    "publisher": "IBM",
     "date_delivered": null,
     "currency": "USD",
-    "identified_risk": null,
-    "id_cost_avoidance": null,
-    "acc_cost_avoidance": null,
-    "id_cost_optimization": null,
+    "identified_risk": 1080000.0,
+    "id_cost_avoidance": 1080000.0,
+    "acc_cost_avoidance": 1080000.0,
+    "id_cost_optimization": 6150000.0,
     "acc_cost_optimization": null,
     "realized_savings": null,
     "contract_spend": null,
     "pricing_available": null,
     "notes": null,
     "elevate_deliverable": null,
-    "confidence": 85,
+    "confidence": 92,
     "source_file": "UPS_IBM_ROAR_2025.pdf",
     "sme": "christina",
-    "stored_name": "",
-    "saved_at": "2026-06-12T22:15:31.399394"
+    "stored_name": "b60220e60aa5449eb0468bbed25666b0.pdf",
+    "saved_at": "2026-06-25T20:55:54.868812"
   },
   {
     "year": 2025,
