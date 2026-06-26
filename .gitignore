@@ -76,3 +76,6 @@ env/
 .mypy_cache/
 .ruff_cache/
 .ipynb_checkpoints/
+
+# ---- Secrets: issued API keys (hashed, but never commit) ----
+backend/data/api_keys.json
