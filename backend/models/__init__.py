@@ -49,6 +49,7 @@ class RecordUpdate(BaseModel):
     changes: dict[str, Any]
     user:    Optional[str] = None
     note:    Optional[str] = None
+    executive_summary:       Optional[dict]  = None
 
 AuthState = Literal[
     "unauthenticated",
