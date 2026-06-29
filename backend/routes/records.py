@@ -2,10 +2,11 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse, Response
+from pydantic import BaseModel
 
 from config import TRACKER_API_KEY
 from models import ROIRecord, RecordUpdate
-from services.storage import save_record, get_all_records, update_record, export_csv, export_xlsx
+from services.storage import save_record, get_all_records, update_record, export_csv, export_xlsx, patch_executive_summary
 from services.audit import get_events
 from services import api_keys
 import hmac

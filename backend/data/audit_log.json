@@ -86,5 +86,16 @@
     "old_value": null,
     "new_value": null,
     "note": "Stored from extraction"
+  },
+  {
+    "event_id": "18e83b69c0b744b9ae2f888256de17fe",
+    "record_id": "r_6a50050ff780",
+    "timestamp": "2026-06-29T19:37:37.455421",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
   }
 ]

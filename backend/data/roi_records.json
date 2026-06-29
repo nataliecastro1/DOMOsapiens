@@ -22,9 +22,10 @@
     "updated_at": "2026-06-25T15:15:50.855618"
   },
   {
+    "record_id": "r_6a50050ff780",
     "year": 2026,
-    "client": "one main",
-    "publisher": "IBM",
+    "client": "",
+    "publisher": "Oracle",
     "date_delivered": null,
     "currency": "USD",
     "identified_risk": null,
@@ -40,11 +41,15 @@
     "confidence": 72,
     "source_file": "OneMain - ROAR.pptx",
     "sme": "christina",
-    "stored_name": "b25eb74e561c4f888f9cb69bdaacb624.pptx",
-    "saved_at": "2026-06-25T20:19:35.235447",
-    "executive_summary": {
-      "test": true
-    }
+    "stored_name": "e7c355a4b84e42918a2a33a81d59652a.pptx",
+    "field_meta": {
+      "id_cost_optimization": {
+        "source_slide": 10,
+        "confidence": 92.5,
+        "alternates": []
+      }
+    },
+    "saved_at": "2026-06-29T19:37:37.447153"
   },
   {
     "year": 2025,
@@ -194,7 +199,8 @@
         }
       }
     },
-    "saved_at": "2026-06-29T15:37:24.057041"
+    "saved_at": "2026-06-29T15:37:24.057041",
+    "record_id": "r_f6486bba9285"
   },
   {
     "year": 2025,
@@ -488,5 +494,29 @@
       }
     },
     "saved_at": "2026-06-25T15:32:32.327597"
+  },
+  {
+    "record_id": "r_abb_sap_2026",
+    "year": 2026,
+    "client": "ABB",
+    "publisher": "SAP",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 27100000.0,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 297300.0,
+    "acc_cost_optimization": 0.0,
+    "realized_savings": null,
+    "contract_spend": 0.0,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 75,
+    "source_file": "ROAR 2026 March 30  - ABB - SAP_DRAFT.pdf",
+    "sme": "Porter",
+    "stored_name": "af7f2117d107452fb60053c6bc8d990b.pdf",
+    "executive_summary": null,
+    "saved_at": "2026-06-25T20:20:52.536102"
   }
 ]

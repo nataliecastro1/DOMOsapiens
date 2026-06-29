@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
 import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog } from '../services/api';
-import React, { useState, useEffect, useRef } from 'react';
-import Badge from '../components/Badge';
-import { getRecords } from '../services/api';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
 
 // ─── Column model ─────────────────────────────────────────────────────────────
@@ -101,17 +98,6 @@ function ColumnsMenu({ prefs, onToggle, onReset }) {
   );
 }
 
-// ─── Tab: ROI Data (editable) ──────────────────────────────────────────────────
-function TabROIData() {
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [edits, setEdits]     = useState({});        // { recordId: { field: stringValue } }
-  const [editingCell, setEditingCell] = useState(null); // { rid, key }
-  const [colPrefs, setColPrefs] = useState(loadColPrefs);
-  const [note, setNote]   = useState('');
-  const [editor, setEditor] = useState('');
-  const [saving, setSaving] = useState(false);
-  const dragKey = useRef(null);
 // ─── Executive Summary Drawer ─────────────────────────────────────────────────
 function ExecSummaryDrawer({ record, onClose }) {
   const summary  = record?.executive_summary || null;
