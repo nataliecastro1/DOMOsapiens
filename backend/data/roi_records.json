@@ -214,5 +214,27 @@
     "sme": "christina",
     "stored_name": "2f9507e156df402c9a1df7512a964027.pptx",
     "saved_at": "2026-06-16T21:53:18.060681"
+  },
+  {
+    "year": 2026,
+    "client": "ABB",
+    "publisher": "SAP",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 27100000.0,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 297300.0,
+    "acc_cost_optimization": 0.0,
+    "realized_savings": null,
+    "contract_spend": 0.0,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 75,
+    "source_file": "ROAR 2026 March 30  - ABB - SAP_DRAFT.pdf",
+    "sme": "Porter",
+    "stored_name": "af7f2117d107452fb60053c6bc8d990b.pdf",
+    "saved_at": "2026-06-25T20:20:52.536102"
   }
 ]
