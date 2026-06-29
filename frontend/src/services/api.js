@@ -121,6 +121,22 @@ export async function generateExecutiveSummary(data) {
   return post('/executive-summary', data);
 }
 
+/** Augment an existing summary with additional user-provided text via Claude. */
+export async function augmentExecutiveSummary(data) {
+  return post('/executive-summary/augment', data);
+}
+
+/** Save a generated executive summary onto an existing record by source_file. */
+export async function saveExecutiveSummary(source_file, executive_summary) {
+  const res = await fetch(`${BASE}/records/executive-summary`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source_file, executive_summary }),
+  });
+  if (!res.ok) throw new Error(`PATCH executive-summary failed: ${res.status}`);
+  return res.json();
+}
+
 /** Return the client roster (sorted names) for the dropdown. */
 export async function getClients() {
   return get('/clients');

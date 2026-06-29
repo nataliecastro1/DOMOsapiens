@@ -7,7 +7,8 @@ export default function LoginView({ onLogin }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (username === 'christina' && password === '123456') {
+    const storedPassword = localStorage.getItem('app_password') || '123456';
+    if (username === 'christina' && password === storedPassword) {
       setError('');
       onLogin(username);
     } else {
