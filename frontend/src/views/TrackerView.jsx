@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
 import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog } from '../services/api';
-import React, { useState, useEffect, useRef } from 'react';
-import Badge from '../components/Badge';
-import { getRecords } from '../services/api';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
 
 // ─── Column model ─────────────────────────────────────────────────────────────
