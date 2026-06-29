@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from config import TRACKER_API_KEY
 from models import ROIRecord, RecordUpdate
+from models.field_catalog import FIELD_CATALOG
 from services.storage import save_record, get_all_records, update_record, export_csv, export_xlsx, patch_executive_summary
 from services.audit import get_events
 from services import api_keys
@@ -44,6 +45,15 @@ def require_tracker_api_key(
         return
 
     raise HTTPException(status_code=401, detail="Unauthorized: invalid API key.")
+
+
+@router.get("/fields")
+def list_fields():
+    """Return the field catalog: per-field label, type, notes, and the
+    ui_visible / editable / exportable / provenance flags. The frontend builds
+    its Tracker columns and tooltips from this, so the UI never duplicates the
+    field definitions that live in models/field_catalog.py."""
+    return [f.model_dump() for f in FIELD_CATALOG]
 
 
 @router.post("/records")

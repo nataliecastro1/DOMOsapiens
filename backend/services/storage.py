@@ -15,11 +15,15 @@ from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from models import ROIRecord
+from models.field_catalog import FIELD_CATALOG
 from services import audit
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "roi_records.json")
 
 # The 15 clean Domo columns (no provenance noise — that lives on its own sheet).
+# Order is the Domo ingestion contract, so it's pinned here rather than derived
+# from the catalog; the catalog's `notes`/flags for these keys ship in the
+# Field_Definitions sheet (see export_xlsx).
 DOMO_COLUMNS = [
     "year", "client", "publisher", "date_delivered", "currency",
     "identified_risk", "id_cost_avoidance", "acc_cost_avoidance",
@@ -27,16 +31,10 @@ DOMO_COLUMNS = [
     "contract_spend", "pricing_available", "notes", "elevate_deliverable",
 ]
 
-# Metric keys that can carry per-field provenance, with client-facing labels.
-PROVENANCE_METRICS = [
-    ("identified_risk",       "Identified Risk"),
-    ("id_cost_avoidance",     "Identified Cost Avoidance"),
-    ("acc_cost_avoidance",    "Accomplished Cost Avoidance"),
-    ("id_cost_optimization",  "Identified Cost Optimization"),
-    ("acc_cost_optimization", "Accomplished Cost Optimization"),
-    ("realized_savings",      "Realized Savings"),
-    ("contract_spend",        "Contract Spend"),
-]
+# Metric keys that can carry per-field provenance, with client-facing labels —
+# derived from the single source of truth (models/field_catalog.py) so the
+# export and the Tracker can never drift.
+PROVENANCE_METRICS = [(f.key, f.label) for f in FIELD_CATALOG if f.provenance]
 
 
 def _new_record_id() -> str:
@@ -174,11 +172,13 @@ def _autowidth(ws, columns):
 
 
 def export_xlsx() -> bytes:
-    """Return all records as an XLSX workbook with three sheets:
-      1. All_ROI_Data    — clean ROI values + record_id (Domo-ready)
-      2. SME_Audit_Log   — the append-only event history (creates + edits)
+    """Return all records as an XLSX workbook with four sheets:
+      1. All_ROI_Data     — clean ROI values + record_id (Domo-ready)
+      2. SME_Audit_Log    — the append-only event history (creates + edits)
       3. Field_Provenance — per-field source slide + confidence (long format)
-    All three join on record_id.
+      4. Field_Definitions — the field catalog: label, type, notes, and the
+                             ui_visible / editable / exportable / provenance flags
+    Sheets 1–3 join on record_id; sheet 4 documents what every column means.
     """
     records = _load()
     by_id = {r.get("record_id"): r for r in records}
@@ -267,6 +267,29 @@ def export_xlsx() -> bytes:
             ws_prov.cell(row=prov_row, column=9, value=alts_str)
             prov_row += 1
     _autowidth(ws_prov, prov_columns)
+
+    # ─── Sheet 4: Field_Definitions (the catalog) ─────────────────────────────
+    # Documents every column: label, type, notes, and which fields are hidden in
+    # the UI / editable / exported / provenance-bearing. Driven entirely by
+    # models/field_catalog.py so the docs can never drift from the app.
+    ws_fields = wb.create_sheet("Field_Definitions")
+    field_columns = [
+        "field", "label", "type", "ui_visible", "editable",
+        "exportable", "provenance", "notes",
+    ]
+    _style_header(ws_fields, field_columns, header_fill, header_font)
+    for row_idx, f in enumerate(FIELD_CATALOG, start=2):
+        ws_fields.cell(row=row_idx, column=1, value=f.key)
+        ws_fields.cell(row=row_idx, column=2, value=f.label)
+        ws_fields.cell(row=row_idx, column=3, value=f.type)
+        ws_fields.cell(row=row_idx, column=4, value="yes" if f.ui_visible else "no")
+        ws_fields.cell(row=row_idx, column=5, value="yes" if f.editable else "no")
+        ws_fields.cell(row=row_idx, column=6, value="yes" if f.exportable else "no")
+        ws_fields.cell(row=row_idx, column=7, value="yes" if f.provenance else "no")
+        ws_fields.cell(row=row_idx, column=8, value=f.notes)
+    _autowidth(ws_fields, field_columns)
+    # Give the notes column real room — autowidth caps at the (short) header.
+    ws_fields.column_dimensions[ws_fields.cell(row=1, column=8).column_letter].width = 70
 
     output = io.BytesIO()
     wb.save(output)
