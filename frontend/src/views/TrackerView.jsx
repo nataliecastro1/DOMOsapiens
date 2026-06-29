@@ -59,6 +59,10 @@ const fmtAmount = (n) => {
   return Number.isNaN(num) ? String(n) : `$${num.toLocaleString()}`;
 };
 const confColor = (c) => (c >= 90 ? 'green' : c >= 75 ? 'amber' : 'red');
+const totalSavings = (r) => {
+  const sum = (r.id_cost_avoidance || 0) + (r.id_cost_optimization || 0) + (r.realized_savings || 0) || r.identified_risk || 0;
+  return fmtAmount(sum || null);
+};
 
 // ─── Columns menu (show/hide) ──────────────────────────────────────────────────
 function ColumnsMenu({ prefs, onToggle, onReset }) {
