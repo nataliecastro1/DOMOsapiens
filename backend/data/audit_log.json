@@ -88,25 +88,14 @@
     "note": "Stored from extraction"
   },
   {
-    "event_id": "a1976a5edfbb4158b202913bf32b7491",
-    "record_id": "r_e11878082db1",
-    "timestamp": "2026-06-25T16:07:13.665724",
+    "event_id": "18e83b69c0b744b9ae2f888256de17fe",
+    "record_id": "r_6a50050ff780",
+    "timestamp": "2026-06-29T19:37:37.455421",
     "user": "christina",
-    "action": "edit",
-    "field": "identified_risk",
-    "old_value": 108000,
-    "new_value": 1080000,
-    "note": "test1"
-  },
-  {
-    "event_id": "0d1ab11dcb944b31b79e92df0151661c",
-    "record_id": "r_2cc46a833b73",
-    "timestamp": "2026-06-25T16:07:13.711325",
-    "user": "christina",
-    "action": "edit",
-    "field": "identified_risk",
-    "old_value": 222000.0,
-    "new_value": 18000,
-    "note": "test1"
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
   }
 ]

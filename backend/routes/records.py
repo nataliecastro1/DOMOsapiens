@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from config import TRACKER_API_KEY
 from models import ROIRecord, RecordUpdate
 from models.field_catalog import FIELD_CATALOG
-from services.storage import save_record, get_all_records, update_record, export_csv, export_xlsx
+from services.storage import save_record, get_all_records, update_record, export_csv, export_xlsx, patch_executive_summary
 from services.audit import get_events
 from services import api_keys
 import hmac
