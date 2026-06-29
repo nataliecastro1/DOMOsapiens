@@ -77,6 +77,15 @@ export async function getRecords() {
 }
 
 /**
+ * Return the field catalog — per-field label, type, notes, and the
+ * ui_visible / editable / exportable / provenance flags. Single source of
+ * truth for the Tracker columns and tooltips (backend models/field_catalog.py).
+ */
+export async function getFields() {
+  return get('/fields');
+}
+
+/**
  * Apply a partial edit to a stored record. `changes` is a map of
  * { field_name: new_value }; `user` and `note` are logged to the audit trail.
  * Each changed field becomes one immutable audit event server-side.
