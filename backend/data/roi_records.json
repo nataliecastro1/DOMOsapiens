@@ -44,7 +44,8 @@
     "saved_at": "2026-06-25T20:19:35.235447",
     "executive_summary": {
       "test": true
-    }
+    },
+    "record_id": "r_6a50050ff780"
   },
   {
     "year": 2025,
@@ -194,7 +195,8 @@
         }
       }
     },
-    "saved_at": "2026-06-29T15:37:24.057041"
+    "saved_at": "2026-06-29T15:37:24.057041",
+    "record_id": "r_f6486bba9285"
   },
   {
     "year": 2025,
@@ -488,5 +490,29 @@
       }
     },
     "saved_at": "2026-06-25T15:32:32.327597"
+  },
+  {
+    "record_id": "r_abb_sap_2026",
+    "year": 2026,
+    "client": "ABB",
+    "publisher": "SAP",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 27100000.0,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 297300.0,
+    "acc_cost_optimization": 0.0,
+    "realized_savings": null,
+    "contract_spend": 0.0,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 75,
+    "source_file": "ROAR 2026 March 30  - ABB - SAP_DRAFT.pdf",
+    "sme": "Porter",
+    "stored_name": "af7f2117d107452fb60053c6bc8d990b.pdf",
+    "executive_summary": null,
+    "saved_at": "2026-06-25T20:20:52.536102"
   }
 ]
