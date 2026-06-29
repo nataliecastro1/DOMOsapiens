@@ -6,6 +6,8 @@ import {
   METRICS, labelFor, deriveOptions, sum, countWithMetric,
   formatCurrency, matchFilters, groupSum,
   yearSeries, yearDeltas, journeyStages, realizationRate, withPercent, formatPct,
+  NUMERIC_ELEMENTS, SUMMARY_ELEMENTS, CHART_ELEMENTS, elementById, parseElementId,
+  isVariantable, groupElements, mostRecentSummary, summaryFieldContent, normalizeElements,
 } from '../services/dashboardData';
 
 const STORAGE_KEY = 'domosapiens.dashboards';
@@ -294,6 +296,285 @@ function TrendChart({ series, metricLabel }) {
   );
 }
 
+// Bullet icon + accent color per summary list field (mirrors the executive-
+// summary report palette). Used by both the selector and the rendered card.
+const SUMMARY_FIELD_STYLE = {
+  overview:            { icon: 'ti-file-text',      color: 'var(--blue)' },
+  key_accomplishments: { icon: 'ti-circle-check',   color: '#2d9e5c' },
+  recommendations:     { icon: 'ti-bulb',           color: 'var(--gold)' },
+  primary_risks:       { icon: 'ti-alert-triangle', color: '#c0392b' },
+  market_risks:        { icon: 'ti-bolt',           color: '#e67e22' },
+  additional_insights: { icon: 'ti-eye',            color: '#4a6a9c' },
+  next_steps:          { icon: 'ti-arrow-right',    color: '#0089af' },
+  key_metrics:         { icon: 'ti-chart-bar',      color: 'var(--blue)' },
+  highlights:          { icon: 'ti-star',           color: 'var(--gold)' },
+};
+
+// A selected element that resolves to no data under the current filters. Shown
+// in the preview (so the user sees it IS selected) but omitted from the export.
+function PlaceholderCard({ label }) {
+  return (
+    <div className="card" style={{ borderStyle: 'dashed', color: 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <i className="ti ti-eye-off" aria-hidden="true" style={{ color: 'var(--text-faint)' }} />
+      {label} — no data for the current filters
+    </div>
+  );
+}
+
+// One executive-summary field rendered per its type, drawn from the most recent
+// matched engagement's summary. `variant` is 'short' | 'long' for text/list.
+function SummaryCard({ field, variant, recent }) {
+  const def   = SUMMARY_ELEMENTS.find(e => e.field === field);
+  const style = SUMMARY_FIELD_STYLE[field] || { icon: 'ti-point', color: 'var(--blue)' };
+  const [expanded, setExpanded] = useState(false);
+
+  const shortContent = summaryFieldContent(recent?.summary, field, 'short');
+  const longContent  = summaryFieldContent(recent?.summary, field, 'long');
+  const base = variant === 'long' ? longContent : shortContent;
+  if (!base) return <PlaceholderCard label={def?.label || field} />;
+
+  // A short text/list field with extra content hidden gets a See more toggle
+  // that swaps in the full long version inline.
+  const canExpand = variant === 'short' && def?.variantable && longContent && (
+    longContent.text  ? longContent.text !== shortContent.text
+    : longContent.items ? longContent.items.length > shortContent.items.length
+    : false
+  );
+  const content = (canExpand && expanded) ? longContent : base;
+
+  const renderContent = () => {
+    if (content.text) {
+      return <p style={{ fontSize: 13.5, lineHeight: 1.6, color: 'var(--text)', margin: 0 }}>{content.text}</p>;
+    }
+    if (content.items) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {content.items.map((it, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 13, lineHeight: 1.5 }}>
+              <i className={`ti ${style.icon}`} aria-hidden="true" style={{ color: style.color, fontSize: 15, marginTop: 1, flexShrink: 0 }} />
+              <span style={{ color: 'var(--text)' }}>{it}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    // key_metrics / highlights → label/value cards
+    const cards = content.metrics || content.highlights;
+    return (
+      <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', marginBottom: 0 }}>
+        {cards.map((c, i) => (
+          <div className="metric-card" key={i}>
+            <div className="metric-label">{c.label}</div>
+            <div className="metric-value" style={{ fontSize: 20 }}>{c.value || '—'}</div>
+            {c.context && <div className="metric-delta muted">{c.context}</div>}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="card">
+      <div className="card-title" style={{ marginBottom: 12 }}>
+        <i className={`ti ${style.icon}`} aria-hidden="true" style={{ color: style.color }} /> {def.label}
+        {recent?.source && (
+          <span style={{ fontWeight: 500, fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
+            {recent.count > 1 ? 'most recent · ' : ''}{recent.source}
+          </span>
+        )}
+      </div>
+      {renderContent()}
+      {canExpand && (
+        <button
+          type="button"
+          onClick={() => setExpanded(x => !x)}
+          style={{
+            marginTop: 10, background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 12.5, fontWeight: 700, color: 'var(--blue)', fontFamily: 'inherit',
+          }}
+        >
+          {expanded ? 'See less' : 'See more'}
+          <i className={`ti ti-chevron-${expanded ? 'up' : 'down'}`} aria-hidden="true" style={{ fontSize: 14 }} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// The publisher/year comparison bar card — extracted so the ordered preview can
+// place it among the other elements.
+function BarCard({ barsPct, maxVal, primaryMetric, groupField }) {
+  return (
+    <div className="card">
+      <div className="card-title">
+        <i className="ti ti-chart-bar" aria-hidden="true" /> {labelFor(primaryMetric)} by {groupField === 'year' ? 'Year' : 'Publisher'}
+      </div>
+      {barsPct.slice(0, MAX_BARS).map((d, i) => (
+        <div className="bar-row" key={d.label}>
+          <span className="bar-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {d.label}
+            {d.isTop && (
+              <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--navy)', background: 'var(--gold)', borderRadius: 6, padding: '1px 7px' }}>Top</span>
+            )}
+          </span>
+          <div className="bar-bg">
+            <div className="bar-fill" style={{ width: `${Math.round((d.value / maxVal) * 100)}%`, background: BAR_COLORS[i % BAR_COLORS.length] }} />
+          </div>
+          <span className="bar-val">{formatCurrency(d.value)} · {Math.round(d.pct)}%</span>
+        </div>
+      ))}
+      {barsPct.length > MAX_BARS && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+          + {barsPct.length - MAX_BARS} more
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Element picker ───────────────────────────────────────────────────────────
+// Builds the ordered `selElements` list: an "Add" palette grouped by category,
+// plus the selected list with drag-to-reorder / remove / short-long controls.
+// Selection order is preserved; drag a row to move the summary to the top,
+// between charts, etc.
+function ElementsField({ selElements, setSelElements, isAvailable }) {
+  const selectedIds = new Set(selElements.map(e => e.id));
+  // Native HTML5 drag-and-drop reorder. dragIndex = the row being dragged;
+  // overIndex = the row it's hovering, used to draw the drop indicator.
+  const [dragIndex, setDragIndex] = useState(null);
+  const [overIndex, setOverIndex] = useState(null);
+
+  const add = (id) => setSelElements(prev =>
+    prev.some(e => e.id === id) ? prev : [...prev, { id, variant: isVariantable(id) ? 'short' : undefined }]);
+  const remove = (idx) => setSelElements(prev => prev.filter((_, i) => i !== idx));
+  const setVariant = (idx, variant) => setSelElements(prev => prev.map((e, i) => i === idx ? { ...e, variant } : e));
+  const moveTo = (from, to) => setSelElements(prev => {
+    if (from == null || to == null || from === to || to < 0 || to >= prev.length) return prev;
+    const a = [...prev];
+    const [x] = a.splice(from, 1);
+    a.splice(to, 0, x);
+    return a;
+  });
+
+  const endDrag = () => { setDragIndex(null); setOverIndex(null); };
+  const handleDrop = (toIdx) => { moveTo(dragIndex, toIdx); endDrag(); };
+
+  const GROUPS = [
+    { title: 'Metrics',           icon: 'ti-coin',        items: NUMERIC_ELEMENTS },
+    { title: 'Executive Summary', icon: 'ti-file-text',   items: SUMMARY_ELEMENTS },
+    { title: 'Charts',            icon: 'ti-chart-dots',  items: CHART_ELEMENTS  },
+  ];
+
+  return (
+    <div className="field-group" style={{ marginBottom: 0 }}>
+      <label className="field-label">Dashboard elements</label>
+
+      {/* Selected, ordered */}
+      {selElements.length === 0 ? (
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>
+          Nothing selected yet — add elements below. They appear on the dashboard in the order you add them.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+          {selElements.map((e, idx) => {
+            const cat   = elementById(e.id);
+            const avail = isAvailable(e.id);
+            const isDragging = dragIndex === idx;
+            const isOver     = overIndex === idx && dragIndex !== null && dragIndex !== idx;
+            return (
+              <div
+                key={e.id}
+                draggable
+                onDragStart={(ev) => { setDragIndex(idx); ev.dataTransfer.effectAllowed = 'move'; }}
+                onDragOver={(ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; if (overIndex !== idx) setOverIndex(idx); }}
+                onDrop={(ev) => { ev.preventDefault(); handleDrop(idx); }}
+                onDragEnd={endDrag}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  border: `1.5px solid ${isOver ? 'var(--blue)' : 'var(--border)'}`,
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '7px 10px',
+                  background: isOver ? 'var(--blue-pale)' : 'var(--surface)',
+                  // Drop indicator painted as an inset shadow so the row never
+                  // changes size — keeps the gap between rows uniform.
+                  boxShadow: isOver
+                    ? (dragIndex > idx ? 'inset 0 3px 0 var(--blue)' : 'inset 0 -3px 0 var(--blue)')
+                    : 'none',
+                  opacity: isDragging ? 0.4 : avail ? 1 : 0.6,
+                  cursor: 'grab',
+                  transition: 'border-color 0.12s, background 0.12s',
+                }}
+              >
+                <i className="ti ti-grip-vertical" aria-hidden="true"
+                   style={{ color: 'var(--text-faint)', fontSize: 16, flexShrink: 0, cursor: 'grab' }} />
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--navy)' }}>
+                  {cat?.label || e.id}
+                  {!avail && <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-faint)', marginLeft: 6 }}>(no data)</span>}
+                </span>
+                {isVariantable(e.id) && (
+                  <div className="toggle-group" style={{ flexShrink: 0 }}>
+                    {['short', 'long'].map(v => (
+                      <button key={v} type="button" className={`toggle-opt ${e.variant === v ? 'on' : ''}`}
+                              style={{ padding: '3px 10px', fontSize: 11, textTransform: 'capitalize' }}
+                              onClick={() => setVariant(idx, v)}>
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button type="button" className="btn ghost small" style={{ padding: '0 4px' }}
+                        onClick={() => remove(idx)} aria-label="Remove">
+                  <i className="ti ti-x" aria-hidden="true" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add palette */}
+      {GROUPS.map(group => (
+        <div key={group.title} style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <i className={`ti ${group.icon}`} aria-hidden="true" /> {group.title}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {group.items.map(item => {
+              const added = selectedIds.has(item.id);
+              const avail = isAvailable(item.id);
+              const disabled = added || !avail;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => add(item.id)}
+                  title={!avail ? 'No data for this element under the current filters' : added ? 'Already added' : 'Add to dashboard'}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                    border: `1.5px solid ${added ? 'var(--blue)' : 'var(--border)'}`,
+                    background: added ? 'var(--blue-pale)' : 'var(--surface)',
+                    color: disabled ? 'var(--text-faint)' : 'var(--navy)',
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <i className={`ti ti-${added ? 'check' : 'plus'}`} style={{ fontSize: 13 }} aria-hidden="true" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <InfoNote>
+        The first <strong>Metric</strong> you add drives the comparison bar and trend charts. Drag the <i className="ti ti-grip-vertical" aria-hidden="true" /> handle to reorder — elements render top-to-bottom in this order.
+      </InfoNote>
+    </div>
+  );
+}
+
 // ─── Default builder selections for a given template ──────────────────────────
 function defaultsFor(templateId, options) {
   const { clients, publishers, years } = options;
@@ -304,7 +585,14 @@ function defaultsFor(templateId, options) {
     selPubs:    [...publishers],
     yrMode:     'All years',
     selYears:   [...years],
-    selMetrics: ['realized_savings'],
+    // Default to the classic layout: one metric card driving the charts. Users
+    // add summary fields and reorder from here.
+    selElements: [
+      { id: 'metric:realized_savings' },
+      { id: 'chart:journey' },
+      { id: 'chart:bar' },
+      { id: 'chart:trend' },
+    ],
   };
   switch (templateId) {
     case 'client-all-pub': // one client, one year, all publishers
@@ -341,11 +629,14 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
   const [yrMode, setYrMode]         = useState(seed.yrMode || 'All years');
   const [selPubs, setSelPubs]       = useState(seed.selPubs || [...options.publishers]);
   const [selYears, setSelYears]     = useState(seed.selYears || [...options.years]);
-  const [selMetrics, setSelMetrics] = useState(seed.selMetrics?.length ? seed.selMetrics : ['realized_savings']);
+  // Ordered element list — migrates older configs that only carried selMetrics.
+  const [selElements, setSelElements] = useState(
+    () => normalizeElements(seed) || [{ id: 'metric:realized_savings' }],
+  );
   const [saved, setSaved]           = useState(false);
 
   // Any edit invalidates the "Saved" confirmation.
-  useEffect(() => { setSaved(false); }, [name, client, pubMode, yrMode, selPubs, selYears, selMetrics]);
+  useEffect(() => { setSaved(false); }, [name, client, pubMode, yrMode, selPubs, selYears, selElements]);
 
   const toggleItem = (arr, setArr, item) =>
     setArr(arr.includes(item) ? arr.filter(x => x !== item) : [...arr, item]);
@@ -369,20 +660,15 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
     return m;
   }, [matched]);
 
-  // When filters change, drop any selected metric that no longer has data; if that
-  // empties the selection, fall back to the first metric that does have data.
-  useEffect(() => {
-    setSelMetrics(prev => {
-      const kept = prev.filter(k => metricAvailable[k]);
-      if (kept.length) return kept.length === prev.length ? prev : kept;
-      const first = METRICS.find(m => metricAvailable[m.key])?.key;
-      return first ? [first] : [];
-    });
-  }, [metricAvailable]);
+  // The first selected numeric metric drives the bar/trend charts (falling back
+  // to the first metric that has data, then realized_savings).
+  const primaryMetric = useMemo(() => {
+    const firstMetric = selElements.map(e => parseElementId(e.id)).find(p => p.kind === 'metric')?.key;
+    return firstMetric
+      || METRICS.find(m => metricAvailable[m.key])?.key
+      || 'realized_savings';
+  }, [selElements, metricAvailable]);
 
-  const primaryMetric = selMetrics[0]
-    || METRICS.find(m => metricAvailable[m.key])?.key
-    || 'realized_savings';
   const groupField    = groupFieldFor(templateId, { pubMode, selPubs });
   const chartData     = useMemo(() => groupSum(matched, groupField, primaryMetric),
     [matched, groupField, primaryMetric]);
@@ -393,6 +679,21 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
   const rates   = useMemo(() => realizationRate(stages), [stages]);
   const trend   = useMemo(() => yearDeltas(yearSeries(matched, primaryMetric)), [matched, primaryMetric]);
   const barsPct = useMemo(() => withPercent(chartData), [chartData]);
+  const recent  = useMemo(() => mostRecentSummary(matched), [matched]);
+
+  // Per-element availability for the picker (disable add) and preview (placeholder).
+  const chartAvailable = {
+    journey: stages[0].value > 0,
+    bar:     maxVal > 0 && barsPct.length > 1,
+    trend:   trend.length >= 2 && trend.some(p => p.value > 0),
+  };
+  const isElementAvailable = (id) => {
+    const { kind, key } = parseElementId(id);
+    if (kind === 'metric')  return Boolean(metricAvailable[key]);
+    if (kind === 'summary') return Boolean(summaryFieldContent(recent?.summary, key, 'long'));
+    if (kind === 'chart')   return Boolean(chartAvailable[key]);
+    return false;
+  };
 
   const pubScope = pubMode === 'All publishers'
     ? 'All publishers'
@@ -401,14 +702,14 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
     ? 'All years'
     : selYears.length === 1 ? String(selYears[0]) : `${selYears.length} years`;
 
-  const canSave = Boolean(client) && selMetrics.length > 0
+  const canSave = Boolean(client) && selElements.length > 0
     && (!needsYear || selYears.length > 0)
     && (!needsPub  || selPubs.length  > 0);
 
   const buildConfig = () => ({
-    id: initial?.id && !initial?.seed ? initial.id : `dash-${client}-${templateId}-${selMetrics.join('-')}-${matched.length}`,
+    id: initial?.id && !initial?.seed ? initial.id : `dash-${client}-${templateId}-${selElements.map(e => e.id).join('+')}-${matched.length}`,
     name: name.trim() || `${client || 'Untitled'} — ${TITLES[templateId]}`,
-    templateId, client, pubMode, yrMode, selPubs, selYears, selMetrics,
+    templateId, client, pubMode, yrMode, selPubs, selYears, selElements,
     sub: `${TITLES[templateId]} · ${matched.length} record${matched.length === 1 ? '' : 's'}`,
     badge: labelFor(primaryMetric),
     badgeColor: templateId === 'custom' ? 'gold' : 'blue',
@@ -515,19 +816,12 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
               </>
             )}
 
-            {/* Metrics */}
-            <div className="field-group" style={{ marginBottom: 0 }}>
-              <label className="field-label">Metrics</label>
-              <Chips
-                options={METRICS.map(m => m.key)}
-                selected={selMetrics}
-                onToggle={item => toggleItem(selMetrics, setSelMetrics, item)}
-                render={labelFor}
-                primary={primaryMetric}
-                isDisabled={key => !metricAvailable[key]}
-              />
-              <InfoNote>The first selected metric (<i className="ti ti-chart-bar" aria-hidden="true" />) drives the chart. Pick more to add summary cards.</InfoNote>
-            </div>
+            {/* Elements — ordered metrics + summary fields + charts */}
+            <ElementsField
+              selElements={selElements}
+              setSelElements={setSelElements}
+              isAvailable={isElementAvailable}
+            />
           </div>
         </div>
 
@@ -551,55 +845,53 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
             </div>
           ) : (
             <>
-              <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-                {selMetrics.slice(0, 5).map(key => {
-                  const has = countWithMetric(matched, key);
-                  const total = sum(matched, key);
+              {groupElements(selElements).map((block, bi) => {
+                // A run of adjacent metric elements → one summary-card grid.
+                if (block.type === 'metrics') {
                   return (
-                    <div className="metric-card" key={key}>
-                      <div className="metric-label">{labelFor(key)}</div>
-                      <div className="metric-value">{has ? formatCurrency(total) : '—'}</div>
-                      <div className={`metric-delta ${has ? '' : 'muted'}`}>
-                        {has ? `across ${has} record${has === 1 ? '' : 's'}` : 'no data for this metric'}
-                      </div>
+                    <div key={bi} className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+                      {block.items.map(e => {
+                        const key   = parseElementId(e.id).key;
+                        const has   = countWithMetric(matched, key);
+                        const total = sum(matched, key);
+                        return (
+                          <div className="metric-card" key={key}>
+                            <div className="metric-label">{labelFor(key)}</div>
+                            <div className="metric-value">{has ? formatCurrency(total) : '—'}</div>
+                            <div className={`metric-delta ${has ? '' : 'muted'}`}>
+                              {has ? `across ${has} record${has === 1 ? '' : 's'}` : 'no data for this metric'}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
-                })}
-              </div>
-
-              {stages[0].value > 0 && <JourneyFunnel stages={stages} rates={rates} />}
-
-              {/* A single bar tells no story — only show the comparison when 2+ bars carry data. */}
-              {maxVal > 0 && barsPct.length > 1 && (
-                <div className="card">
-                  <div className="card-title">
-                    <i className="ti ti-chart-bar" aria-hidden="true" /> {labelFor(primaryMetric)} by {groupField === 'year' ? 'Year' : 'Publisher'}
-                  </div>
-                  {barsPct.slice(0, MAX_BARS).map((d, i) => (
-                    <div className="bar-row" key={d.label}>
-                      <span className="bar-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        {d.label}
-                        {d.isTop && (
-                          <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--navy)', background: 'var(--gold)', borderRadius: 6, padding: '1px 7px' }}>Top</span>
-                        )}
-                      </span>
-                      <div className="bar-bg">
-                        <div className="bar-fill" style={{ width: `${Math.round((d.value / maxVal) * 100)}%`, background: BAR_COLORS[i % BAR_COLORS.length] }} />
-                      </div>
-                      <span className="bar-val">{formatCurrency(d.value)} · {Math.round(d.pct)}%</span>
-                    </div>
-                  ))}
-                  {barsPct.length > MAX_BARS && (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                      + {barsPct.length - MAX_BARS} more
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {trend.length >= 2 && trend.some(p => p.value > 0) && (
-                <TrendChart series={trend} metricLabel={labelFor(primaryMetric)} />
-              )}
+                }
+                if (block.type === 'summary') {
+                  const { key } = parseElementId(block.el.id);
+                  return <SummaryCard key={bi} field={key} variant={block.el.variant || 'short'} recent={recent} />;
+                }
+                if (block.type === 'chart') {
+                  const { key } = parseElementId(block.el.id);
+                  if (key === 'journey') {
+                    return stages[0].value > 0
+                      ? <JourneyFunnel key={bi} stages={stages} rates={rates} />
+                      : <PlaceholderCard key={bi} label="ROI Journey" />;
+                  }
+                  if (key === 'bar') {
+                    // A single bar tells no story — need 2+ bars carrying data.
+                    return (maxVal > 0 && barsPct.length > 1)
+                      ? <BarCard key={bi} barsPct={barsPct} maxVal={maxVal} primaryMetric={primaryMetric} groupField={groupField} />
+                      : <PlaceholderCard key={bi} label="Comparison Bars" />;
+                  }
+                  if (key === 'trend') {
+                    return (trend.length >= 2 && trend.some(p => p.value > 0))
+                      ? <TrendChart key={bi} series={trend} metricLabel={labelFor(primaryMetric)} />
+                      : <PlaceholderCard key={bi} label="Year Trend" />;
+                  }
+                }
+                return null;
+              })}
             </>
           )}
         </div>
@@ -673,7 +965,9 @@ export default function DashboardsView() {
       years: dash.yrMode === 'Select specific' ? dash.selYears : null,
     };
     const matched = matchFilters(records, filterArgs);
-    const primaryMetric = dash.selMetrics?.[0] || 'realized_savings';
+    const selElements = normalizeElements(dash) || [{ id: 'metric:realized_savings' }];
+    const primaryMetric = selElements.map(e => parseElementId(e.id)).find(p => p.kind === 'metric')?.key
+      || 'realized_savings';
     const groupField = groupFieldFor(dash.templateId, dash);
     const chartData = groupSum(matched, groupField, primaryMetric);
     const maxVal = chartData.reduce((m, d) => Math.max(m, d.value), 0);
@@ -684,6 +978,7 @@ export default function DashboardsView() {
     const rates = realizationRate(stages);
     const trend = yearDeltas(yearSeries(matched, primaryMetric));
     const barsPct = withPercent(chartData);
+    const recent = mostRecentSummary(matched);
 
     const pubScope = dash.pubMode === 'All publishers'
       ? 'All publishers'
@@ -699,9 +994,8 @@ export default function DashboardsView() {
       { text: `${matched.length} record${matched.length === 1 ? '' : 's'}`, bg: '#ffad00', fg: '#001941' },
     ].map(b => `<span class="badge" style="background:${b.bg};color:${b.fg || '#fff'}">${escapeHtml(b.text)}</span>`).join('\n      ');
 
-    // Metric summary cards (mirrors the builder preview).
-    const metricKeys = (dash.selMetrics?.length ? dash.selMetrics : ['realized_savings']).slice(0, 5);
-    const metricCards = metricKeys.map(key => {
+    // One numeric metric summary card (mirrors the builder preview).
+    const metricCardHtml = (key) => {
       const has = countWithMetric(matched, key);
       const value = has ? formatCurrency(sum(matched, key)) : '—';
       const delta = has ? `across ${has} record${has === 1 ? '' : 's'}` : 'no data for this metric';
@@ -711,7 +1005,7 @@ export default function DashboardsView() {
         <div class="metric-value">${escapeHtml(value)}</div>
         <div class="metric-delta" style="color:${deltaColor}">${escapeHtml(delta)}</div>
       </div>`;
-    }).join('\n');
+    };
 
     // Bar chart with contribution callouts (mirrors the builder preview).
     // A single bar tells no story — only render the card when 2+ bars carry data.
@@ -781,13 +1075,84 @@ ${journeyRows}
   </div>`;
     }
 
+    // One executive-summary field as a card (mirrors SummaryCard). No icon font
+    // in the export, so list bullets use a colored dot. Returns '' when empty so
+    // the deliverable omits sections with no data.
+    const fieldDot = {
+      key_accomplishments: '#2d9e5c', recommendations: '#ffad00', primary_risks: '#c0392b',
+      market_risks: '#e67e22', additional_insights: '#4a6a9c', next_steps: '#0089af',
+    };
+    // Render one content object (short or long) to inner HTML.
+    const renderFieldContent = (field, content) => {
+      if (content.text) {
+        return `    <p class="insight-overview">${escapeHtml(content.text)}</p>\n`;
+      }
+      if (content.items) {
+        const dot = fieldDot[field] || '#005f86';
+        const rows = content.items.map(it =>
+          `      <div class="insight-item"><span class="insight-dot" style="background:${dot}"></span><span>${escapeHtml(it)}</span></div>`).join('\n');
+        return `    <div class="insight-list">\n${rows}\n    </div>\n`;
+      }
+      const cards = content.metrics || content.highlights;
+      const cardHtml = cards.map(c => `      <div class="metric-card">
+        <div class="metric-label">${escapeHtml(c.label)}</div>
+        <div class="metric-value" style="font-size:26px">${escapeHtml(c.value || '—')}</div>${c.context ? `
+        <div class="metric-delta" style="color:#ffad00">${escapeHtml(c.context)}</div>` : ''}
+      </div>`).join('\n');
+      return `    <div class="metric-grid" style="margin:0">\n${cardHtml}\n    </div>\n`;
+    };
+
+    const summaryFieldHtml = (field, variant) => {
+      const def = SUMMARY_ELEMENTS.find(e => e.field === field);
+      const shortContent = summaryFieldContent(recent?.summary, field, 'short');
+      const longContent  = summaryFieldContent(recent?.summary, field, 'long');
+      const base = variant === 'long' ? longContent : shortContent;
+      if (!def || !base) return '';
+      const src = recent?.source
+        ? ` <span style="font-weight:500;font-size:11px;color:#5a6e8c">${recent.count > 1 ? 'most recent · ' : ''}${escapeHtml(recent.source)}</span>`
+        : '';
+      const title = `    <div class="card-title">${escapeHtml(def.label)}${src}</div>\n`;
+
+      // A short text/list field with more content gets a CSS-only See more
+      // toggle (a hidden checkbox swaps the short body for the long one) so the
+      // exported file stays interactive without any JavaScript.
+      const canExpand = variant === 'short' && def.variantable && longContent && (
+        longContent.text  ? longContent.text !== shortContent.text
+        : longContent.items ? longContent.items.length > shortContent.items.length
+        : false
+      );
+      if (!canExpand) {
+        return `  <div class="card">\n${title}${renderFieldContent(field, base)}  </div>\n`;
+      }
+      const id = `exp-${field}`;
+      return `  <div class="card">
+${title}    <input type="checkbox" id="${id}" class="exp-toggle" hidden>
+    <div class="exp-short">
+${renderFieldContent(field, shortContent)}    </div>
+    <div class="exp-long">
+${renderFieldContent(field, longContent)}    </div>
+    <label for="${id}" class="exp-label"><span class="exp-more">See more ▾</span><span class="exp-less">See less ▴</span></label>
+  </div>\n`;
+    };
+
+    // Walk the ordered elements, grouping adjacent metric cards into one grid.
+    const orderedBody = groupElements(selElements).map(block => {
+      if (block.type === 'metrics') {
+        return `  <div class="metric-grid">\n${block.items.map(e => metricCardHtml(parseElementId(e.id).key)).join('\n')}\n  </div>\n`;
+      }
+      if (block.type === 'summary') {
+        return summaryFieldHtml(parseElementId(block.el.id).key, block.el.variant || 'short');
+      }
+      if (block.type === 'chart') {
+        const key = parseElementId(block.el.id).key;
+        return key === 'journey' ? journeyCard : key === 'bar' ? barCard : key === 'trend' ? trendCard : '';
+      }
+      return '';
+    }).filter(Boolean).join('\n');
+
     const body = matched.length === 0
       ? `  <div class="card" style="text-align:center;color:#5a6e8c;padding:40px">No records match these filters.</div>`
-      : `  <div class="metric-grid">
-${metricCards}
-  </div>
-
-${journeyCard}${barCard}${trendCard}`;
+      : orderedBody;
 
     return `<!doctype html>
 <html lang="en">
@@ -818,6 +1183,18 @@ ${journeyCard}${barCard}${trendCard}`;
     .bar-val { min-width: 60px; text-align: right; font-size: 13px; font-weight: 700; color: var(--text-muted); }
     .top-pill { font-size: 10px; font-weight: 800; color: #001941; background: var(--gold); border-radius: 6px; padding: 1px 7px; margin-left: 8px; }
     .rate-chip { padding-left: 150px; font-size: 12px; font-weight: 700; color: #005f86; margin-bottom: 8px; }
+    .insight-overview { font-size: 13.5px; line-height: 1.6; color: var(--navy); margin: 0 0 10px; }
+    .insight-list { display: flex; flex-direction: column; gap: 8px; }
+    .insight-item { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; line-height: 1.5; color: var(--navy); }
+    .insight-dot { width: 9px; height: 9px; border-radius: 2px; margin-top: 5px; flex-shrink: 0; }
+    .insight-note { font-size: 11px; color: var(--text-muted); margin-top: 12px; }
+    .exp-long { display: none; }
+    .exp-toggle:checked ~ .exp-long { display: block; }
+    .exp-toggle:checked ~ .exp-short { display: none; }
+    .exp-label { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 12.5px; font-weight: 700; color: #005f86; cursor: pointer; user-select: none; }
+    .exp-less { display: none; }
+    .exp-toggle:checked ~ .exp-label .exp-more { display: none; }
+    .exp-toggle:checked ~ .exp-label .exp-less { display: inline; }
     .brandbar { display: flex; align-items: center; gap: 12px; padding: 14px 20px; background: var(--navy); border-bottom: 3px solid var(--gold); border-radius: 12px 12px 0 0; }
     .brandbar img { height: 30px; }
     .brand-name { color: #fff; font-weight: 800; font-size: 16px; letter-spacing: 1px; }
