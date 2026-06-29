@@ -55,16 +55,49 @@ async def extract_with_claude(file_path: str) -> dict:
         ]
     elif ext in (".pptx", ".ppt"):
         from pptx import Presentation
+        from pptx.util import Pt
+        from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+        def _extract_shape_text(shape, depth=0) -> list[str]:
+            """Recursively extract text from any shape, including groups and tables."""
+            lines = []
+            # Group shapes: recurse into children
+            if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+                for child in shape.shapes:
+                    lines.extend(_extract_shape_text(child, depth + 1))
+                return lines
+            # Tables: emit each cell with row context
+            if shape.has_table:
+                for row_idx, row in enumerate(shape.table.rows):
+                    cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                    if cells:
+                        lines.append(" | ".join(cells))
+                return lines
+            # Text frames (most shapes)
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    text = "".join(run.text for run in para.runs).strip()
+                    if text:
+                        lines.append(text)
+                return lines
+            # Fallback: try .text attribute
+            try:
+                t = shape.text.strip()
+                if t:
+                    lines.append(t)
+            except Exception:
+                pass
+            return lines
+
         prs = Presentation(file_path)
         slides_text = []
-        for slide in prs.slides:
-            slide_lines = [
-                shape.text.strip()
-                for shape in slide.shapes
-                if hasattr(shape, "text") and shape.text.strip()
-            ]
+        for slide_num, slide in enumerate(prs.slides, start=1):
+            slide_lines = []
+            for shape in slide.shapes:
+                slide_lines.extend(_extract_shape_text(shape))
             if slide_lines:
-                slides_text.append("\n".join(slide_lines))
+                slides_text.append(f"[Slide {slide_num}]\n" + "\n".join(slide_lines))
+
         pptx_text = "\n\n---\n\n".join(slides_text)
         content = [
             {
