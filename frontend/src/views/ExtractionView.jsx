@@ -2265,6 +2265,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   const [summary, setSummary]             = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError]   = useState(null);
+  const [saveStatus, setSaveStatus]       = useState(null); // null | 'saving' | 'saved' | 'error'
   const summaryRef = useRef(null);
 
   const parseDollar = (v) => {
@@ -2332,6 +2333,21 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
       .finally(() => setSummaryLoading(false));
   }, []);
 
+  const handleSaveToTracker = async () => {
+    if (!summary) return;
+    const sourceFile = selectedFile?.stored_name || selectedFile?.name || selectedFile?.file_path;
+    if (!sourceFile) { setSaveStatus('error'); return; }
+    setSaveStatus('saving');
+    try {
+      await saveExecutiveSummary(sourceFile, summary);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch {
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(null), 4000);
+    }
+  };
+
   const handleDownloadPDF = () => {
     import('html2pdf.js').then(mod => {
       const html2pdf = mod.default;
@@ -2366,6 +2382,17 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
           <Badge color="green">
             <i className="ti ti-circle-check" aria-hidden="true" /> All records stored
           </Badge>
+          <button
+            className="btn ghost small no-print"
+            onClick={handleSaveToTracker}
+            disabled={!summary || summaryLoading || saveStatus === 'saving'}
+            style={saveStatus === 'saved' ? { color: 'var(--green)' } : saveStatus === 'error' ? { color: 'var(--red)' } : {}}
+          >
+            {saveStatus === 'saving' && <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} aria-hidden="true" /> Saving…</>}
+            {saveStatus === 'saved'  && <><i className="ti ti-circle-check" aria-hidden="true" /> Saved to Tracker</>}
+            {saveStatus === 'error'  && <><i className="ti ti-alert-circle" aria-hidden="true" /> Save Failed</>}
+            {!saveStatus            && <><i className="ti ti-device-floppy" aria-hidden="true" /> Save Executive Summary</>}
+          </button>
           <button className="btn ghost small no-print" onClick={handleDownloadPDF} disabled={!summary}>
             <i className="ti ti-file-type-pdf" aria-hidden="true" /> Download PDF
           </button>
