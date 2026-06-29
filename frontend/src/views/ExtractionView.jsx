@@ -940,7 +940,38 @@ function deriveCommonMeta(results) {
 }
 
 // Build the flat ROI record the backend expects from a file's meta + fields.
-function buildRecord(meta, fields, sme) {
+// Canonical UI label → backend model key. Used for BOTH value extraction and
+// per-field provenance, so the two always stay in sync.
+const LABEL_TO_KEY = {
+  'Identified Risk':                'identified_risk',
+  'Identified Cost Avoidance':      'id_cost_avoidance',
+  'Accomplished Cost Avoidance':    'acc_cost_avoidance',
+  'Identified Cost Optimization':   'id_cost_optimization',
+  'Accomplished Cost Optimization': 'acc_cost_optimization',
+  'Identified Cost Savings':        'realized_savings',
+  'Realized Cost Savings':          'contract_spend',
+};
+
+// Build per-field provenance (source slide + confidence + alternates) from the
+// script extractor's scriptData map, keyed by backend model field name. Returns
+// null when there's no provenance to attach (e.g. aggregate records).
+function buildFieldMeta(scriptData) {
+  if (!scriptData || typeof scriptData !== 'object') return null;
+  const out = {};
+  for (const [label, key] of Object.entries(LABEL_TO_KEY)) {
+    const s = scriptData[label];
+    if (!s) continue;
+    if (s.sourceSlide == null && s.confidence == null && !(s.alternates?.length)) continue;
+    out[key] = {
+      source_slide: s.sourceSlide ?? null,
+      confidence:   s.confidence ?? null,
+      alternates:   (s.alternates || []).map(a => ({ value: a.value, confidence: a.confidence })),
+    };
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function buildRecord(meta, fields, sme, scriptData = null) {
   const getValue = (label) => {
     const f = fields.find(x => x.label === label);
     const n = parseDollar(f?.value);
@@ -961,6 +992,7 @@ function buildRecord(meta, fields, sme) {
     source_file:           meta?.filename || meta?.name || meta?.file_path || '',
     stored_name:           meta?.stored_name || '',
     sme:                   sme || '',
+    field_meta:            buildFieldMeta(scriptData),
   };
 }
 
@@ -2476,13 +2508,14 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     if (!isMulti) {
       const only = active[0];
       const meta = only?.fileMeta || files[0] || {};
-      await saveRecord(buildRecord(meta, editedAggregateFields, sme))
+      // Single-file: provenance comes from that file's script extraction.
+      saveRecord(buildRecord(meta, editedAggregateFields, sme, only?.scriptData))
         .catch(err => console.error('[Store] saveRecord failed:', err));
     } else {
-      await Promise.all(active.map(r =>
-        saveRecord(buildRecord(r.fileMeta, r.finalFields, sme))
-          .catch(err => console.error('[Store] saveRecord failed:', err))
-      ));
+      active.forEach(r => {
+        saveRecord(buildRecord(r.fileMeta, r.finalFields, sme, r.scriptData))
+          .catch(err => console.error('[Store] saveRecord failed:', err));
+      });
       if (storeAggregate) {
         const aggMeta = {
           client:    commonMeta.client,
