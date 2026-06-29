@@ -22,9 +22,10 @@
     "updated_at": "2026-06-25T15:15:50.855618"
   },
   {
+    "record_id": "r_6a50050ff780",
     "year": 2026,
-    "client": "one main",
-    "publisher": "IBM",
+    "client": "",
+    "publisher": "Oracle",
     "date_delivered": null,
     "currency": "USD",
     "identified_risk": null,
@@ -40,12 +41,15 @@
     "confidence": 72,
     "source_file": "OneMain - ROAR.pptx",
     "sme": "christina",
-    "stored_name": "b25eb74e561c4f888f9cb69bdaacb624.pptx",
-    "saved_at": "2026-06-25T20:19:35.235447",
-    "executive_summary": {
-      "test": true
+    "stored_name": "e7c355a4b84e42918a2a33a81d59652a.pptx",
+    "field_meta": {
+      "id_cost_optimization": {
+        "source_slide": 10,
+        "confidence": 92.5,
+        "alternates": []
+      }
     },
-    "record_id": "r_6a50050ff780"
+    "saved_at": "2026-06-29T19:37:37.447153"
   },
   {
     "year": 2025,
