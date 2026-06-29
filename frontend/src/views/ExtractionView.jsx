@@ -2509,13 +2509,13 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
       const only = active[0];
       const meta = only?.fileMeta || files[0] || {};
       // Single-file: provenance comes from that file's script extraction.
-      saveRecord(buildRecord(meta, editedAggregateFields, sme, only?.scriptData))
+      await saveRecord(buildRecord(meta, editedAggregateFields, sme, only?.scriptData))
         .catch(err => console.error('[Store] saveRecord failed:', err));
     } else {
-      active.forEach(r => {
+      await Promise.all(active.map(r =>
         saveRecord(buildRecord(r.fileMeta, r.finalFields, sme, r.scriptData))
-          .catch(err => console.error('[Store] saveRecord failed:', err));
-      });
+          .catch(err => console.error('[Store] saveRecord failed:', err))
+      ));
       if (storeAggregate) {
         const aggMeta = {
           client:    commonMeta.client,
