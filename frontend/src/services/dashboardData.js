@@ -192,3 +192,187 @@ export function formatPct(fraction, { signed = false } = {}) {
   const pct = Math.round(v * 100);
   return signed && pct > 0 ? `+${pct}%` : `${pct}%`;
 }
+
+// ─── Dashboard element catalog ───────────────────────────────────────────────
+// A dashboard is now an ORDERED list of "elements". Each element is one of:
+//   • a numeric ROI metric  → id "metric:<key>"   (renders as a summary card)
+//   • an executive-summary field → id "summary:<field>"
+//   • a chart                → id "chart:<journey|bar|trend>"
+// The order the user picks them is the order they appear on the dashboard, so a
+// summary can sit above, below, or between the charts. Summary text fields carry
+// a short/long variant. The catalog below is the single source of truth shared
+// by the builder UI, the live preview, and the HTML export.
+
+/** Numeric metric elements — one per METRIC, in METRICS order. */
+export const NUMERIC_ELEMENTS = METRICS.map(m => ({ id: `metric:${m.key}`, key: m.key, label: m.label }));
+
+/**
+ * Executive-summary field elements.
+ *  type 'text'       → single paragraph (overview)
+ *  type 'list'       → bulleted narrative list
+ *  type 'metrics'    → label/value/context cards (key_metrics)
+ *  type 'highlights' → headline label/value cards
+ * `variantable` fields support a short/long toggle.
+ */
+export const SUMMARY_ELEMENTS = [
+  { id: 'summary:overview',            field: 'overview',            label: 'Overview',            type: 'text',       variantable: true  },
+  { id: 'summary:key_accomplishments', field: 'key_accomplishments', label: 'Key Accomplishments', type: 'list',       variantable: true  },
+  { id: 'summary:recommendations',     field: 'recommendations',     label: 'Recommendations',     type: 'list',       variantable: true  },
+  { id: 'summary:primary_risks',       field: 'primary_risks',       label: 'Primary Risks',       type: 'list',       variantable: true  },
+  { id: 'summary:market_risks',        field: 'market_risks',        label: 'Market Risks',        type: 'list',       variantable: true  },
+  { id: 'summary:additional_insights', field: 'additional_insights', label: 'Additional Insights', type: 'list',       variantable: true  },
+  { id: 'summary:next_steps',          field: 'next_steps',          label: 'Next Steps',          type: 'list',       variantable: true  },
+  { id: 'summary:key_metrics',         field: 'key_metrics',         label: 'Summary Metrics',     type: 'metrics',    variantable: false },
+  { id: 'summary:highlights',          field: 'highlights',          label: 'Highlights',          type: 'highlights', variantable: false },
+];
+
+/** Chart elements. */
+export const CHART_ELEMENTS = [
+  { id: 'chart:journey', key: 'journey', label: 'ROI Journey' },
+  { id: 'chart:bar',     key: 'bar',     label: 'Comparison Bars' },
+  { id: 'chart:trend',   key: 'trend',   label: 'Year Trend' },
+];
+
+export const ELEMENT_CATALOG = [...NUMERIC_ELEMENTS, ...SUMMARY_ELEMENTS, ...CHART_ELEMENTS];
+
+/** Look up a catalog entry by full id ("metric:realized_savings"). */
+export const elementById = (id) => ELEMENT_CATALOG.find(e => e.id === id);
+
+/** Split an element id into { kind, key }, e.g. "summary:overview" → {summary, overview}. */
+export function parseElementId(id) {
+  const i = String(id).indexOf(':');
+  return i === -1 ? { kind: id, key: '' } : { kind: id.slice(0, i), key: id.slice(i + 1) };
+}
+
+/** Does this element support a short/long variant? */
+export const isVariantable = (id) => Boolean(elementById(id)?.variantable);
+
+/**
+ * Group an ordered element list into render blocks: consecutive numeric-metric
+ * elements collapse into one grid block; every other element is its own block.
+ * Order is preserved. Returns [{ type:'metrics', items:[...] } | { type, el }].
+ */
+export function groupElements(selElements) {
+  const blocks = [];
+  for (const e of (selElements || [])) {
+    const { kind } = parseElementId(e.id);
+    if (kind === 'metric') {
+      const last = blocks[blocks.length - 1];
+      if (last && last.type === 'metrics') last.items.push(e);
+      else blocks.push({ type: 'metrics', items: [e] });
+    } else {
+      blocks.push({ type: kind, el: e });
+    }
+  }
+  return blocks;
+}
+
+// ─── Executive-summary content extraction ────────────────────────────────────
+
+// Narrative list sections — used to validate a summary has real content.
+const INSIGHT_SECTIONS = ['key_accomplishments', 'recommendations', 'primary_risks',
+  'market_risks', 'additional_insights', 'next_steps'];
+
+/**
+ * Is this a real, populated summary — not the empty/placeholder junk a record
+ * can carry (e.g. `{ "test": true }`)? Requires a non-empty overview or at
+ * least one populated narrative list.
+ */
+export function isValidSummary(s) {
+  if (!s || typeof s !== 'object') return false;
+  if (typeof s.overview === 'string' && s.overview.trim()) return true;
+  return INSIGHT_SECTIONS.some(key => Array.isArray(s[key]) && s[key].some(x => typeof x === 'string' && x.trim()));
+}
+
+/** Truncate to a word boundary near `max` chars, adding an ellipsis. */
+export function truncate(text, max = 160) {
+  const t = String(text).trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:]+$/, '')}…`;
+}
+
+// First sentence of a paragraph (for the 'short' overview), falling back to a
+// truncation when no sentence boundary is found.
+function firstSentence(t) {
+  const m = String(t).trim().match(/^.*?[.!?](\s|$)/);
+  return m ? m[0].trim() : truncate(t, 200);
+}
+
+// Sort key for "most recent" — date_delivered when present, else saved_at.
+function deliveredAt(r) {
+  return r.date_delivered || r.saved_at || '';
+}
+
+/**
+ * The most-recently-delivered matched record that carries a valid summary.
+ * Per product decision, every summary element draws from this one engagement.
+ * Returns { summary, source, count } or null.
+ */
+export function mostRecentSummary(records) {
+  const withSummary = (records || [])
+    .filter(r => isValidSummary(r.executive_summary))
+    .sort((a, b) => String(deliveredAt(b)).localeCompare(String(deliveredAt(a))));
+  if (!withSummary.length) return null;
+  const r = withSummary[0];
+  return {
+    summary: r.executive_summary,
+    source: [r.client, r.publisher, r.year].filter(Boolean).join(' · '),
+    count: withSummary.length,
+  };
+}
+
+/**
+ * Render-ready content for one summary field at the given variant, or null when
+ * the field is empty/absent. Shapes by field type:
+ *   text       → { text }
+ *   list       → { items: [string] }   (short = single top item; long = full)
+ *   metrics    → { metrics: [{label,value,context}] }
+ *   highlights → { highlights: [{label,value}] }
+ * Short list picks the highest-signal item ($-bearing if any), truncated.
+ */
+export function summaryFieldContent(summary, field, variant = 'short') {
+  if (!summary) return null;
+  const def = SUMMARY_ELEMENTS.find(e => e.field === field);
+  if (!def) return null;
+  const raw = summary[field];
+
+  if (def.type === 'text') {
+    const t = typeof raw === 'string' ? raw.trim() : '';
+    if (!t) return null;
+    return { text: variant === 'long' ? t : firstSentence(t) };
+  }
+  if (def.type === 'list') {
+    const items = (Array.isArray(raw) ? raw : []).filter(x => typeof x === 'string' && x.trim());
+    if (!items.length) return null;
+    if (variant === 'long') return { items: items.map(x => x.trim()) };
+    const top = items.find(x => x.includes('$')) || items[0];
+    return { items: [truncate(top)] };
+  }
+  if (def.type === 'metrics') {
+    const metrics = (Array.isArray(raw) ? raw : [])
+      .filter(m => m && (m.label || m.value))
+      .map(m => ({ label: m.label || '', value: String(m.value ?? ''), context: m.context || '' }));
+    return metrics.length ? { metrics } : null;
+  }
+  if (def.type === 'highlights') {
+    const highlights = (Array.isArray(raw) ? raw : [])
+      .filter(h => h && (h.label || h.value))
+      .map(h => ({ label: h.label || '', value: String(h.value ?? '') }));
+    return highlights.length ? { highlights } : null;
+  }
+  return null;
+}
+
+/**
+ * Migrate a saved dashboard config to the ordered-element model. Configs saved
+ * before this feature carry `selMetrics` (a key array) but no `selElements`.
+ */
+export function normalizeElements(cfg) {
+  if (Array.isArray(cfg?.selElements) && cfg.selElements.length) return cfg.selElements;
+  if (Array.isArray(cfg?.selMetrics) && cfg.selMetrics.length) {
+    return cfg.selMetrics.map(k => ({ id: `metric:${k}` }));
+  }
+  return null;
+}
