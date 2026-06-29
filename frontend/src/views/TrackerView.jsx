@@ -213,10 +213,17 @@ function ExecSummaryDrawer({ record, onClose }) {
 
 // ─── Tab: ROI Data ────────────────────────────────────────────────────────────
 function TabROIData() {
-  const [records, setRecords]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [detailRow, setDetailRow]   = useState(null);
+  const [records, setRecords]           = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [detailRow, setDetailRow]       = useState(null);
   const [summaryRecord, setSummaryRecord] = useState(null);
+  const [edits, setEdits]               = useState({});
+  const [editingCell, setEditingCell]   = useState(null);
+  const [colPrefs, setColPrefs]         = useState(loadColPrefs);
+  const [note, setNote]                 = useState('');
+  const [editor, setEditor]             = useState('');
+  const [saving, setSaving]             = useState(false);
+  const dragKey                         = useRef(null);
 
   const load = () => getRecords()
     .then(data => setRecords(Array.isArray(data) ? data : []))
