@@ -2,6 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse, Response
+from pydantic import BaseModel
 
 from config import TRACKER_API_KEY
 from models import ROIRecord, RecordUpdate
