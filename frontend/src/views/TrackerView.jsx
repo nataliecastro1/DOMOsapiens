@@ -1,43 +1,67 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
-import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog } from '../services/api';
+import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog, getFields } from '../services/api';
 
-// ─── Column model ─────────────────────────────────────────────────────────────
-// `editable` numeric metrics can be corrected inline (some ROI fields aren't
-// known until later). Identifying columns stay read-only.
-const COLUMNS = [
-  { key: 'client',                label: 'Client',                         type: 'text' },
-  { key: 'publisher',             label: 'Publisher',                      type: 'text' },
-  { key: 'year',                  label: 'Year',                           type: 'text' },
-  { key: 'identified_risk',       label: 'Identified Risk',                type: 'num', editable: true },
-  { key: 'id_cost_avoidance',     label: 'Identified Cost Avoidance',      type: 'num', editable: true },
-  { key: 'acc_cost_avoidance',    label: 'Accomplished Cost Avoidance',    type: 'num', editable: true },
-  { key: 'id_cost_optimization',  label: 'Identified Cost Optimization',   type: 'num', editable: true },
-  { key: 'acc_cost_optimization', label: 'Accomplished Cost Optimization', type: 'num', editable: true },
-  { key: 'realized_savings',      label: 'Realized Savings',               type: 'num', editable: true },
-  { key: 'contract_spend',        label: 'Contract Spend',                 type: 'num', editable: true },
-  { key: 'confidence',            label: 'Confidence',                     type: 'conf' },
-  { key: 'sme',                   label: 'SME',                            type: 'text' },
-  { key: 'source_file',           label: 'Source File',                    type: 'file' },
-];
+// ─── Field catalog ──────────────────────────────────────────────────────────
+// Single source of truth lives in the backend (models/field_catalog.py) and is
+// fetched once from GET /api/fields. The Tracker renders only `ui_visible`
+// fields, marks `editable` ones inline-editable, and uses `notes` for column
+// tooltips — so the column definitions are never duplicated here.
+let _fieldsCache = null;
 
-const COL_BY_KEY = Object.fromEntries(COLUMNS.map(c => [c.key, c]));
+function useFields() {
+  const [catalog, setCatalog] = useState(_fieldsCache || []);
+  const [loading, setLoading] = useState(!_fieldsCache);
 
-// Metrics that can carry per-field provenance (mirrors the backend export).
-const PROV_METRICS = [
-  ['identified_risk',       'Identified Risk'],
-  ['id_cost_avoidance',     'Identified Cost Avoidance'],
-  ['acc_cost_avoidance',    'Accomplished Cost Avoidance'],
-  ['id_cost_optimization',  'Identified Cost Optimization'],
-  ['acc_cost_optimization', 'Accomplished Cost Optimization'],
-  ['realized_savings',      'Realized Savings'],
-  ['contract_spend',        'Contract Spend'],
-];
+  useEffect(() => {
+    if (_fieldsCache) return;
+    let alive = true;
+    getFields()
+      .then(f => { _fieldsCache = Array.isArray(f) ? f : []; if (alive) setCatalog(_fieldsCache); })
+      .catch(() => { if (alive) setCatalog([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  return useMemo(() => ({
+    catalog,
+    loading,
+    columns:     catalog.filter(f => f.ui_visible),
+    colByKey:    Object.fromEntries(catalog.map(f => [f.key, f])),
+    provMetrics: catalog.filter(f => f.provenance).map(f => [f.key, f.label]),
+  }), [catalog, loading]);
+}
 
 const COL_STORAGE = 'domosapiens.tracker.columns';
 
-function loadColPrefs() {
-  const allKeys = COLUMNS.map(c => c.key);
+// Sentinel for a filter condition that searches across every field.
+const ANY_FIELD = '__any__';
+
+// Build a CSV string from rows + columns, then trigger a browser download.
+// Used by "Export view" so the file mirrors exactly what's on screen — the
+// current search, filters, and visible/ordered columns. The leading BOM keeps
+// Excel happy with UTF-8.
+function downloadCsv(filename, columns, rows) {
+  const esc = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const cellValue = (r, col) => (col.key === 'confidence' ? r.confidence : r[col.key]);
+  const header = columns.map(c => esc(c.label)).join(',');
+  const lines = rows.map(r => columns.map(c => esc(cellValue(r, c))).join(','));
+  const csv = [header, ...lines].join('\n');
+  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function loadColPrefs(allKeys) {
   try {
     const raw = localStorage.getItem(COL_STORAGE);
     if (raw) {
@@ -60,7 +84,7 @@ const fmtAmount = (n) => {
 const confColor = (c) => (c >= 90 ? 'green' : c >= 75 ? 'amber' : 'red');
 
 // ─── Columns menu (show/hide) ──────────────────────────────────────────────────
-function ColumnsMenu({ prefs, onToggle, onReset }) {
+function ColumnsMenu({ columns, prefs, onToggle, onReset }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ position: 'relative' }}>
@@ -77,8 +101,8 @@ function ColumnsMenu({ prefs, onToggle, onReset }) {
             <span>Show columns</span>
             <button onClick={onReset} style={{ border: 'none', background: 'none', color: 'var(--blue)', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>Reset</button>
           </div>
-          {COLUMNS.map(c => (
-            <label key={c.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8, padding: '4px 2px', fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
+          {columns.map(c => (
+            <label key={c.key} title={c.notes || ''} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8, padding: '4px 2px', fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
               <input
                 type="checkbox"
                 checked={!prefs.hidden.includes(c.key)}
@@ -99,14 +123,19 @@ function ColumnsMenu({ prefs, onToggle, onReset }) {
 
 // ─── Tab: ROI Data (editable) ──────────────────────────────────────────────────
 function TabROIData() {
+  const { catalog, columns, colByKey, loading: fieldsLoading } = useFields();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [edits, setEdits]     = useState({});        // { recordId: { field: stringValue } }
   const [editingCell, setEditingCell] = useState(null); // { rid, key }
-  const [colPrefs, setColPrefs] = useState(loadColPrefs);
+  const [colPrefs, setColPrefs] = useState({ order: [], hidden: [] });
   const [note, setNote]   = useState('');
   const [editor, setEditor] = useState('');
   const [saving, setSaving] = useState(false);
+  // Filter builder: a list of { field, query } conditions, AND-ed together.
+  // field === ANY_FIELD searches across every field on the record. A trailing
+  // blank row is kept so a new condition appears as soon as one is filled in.
+  const [conditions, setConditions] = useState([{ field: ANY_FIELD, query: '' }]);
   const dragKey = useRef(null);
 
   const load = () => getRecords()
@@ -116,11 +145,67 @@ function TabROIData() {
 
   useEffect(() => { load(); }, []);
 
+  // Column prefs depend on the fetched catalog, so load them once it arrives.
+  const colKeySig = columns.map(c => c.key).join(',');
+  useEffect(() => {
+    if (columns.length) setColPrefs(loadColPrefs(columns.map(c => c.key)));
+  }, [colKeySig]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const recById = useMemo(() => Object.fromEntries(records.map(r => [r.record_id, r])), [records]);
 
   const visibleCols = useMemo(
-    () => colPrefs.order.map(k => COL_BY_KEY[k]).filter(c => c && !colPrefs.hidden.includes(c.key)),
-    [colPrefs],
+    () => colPrefs.order.map(k => colByKey[k]).filter(c => c && !colPrefs.hidden.includes(c.key)),
+    [colPrefs, colByKey],
+  );
+
+  // Field choices for the left-hand selector: "Any field" + every catalog field
+  // (including ones hidden from the table), so you can filter on anything.
+  const fieldChoices = useMemo(
+    () => [{ key: ANY_FIELD, label: 'Any field' }, ...catalog.map(f => ({ key: f.key, label: f.label }))],
+    [catalog],
+  );
+
+  // The on-screen rows: records that satisfy EVERY non-empty condition (AND).
+  // A condition matches when the chosen field's value contains the typed text;
+  // "Any field" matches across all fields (including nested provenance).
+  const filteredRecords = useMemo(() => {
+    const haystack = (r) => Object.values(r)
+      .map(v => (v != null && typeof v === 'object' ? JSON.stringify(v) : String(v ?? '')))
+      .join(' ')
+      .toLowerCase();
+    const active = conditions.filter(c => c.query.trim());
+    if (!active.length) return records;
+    return records.filter(r => active.every(c => {
+      const q = c.query.trim().toLowerCase();
+      if (c.field === ANY_FIELD) return haystack(r).includes(q);
+      const cell = c.field === 'confidence' ? r.confidence : r[c.field];
+      return String(cell ?? '').toLowerCase().includes(q);
+    }));
+  }, [records, conditions]);
+
+  const activeFilterCount = conditions.filter(c => c.query.trim()).length;
+
+  // Keep exactly one trailing blank row so a fresh condition is always available.
+  const withTrailingBlank = (rows) => {
+    const last = rows[rows.length - 1];
+    return last && last.query.trim() ? [...rows, { field: ANY_FIELD, query: '' }] : rows;
+  };
+  const setCondition = (i, patch) => setConditions(prev =>
+    withTrailingBlank(prev.map((c, idx) => (idx === i ? { ...c, ...patch } : c))));
+  const addCondition = () => setConditions(prev => {
+    const last = prev[prev.length - 1];
+    return last && !last.query.trim() ? prev : [...prev, { field: ANY_FIELD, query: '' }];
+  });
+  const removeCondition = (i) => setConditions(prev => {
+    const next = prev.filter((_, idx) => idx !== i);
+    return withTrailingBlank(next.length ? next : [{ field: ANY_FIELD, query: '' }]);
+  });
+  const clearFilters = () => setConditions([{ field: ANY_FIELD, query: '' }]);
+
+  const exportView = () => downloadCsv(
+    `tracker_view_${new Date().toISOString().slice(0, 10)}.csv`,
+    visibleCols,
+    filteredRecords,
   );
 
   const persistCols = (next) => {
@@ -131,7 +216,7 @@ function TabROIData() {
     ...colPrefs,
     hidden: colPrefs.hidden.includes(key) ? colPrefs.hidden.filter(k => k !== key) : [...colPrefs.hidden, key],
   });
-  const resetCols = () => persistCols({ order: COLUMNS.map(c => c.key), hidden: [] });
+  const resetCols = () => persistCols({ order: columns.map(c => c.key), hidden: [] });
   const reorder = (fromKey, toKey) => {
     if (!fromKey || !toKey || fromKey === toKey) return;
     const order = [...colPrefs.order];
@@ -176,7 +261,7 @@ function TabROIData() {
         const changes = {};
         for (const [k, v] of Object.entries(fm)) {
           if (!isEdited(rid, k)) continue;
-          const col = COL_BY_KEY[k];
+          const col = colByKey[k];
           let parsed = v;
           if (col?.type === 'num') {
             const s = String(v).replace(/[$,\s]/g, '');
@@ -252,7 +337,7 @@ function TabROIData() {
     }
   };
 
-  if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading records…</p>;
+  if (loading || fieldsLoading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading records…</p>;
 
   const totalCols = visibleCols.length + 1; // index
 
@@ -262,7 +347,59 @@ function TabROIData() {
         <p style={{ fontSize: 12, color: 'var(--blue)', margin: 0 }}>
           <i className="ti ti-info-circle" aria-hidden="true" /> Click a value to edit it · source slide &amp; confidence live on the <strong>Field Provenance</strong> tab
         </p>
-        <ColumnsMenu prefs={colPrefs} onToggle={toggleHidden} onReset={resetCols} />
+        <ColumnsMenu columns={columns} prefs={colPrefs} onToggle={toggleHidden} onReset={resetCols} />
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        {conditions.map((c, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <select
+              value={c.field}
+              onChange={(e) => setCondition(i, { field: e.target.value })}
+              title="Field to filter on"
+              style={{ flex: '0 0 200px', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, background: 'var(--surface)', cursor: 'pointer' }}
+            >
+              {fieldChoices.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+            <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 160 }}>
+              <i className="ti ti-search" aria-hidden="true" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)', fontSize: 14 }} />
+              <input
+                placeholder={c.field === ANY_FIELD ? 'Search any field…' : `${fieldChoices.find(f => f.key === c.field)?.label || ''} contains…`}
+                value={c.query}
+                onChange={(e) => setCondition(i, { query: e.target.value })}
+                style={{ width: '100%', padding: '6px 10px 6px 30px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13 }}
+              />
+            </div>
+            <button
+              className="btn ghost small"
+              onClick={() => removeCondition(i)}
+              disabled={conditions.length === 1 && !c.query.trim()}
+              title="Remove this filter"
+              style={{ flex: '0 0 auto' }}
+            >
+              <i className="ti ti-x" aria-hidden="true" />
+            </button>
+          </div>
+        ))}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          <button className="btn ghost small" onClick={addCondition}>
+            <i className="ti ti-plus" aria-hidden="true" /> Add filter
+          </button>
+          {activeFilterCount > 0 && (
+            <button className="btn ghost small" onClick={clearFilters} title="Clear all filters">
+              <i className="ti ti-filter-off" aria-hidden="true" /> Clear all
+            </button>
+          )}
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            {activeFilterCount > 0
+              ? <>Showing <strong style={{ color: 'var(--text)' }}>{filteredRecords.length}</strong> of {records.length}</>
+              : <>{records.length} record{records.length !== 1 ? 's' : ''}</>}
+          </span>
+          <button className="btn ghost small" onClick={exportView} disabled={filteredRecords.length === 0} title="Export only the rows & columns currently shown (active filters + visible columns) to CSV">
+            <i className="ti ti-file-export" aria-hidden="true" /> Export filtered view ({filteredRecords.length})
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -279,7 +416,7 @@ function TabROIData() {
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => { reorder(dragKey.current, col.key); dragKey.current = null; }}
                     style={{ cursor: 'grab', whiteSpace: 'nowrap' }}
-                    title="Drag to reorder"
+                    title={col.notes ? `${col.notes} · Drag to reorder` : 'Drag to reorder'}
                   >
                     {col.label}{col.editable && <i className="ti ti-pencil" style={{ fontSize: 11, marginLeft: 4, color: 'var(--text-faint)' }} aria-hidden="true" />}
                   </th>
@@ -289,7 +426,9 @@ function TabROIData() {
             <tbody>
               {records.length === 0 ? (
                 <tr><td colSpan={totalCols} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No records yet. Complete an extraction to see data here.</td></tr>
-              ) : records.map((r, i) => (
+              ) : filteredRecords.length === 0 ? (
+                <tr><td colSpan={totalCols} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No records match your search or filters. <button onClick={clearFilters} style={{ border: 'none', background: 'none', color: 'var(--blue)', cursor: 'pointer', fontWeight: 600 }}>Clear</button></td></tr>
+              ) : filteredRecords.map((r, i) => (
                 <tr key={r.record_id || i} className={edits[r.record_id] ? 'row-edited' : ''}>
                   <td style={{ color: 'var(--text-faint)' }}>{i + 1}</td>
                   {visibleCols.map(col => (
@@ -444,6 +583,7 @@ function TabSourceFiles() {
 // In-app mirror of the Excel `Field_Provenance` sheet: one row per record×metric,
 // with the source slide and confidence the value was extracted with.
 function TabFieldProvenance() {
+  const { provMetrics, loading: fieldsLoading } = useFields();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -458,7 +598,7 @@ function TabFieldProvenance() {
     const out = [];
     for (const r of records) {
       const fm = r.field_meta || {};
-      for (const [k, label] of PROV_METRICS) {
+      for (const [k, label] of provMetrics) {
         if (r[k] == null && !fm[k]) continue;
         const meta = fm[k] || {};
         out.push({
@@ -470,9 +610,9 @@ function TabFieldProvenance() {
       }
     }
     return out;
-  }, [records]);
+  }, [records, provMetrics]);
 
-  if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>;
+  if (loading || fieldsLoading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>;
 
   return (
     <>
@@ -532,7 +672,7 @@ export default function TrackerView() {
           <strong style={{ color: 'var(--text)' }}>SME_Audit_Log</strong>,{' '}
           <strong style={{ color: 'var(--text)' }}>Field_Provenance</strong>
         </p>
-        <button className="btn ghost small" onClick={downloadRecordsAsXlsx}><i className="ti ti-table-export" aria-hidden="true" /> Export .xlsx</button>
+        <button className="btn ghost small" onClick={downloadRecordsAsXlsx} title="Export ALL records (every column, all 4 sheets) as the full Domo-ready workbook"><i className="ti ti-table-export" aria-hidden="true" /> Export full raw (.xlsx)</button>
       </div>
 
       <div className="tab-bar">

@@ -5,7 +5,7 @@
     "publisher": "Oracle",
     "date_delivered": null,
     "currency": "USD",
-    "identified_risk": 108000,
+    "identified_risk": 1080000,
     "id_cost_avoidance": null,
     "acc_cost_avoidance": 1080000.0,
     "id_cost_optimization": null,
@@ -19,7 +19,7 @@
     "source_file": "test.pptx",
     "saved_at": "2026-06-02T22:45:08.273838",
     "record_id": "r_e11878082db1",
-    "updated_at": "2026-06-25T15:15:50.855618"
+    "updated_at": "2026-06-25T16:07:13.669041"
   },
   {
     "year": 2025,
@@ -155,7 +155,7 @@
     "publisher": "IBM",
     "date_delivered": "January 2026",
     "currency": "USD",
-    "identified_risk": 222000.0,
+    "identified_risk": 18000,
     "id_cost_avoidance": 222000.0,
     "acc_cost_avoidance": 222000.0,
     "id_cost_optimization": 507000.0,
@@ -201,7 +201,8 @@
         "alternates": null
       }
     },
-    "saved_at": "2026-06-25T15:32:32.285693"
+    "saved_at": "2026-06-25T15:32:32.285693",
+    "updated_at": "2026-06-25T16:07:13.713222"
   },
   {
     "record_id": "r_b3c6f4845738",

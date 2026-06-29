@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill -f \"uvicorn main:app\")",
+      "Bash(cp /tmp/roi_backup2.json data/roi_records.json)",
+      "Bash(rm -f data/audit_log.json)",
+      "Bash(npm run *)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}
