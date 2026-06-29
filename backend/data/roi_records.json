@@ -75,6 +75,7 @@
     "record_id": "r_5d65de1d5b91"
   },
   {
+    "record_id": "r_f6486bba9285",
     "year": 2025,
     "client": "UPS",
     "publisher": "IBM",
@@ -83,7 +84,7 @@
     "identified_risk": 1080000.0,
     "id_cost_avoidance": 1080000.0,
     "acc_cost_avoidance": 1080000.0,
-    "id_cost_optimization": 7810175.0,
+    "id_cost_optimization": 6150000.0,
     "acc_cost_optimization": null,
     "realized_savings": null,
     "contract_spend": null,
@@ -93,114 +94,9 @@
     "confidence": 85,
     "source_file": "UPS_IBM_ROAR_2025.pdf",
     "sme": "christina",
-    "stored_name": "5a3a6b14233c4509abff1e91a90aba90.pdf",
-    "executive_summary": {
-      "overview": "Anglepoint conducted an IBM Risk & Opportunity Assessment for UPS, covering up to 250 IBM products across 70,000 servers, 270,000 workstations, and 5 physical mainframes. The engagement identified $8.9M in total optimization potential through cost avoidance and savings opportunities, with full remediation of $1.08M in identified compliance risks.",
-      "key_accomplishments": [
-        "Achieved 100% cost avoidance on $1.08M identified compliance risk across 8 IBM products, reducing remaining risk to $0",
-        "Identified $3.59M in potential cost savings from sub-capacity products with low utilization rates (0%-63%)",
-        "Identified $2.56M in potential cost savings from non-ILMT products with underutilization",
-        "Discovered 115 total IBM distributed products with more licenses than in use, representing $7.81M optimization opportunity",
-        "Tracked deployment trends showing significant reduction in IBM ODM Server (23,400 to 7,420 units) yielding $858K savings value"
-      ],
-      "key_metrics": [
-        {
-          "label": "Total Optimization Identified",
-          "value": "$8.9M",
-          "context": "Combined cost avoidance and savings potential over 1-year period"
-        },
-        {
-          "label": "Identified Risk",
-          "value": "$1.08M",
-          "context": "Financial impact from under or incorrectly licensed IBM software"
-        },
-        {
-          "label": "Cost Avoidance Accomplished",
-          "value": "$1.08M",
-          "context": "Full risk remediation achieved with $0 remaining risk"
-        },
-        {
-          "label": "Sub-Capacity Cost Savings",
-          "value": "$3.59M",
-          "context": "Potential savings from 23 products with excess licenses"
-        },
-        {
-          "label": "Non-ILMT Cost Savings",
-          "value": "$2.56M",
-          "context": "Potential savings from 75 products with underutilization"
-        },
-        {
-          "label": "Products with Excess Licenses",
-          "value": "115",
-          "context": "IBM distributed products found with more licenses than deployed"
-        }
-      ],
-      "recommendations": [
-        "Remove 23 IBM sub-capacity products with excess licenses from upcoming renewal if no growth plans exist ($2.34M savings potential) - Target: June 30, 2025",
-        "Validate and remove 17 sub-capacity products with active S&S but 0 deployments from renewal ($2.91M savings potential) - Target: June 30, 2025",
-        "Review 43 non-ILMT products with excess licenses for renewal reduction ($1.82M savings potential) - Target: June 30, 2025",
-        "Confirm usage and remove 32 non-ILMT products with active S&S and 0 deployments ($743K savings potential) - Target: June 30, 2025",
-        "Validate deployments for products showing 0% utilization including IBM Storage Suite, IBM Sterling Family, and IBM Cognos Analytics for Non-Production",
-        "Schedule WatsonX Implementation with product stakeholders as next strategic initiative"
-      ],
-      "primary_risks": [
-        "IBM InfoSphere DataStage Linux for System z under-licensing exposure of $339,517 (remediated)",
-        "IBM WebSphere Application Server Network Deployment compliance gap of $303,635 (remediated)",
-        "IBM DB2 Enterprise Server Edition deployment increased from 43,280 to 46,800 units, adding $107K in additional license value required",
-        "Multiple products with 0% utilization require deployment validation to confirm accurate reporting"
-      ],
-      "market_risks": [
-        "ELA Renewal deadline of June 30, 2025 requires immediate decision on license quantities for all products on ELA",
-        "IASP (US/Canada) ELP Delivery to IBM due July 31, 2025 for all sub-capacity products covered under IASP",
-        "IBM Cloud Pak for Business Automation at 36.59% utilization with $768K savings potential indicates possible over-provisioning"
-      ],
-      "additional_insights": [
-        "IBM ODM Server deployment decreased dramatically from 23,400 to 7,420 units, representing $858K in realized value",
-        "IBM MQ deployment reduced from 292,280 to 266,700 units, yielding $85K in license value reduction",
-        "6 products showed deployment increases over the past year, adding incremental licensing costs of approximately $136K",
-        "Reducing renewals not recommended for products with utilization over 60% per Anglepoint methodology",
-        "26 ACEL revenue placeholder products identified in ELA for subscription and support tracking"
-      ],
-      "next_steps": [
-        "Implement cost savings recommendations by June 30, 2025 to capture renewal optimization",
-        "Schedule WatsonX Implementation with product stakeholders",
-        "Begin Non-PVU data collection to work towards annual baseline establishment",
-        "Register and track risk remediation and opportunity realization in Elevate platform",
-        "Report realized cost savings and avoidance in upcoming Quarterly Service Review"
-      ],
-      "highlights": [
-        {
-          "label": "Total Identified Risk",
-          "value": "$1.08M"
-        },
-        {
-          "label": "Cost Avoidance Accomplished",
-          "value": "$1.08M"
-        }
-      ],
-      "charts": {
-        "roi_breakdown": [
-          {
-            "name": "Sub-Capacity Cost Savings",
-            "value": 3590000
-          },
-          {
-            "name": "Non-ILMT Cost Savings",
-            "value": 2560000
-          },
-          {
-            "name": "Cost Avoidance",
-            "value": 1080000
-          }
-        ],
-        "accomplishment_rate": {
-          "accomplished": 12,
-          "remaining": 88
-        }
-      }
-    },
-    "saved_at": "2026-06-29T15:37:24.057041",
-    "record_id": "r_f6486bba9285"
+    "stored_name": "f77779e67a0549b982a72dfb3447189b.pdf",
+    "field_meta": null,
+    "saved_at": "2026-06-29T20:13:57.772680"
   },
   {
     "year": 2025,

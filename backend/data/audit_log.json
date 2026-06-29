@@ -97,5 +97,27 @@
     "old_value": null,
     "new_value": null,
     "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "feb349930163445e919006b7a1b774f4",
+    "record_id": "r_f6486bba9285",
+    "timestamp": "2026-06-29T20:05:05.118862",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "cc9c8d80c34d44bba9e820cf4eb69b14",
+    "record_id": "r_f6486bba9285",
+    "timestamp": "2026-06-29T20:13:57.791583",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
   }
 ]
