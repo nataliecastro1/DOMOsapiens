@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
-import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog } from '../services/api';
+import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog, generateExecutiveSummary, saveExecutiveSummary } from '../services/api';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
 
 // ─── Column model ─────────────────────────────────────────────────────────────
@@ -227,6 +227,7 @@ function TabROIData() {
   const [note, setNote]                 = useState('');
   const [editor, setEditor]             = useState('');
   const [saving, setSaving]             = useState(false);
+  const [generating, setGenerating]     = useState(null); // record_id being generated
   const dragKey                         = useRef(null);
 
   const load = () => getRecords()
@@ -372,6 +373,37 @@ function TabROIData() {
     }
   };
 
+  const handleGenerate = async (r) => {
+    setGenerating(r.record_id);
+    try {
+      const data = await generateExecutiveSummary({
+        client:               r.client,
+        publisher:            r.publisher,
+        year:                 r.year,
+        identified_risk:      r.identified_risk,
+        id_cost_avoidance:    r.id_cost_avoidance,
+        acc_cost_avoidance:   r.acc_cost_avoidance,
+        id_cost_optimization: r.id_cost_optimization,
+        acc_cost_optimization:r.acc_cost_optimization,
+        realized_savings:     r.realized_savings,
+        contract_spend:       r.contract_spend,
+        confidence:           r.confidence,
+        stored_name:          r.stored_name,
+      });
+      const identifier = r.stored_name || r.source_file;
+      if (identifier) await saveExecutiveSummary(identifier, data).catch(() => {});
+      // Update local state so drawer opens immediately
+      setRecords(prev => prev.map(rec =>
+        rec.record_id === r.record_id ? { ...rec, executive_summary: data } : rec
+      ));
+      setSummaryRecord({ ...r, executive_summary: data });
+    } catch (e) {
+      alert('Could not generate summary. Check your API key.');
+    } finally {
+      setGenerating(null);
+    }
+  };
+
   if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading records…</p>;
 
   const totalCols = visibleCols.length + 1; // index
@@ -421,18 +453,38 @@ function TabROIData() {
                   </td>
                   <td><Badge color="green">Stored</Badge></td>
                   <td onClick={e => e.stopPropagation()}>
-                    <button
-                      onClick={() => setSummaryRecord(r)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 5,
-                        background: 'var(--blue-pale)', color: 'var(--blue)',
-                        border: '1.5px solid var(--blue)', borderRadius: 8,
-                        padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <i className="ti ti-file-description" /> View
-                    </button>
+                    {r.executive_summary ? (
+                      <button
+                        onClick={() => setSummaryRecord(r)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          background: 'var(--blue-pale)', color: 'var(--blue)',
+                          border: '1.5px solid var(--blue)', borderRadius: 8,
+                          padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <i className="ti ti-file-description" /> View
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleGenerate(r)}
+                        disabled={generating === r.record_id}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          background: generating === r.record_id ? 'var(--surface-3)' : 'var(--gold-pale)',
+                          color: generating === r.record_id ? 'var(--text-muted)' : 'var(--gold-text)',
+                          border: `1.5px solid ${generating === r.record_id ? 'var(--border)' : 'var(--gold)'}`,
+                          borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600,
+                          cursor: generating === r.record_id ? 'not-allowed' : 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {generating === r.record_id
+                          ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Generating…</>
+                          : <><i className="ti ti-sparkles" /> Generate</>}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
