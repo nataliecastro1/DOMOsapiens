@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
-import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog, getFields, generateExecutiveSummary, saveExecutiveSummary } from '../services/api';
+import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog, getFields, generateExecutiveSummary, saveExecutiveSummary, deleteRecord } from '../services/api';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
 
 // ─── Field catalog ──────────────────────────────────────────────────────────
@@ -248,6 +248,9 @@ function TabROIData() {
   const [saving, setSaving] = useState(false);
   const [summaryRecord, setSummaryRecord] = useState(null);
   const [generating, setGenerating] = useState(null); // record_id being generated
+  const [deleteTarget, setDeleteTarget] = useState(null); // { record_id, client }
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteError, setDeleteError] = useState(false);
   // Filter builder: a list of { field, query } conditions, AND-ed together.
   // field === ANY_FIELD searches across every field on the record. A trailing
   // blank row is kept so a new condition appears as soon as one is filled in.
@@ -453,6 +456,23 @@ function TabROIData() {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    const reason = deleteReason.trim().toLowerCase();
+    if (reason !== 'duplicate' && reason !== 'error') {
+      setDeleteError(true);
+      return;
+    }
+    try {
+      await deleteRecord(deleteTarget.record_id, reason);
+      setRecords(prev => prev.filter(r => r.record_id !== deleteTarget.record_id));
+      setDeleteTarget(null);
+      setDeleteReason('');
+      setDeleteError(false);
+    } catch {
+      setDeleteError(true);
+    }
+  };
+
   const handleGenerate = async (r) => {
     setGenerating(r.record_id);
     try {
@@ -486,7 +506,7 @@ function TabROIData() {
 
   if (loading || fieldsLoading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading records…</p>;
 
-  const totalCols = visibleCols.length + 2; // index + exec summary
+  const totalCols = visibleCols.length + 3; // index + exec summary + delete
 
   return (
     <>
@@ -569,6 +589,7 @@ function TabROIData() {
                   </th>
                 ))}
                 <th>Exec. Summary</th>
+                <th style={{ width: 40 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -618,6 +639,22 @@ function TabROIData() {
                       </button>
                     )}
                   </td>
+                  <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                    <button
+                      onClick={() => { setDeleteTarget(r); setDeleteReason(''); setDeleteError(false); }}
+                      title="Delete record"
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--text-faint)', padding: '2px 6px', borderRadius: 6,
+                        fontSize: 15, lineHeight: 1,
+                        transition: 'color 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}
+                    >
+                      <i className="ti ti-trash" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -654,6 +691,64 @@ function TabROIData() {
 
       {summaryRecord && (
         <ExecSummaryDrawer record={summaryRecord} onClose={() => setSummaryRecord(null)} />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => { setDeleteTarget(null); setDeleteError(false); }}>
+          <div style={{
+            background: 'var(--surface-1)', borderRadius: 14, padding: '28px 32px', width: 380,
+            boxShadow: '0 8px 40px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', gap: 16,
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <i className="ti ti-trash" style={{ color: 'var(--red)', fontSize: 20 }} />
+              <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--navy)' }}>Delete Record</span>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              <strong>{deleteTarget.client || deleteTarget.record_id}</strong> will be permanently removed. Select a reason:
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {['duplicate', 'error'].map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => { setDeleteReason(opt); setDeleteError(false); }}
+                  style={{
+                    flex: 1, padding: '8px 0', borderRadius: 8, fontWeight: 600, fontSize: 13,
+                    cursor: 'pointer', border: '2px solid',
+                    borderColor: deleteReason === opt ? 'var(--red)' : 'var(--border)',
+                    background: deleteReason === opt ? 'var(--red)' : 'var(--surface-2)',
+                    color: deleteReason === opt ? '#fff' : 'var(--text)',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {opt === 'duplicate' ? '🔁 Duplicate' : '⚠️ Error'}
+                </button>
+              ))}
+            </div>
+            {deleteError && (
+              <div style={{ background: 'var(--red-pale,#fff0f0)', border: '1px solid var(--red)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--red)', fontWeight: 600 }}>
+                Could not delete — please select a reason and try again.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setDeleteTarget(null); setDeleteError(false); }}
+                style={{ padding: '7px 18px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                style={{ padding: '7px 18px', borderRadius: 8, border: 'none', background: 'var(--red)', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

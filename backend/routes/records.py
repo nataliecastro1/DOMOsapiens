@@ -88,6 +88,21 @@ def update_executive_summary(body: SummaryPatch):
     return {"status": "updated", "record_id": updated.get("record_id")}
 
 
+@router.delete("/records/{record_id}")
+def delete_record(record_id: str, reason: str = ""):
+    """Permanently delete a record. Reason must be 'duplicate' or 'error'."""
+    from services.storage import _load, _save
+    allowed = {"duplicate", "error"}
+    if reason.strip().lower() not in allowed:
+        raise HTTPException(status_code=400, detail="invalid_reason")
+    records = _load()
+    new_records = [r for r in records if r.get("record_id") != record_id]
+    if len(new_records) == len(records):
+        raise HTTPException(status_code=404, detail="Record not found")
+    _save(new_records)
+    return {"status": "deleted", "record_id": record_id}
+
+
 @router.patch("/records/{record_id}")
 def edit_record(record_id: str, update: RecordUpdate):
     """Apply a partial edit to a stored record. Each changed field is logged to

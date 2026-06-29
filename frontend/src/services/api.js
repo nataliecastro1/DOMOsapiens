@@ -126,6 +126,18 @@ export async function augmentExecutiveSummary(data) {
   return post('/executive-summary/augment', data);
 }
 
+/** Delete a record permanently. reason must be 'duplicate' or 'error'. */
+export async function deleteRecord(recordId, reason) {
+  const res = await fetch(`${BASE}/records/${recordId}?reason=${encodeURIComponent(reason)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail?.detail || `DELETE failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 /** Save a generated executive summary onto an existing record.
  *  identifier can be a record_id, stored_name, or source_file. */
 export async function saveExecutiveSummary(identifier, executive_summary) {
