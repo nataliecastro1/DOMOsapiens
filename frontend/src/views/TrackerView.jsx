@@ -59,6 +59,10 @@ const fmtAmount = (n) => {
   return Number.isNaN(num) ? String(n) : `$${num.toLocaleString()}`;
 };
 const confColor = (c) => (c >= 90 ? 'green' : c >= 75 ? 'amber' : 'red');
+const totalSavings = (r) => {
+  const sum = (r.id_cost_avoidance || 0) + (r.id_cost_optimization || 0) + (r.realized_savings || 0) || r.identified_risk || 0;
+  return fmtAmount(sum || null);
+};
 
 // ─── Columns menu (show/hide) ──────────────────────────────────────────────────
 function ColumnsMenu({ prefs, onToggle, onReset }) {
@@ -213,10 +217,17 @@ function ExecSummaryDrawer({ record, onClose }) {
 
 // ─── Tab: ROI Data ────────────────────────────────────────────────────────────
 function TabROIData() {
-  const [records, setRecords]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [detailRow, setDetailRow]   = useState(null);
+  const [records, setRecords]           = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [detailRow, setDetailRow]       = useState(null);
   const [summaryRecord, setSummaryRecord] = useState(null);
+  const [edits, setEdits]               = useState({});
+  const [editingCell, setEditingCell]   = useState(null);
+  const [colPrefs, setColPrefs]         = useState(loadColPrefs);
+  const [note, setNote]                 = useState('');
+  const [editor, setEditor]             = useState('');
+  const [saving, setSaving]             = useState(false);
+  const dragKey                         = useRef(null);
 
   const load = () => getRecords()
     .then(data => setRecords(Array.isArray(data) ? data : []))
@@ -379,23 +390,15 @@ function TabROIData() {
           <table className="data-table">
             <thead>
               <tr>
-                <th style={{ width: 30 }}>#</th>
-                {visibleCols.map(col => (
-                  <th
-                    key={col.key}
-                    draggable
-                    onDragStart={() => { dragKey.current = col.key; }}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => { reorder(dragKey.current, col.key); dragKey.current = null; }}
-                    style={{ cursor: 'grab', whiteSpace: 'nowrap' }}
-                    title="Drag to reorder"
-                  >
-                    {col.label}{col.editable && <i className="ti ti-pencil" style={{ fontSize: 11, marginLeft: 4, color: 'var(--text-faint)' }} aria-hidden="true" />}
-                  </th>
-                ))}
-                <th>#</th><th>Client</th><th>Publisher</th><th>Year</th>
-                <th>Total Savings</th><th>Confidence</th>
-                <th>SME</th><th>Source File</th><th>Status</th>
+                <th>#</th>
+                <th>Client</th>
+                <th>Publisher</th>
+                <th>Year</th>
+                <th>Total Savings</th>
+                <th>Confidence</th>
+                <th>SME</th>
+                <th>Source File</th>
+                <th>Status</th>
                 <th>Exec. Summary</th>
               </tr>
             </thead>
