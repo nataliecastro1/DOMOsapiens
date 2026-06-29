@@ -40,6 +40,7 @@ class ROIRecord(BaseModel):
     stored_name:             Optional[str]   = None
     # Per-metric provenance, keyed by model field name (e.g. "identified_risk").
     field_meta:              Optional[dict[str, FieldMeta]] = None
+    executive_summary:       Optional[dict]  = None
 
 
 class RecordUpdate(BaseModel):
