@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
 import { SAVED_DASHBOARDS } from '../data';
 import { getRecords } from '../services/api';
 import {
   METRICS, labelFor, deriveOptions, sum, countWithMetric,
   formatCurrency, matchFilters, groupSum,
+  yearSeries, yearDeltas, journeyStages, realizationRate, withPercent, formatPct,
 } from '../services/dashboardData';
 
 const STORAGE_KEY = 'domosapiens.dashboards';
@@ -24,6 +25,10 @@ const TITLES = {
 };
 
 const BAR_COLORS = ['var(--navy)', 'var(--blue)', 'var(--blue-light)', 'var(--gold)'];
+// Cap visible comparison bars so a long publisher list stays readable.
+const MAX_BARS = 12;
+// Pipeline stage colors for the ROI journey funnel (navy → blue → gold).
+const STAGE_COLORS = ['var(--navy)', 'var(--blue)', 'var(--gold)'];
 
 // ─── localStorage helpers ─────────────────────────────────────────────────────
 function loadSaved() {
@@ -55,6 +60,101 @@ function ToggleGroup({ options, value, onChange }) {
           {opt}
         </button>
       ))}
+    </div>
+  );
+}
+
+// Searchable single-select combobox — type to filter a long list of options.
+// Keeps the styling of the native <input> (search icon + chevron added inline) so
+// it slots in wherever a <select> would, but scales to large option sets.
+function SearchableSelect({ options, value, onChange, placeholder = 'Search…', emptyText = 'No matches' }) {
+  const [open, setOpen]     = useState(false);
+  const [query, setQuery]   = useState('');
+  const [active, setActive] = useState(0);
+  const boxRef   = useRef(null);
+  const inputRef = useRef(null);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? options.filter(o => o.toLowerCase().includes(q)) : options;
+  }, [options, query]);
+
+  const close = () => { setOpen(false); setQuery(''); };
+  const pick  = (opt) => { onChange(opt); close(); inputRef.current?.blur(); };
+
+  // Close when clicking outside the component.
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) close(); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  // Keep the highlighted option in range as the filter changes.
+  useEffect(() => { setActive(0); }, [query, open]);
+
+  const onKeyDown = (e) => {
+    if (e.key === 'ArrowDown')      { e.preventDefault(); setOpen(true); setActive(a => Math.min(a + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); setActive(a => Math.max(a - 1, 0)); }
+    else if (e.key === 'Enter')     { if (open && filtered[active]) { e.preventDefault(); pick(filtered[active]); } }
+    else if (e.key === 'Escape')    { close(); inputRef.current?.blur(); }
+  };
+
+  return (
+    <div ref={boxRef} style={{ position: 'relative' }}>
+      <i className="ti ti-search" aria-hidden="true"
+         style={{ position: 'absolute', left: 12, top: 19, fontSize: 15, color: 'var(--text-faint)', pointerEvents: 'none' }} />
+      <input
+        ref={inputRef}
+        type="text"
+        role="combobox"
+        aria-expanded={open}
+        value={open ? query : value}
+        placeholder={value || placeholder}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => { setOpen(true); setQuery(''); }}
+        onKeyDown={onKeyDown}
+        style={{ paddingLeft: 34, paddingRight: 34 }}
+      />
+      <i className={`ti ti-chevron-${open ? 'up' : 'down'}`} aria-hidden="true"
+         style={{ position: 'absolute', right: 12, top: 19, fontSize: 15, color: 'var(--text-faint)', pointerEvents: 'none' }} />
+
+      {open && (
+        <div style={{
+          position: 'absolute', zIndex: 20, top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: 'var(--surface)', border: '1.5px solid var(--border)',
+          borderRadius: 'var(--radius-sm)', boxShadow: '0 8px 24px rgba(0,25,65,0.12)',
+          maxHeight: 240, overflowY: 'auto', padding: 4,
+        }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 13, color: 'var(--text-muted)' }}>{emptyText}</div>
+          ) : filtered.map((opt, i) => {
+            const isActive = i === active;
+            const isSel    = opt === value;
+            return (
+              <div
+                key={opt}
+                role="option"
+                aria-selected={isSel}
+                onMouseEnter={() => setActive(i)}
+                onMouseDown={e => { e.preventDefault(); pick(opt); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '9px 12px', borderRadius: 'var(--radius-xs)', cursor: 'pointer',
+                  fontSize: 14, fontWeight: isSel ? 700 : 500,
+                  background: isActive ? 'var(--navy)' : 'transparent',
+                  color: isActive ? '#fff' : 'var(--navy)',
+                }}
+              >
+                {isSel
+                  ? <i className="ti ti-check" style={{ fontSize: 14, color: isActive ? '#fff' : 'var(--blue)' }} aria-hidden="true" />
+                  : <span style={{ width: 14 }} />}
+                <span style={{ flex: 1 }}>{opt}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -119,6 +219,77 @@ function BrandHeader({ tag = 'ROI Dashboard' }) {
       <img src="/anglepoint-logo.png" alt="Anglepoint" style={{ height: 26 }} />
       <span style={{ color: '#fff', fontWeight: 800, fontSize: 14, letterSpacing: 1 }}>ANGLEPOINT</span>
       <span style={{ marginLeft: 'auto', color: 'var(--gold)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tag}</span>
+    </div>
+  );
+}
+
+// ─── Storytelling visuals ─────────────────────────────────────────────────────
+// Pure-render: all math is precomputed in dashboardData.js so the same numbers
+// can be mirrored into the HTML export (see buildDashboardHtml).
+
+// Identified → Accomplished → Realized funnel. Bar widths are relative to the
+// first (largest) stage; realization-rate chips sit between stages.
+function JourneyFunnel({ stages, rates }) {
+  const top = Math.max(...stages.map(s => s.value), 1);
+  const stepRates = [null, rates.accToId, rates.realToAcc]; // rate from the prior stage
+  return (
+    <div className="card">
+      <div className="card-title"><i className="ti ti-filter" aria-hidden="true" /> ROI Journey</div>
+      {stages.map((s, i) => (
+        <div key={s.key}>
+          {i > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '2px 0 8px', paddingLeft: 150, fontSize: 12, fontWeight: 700, color: 'var(--blue)' }}>
+              <i className="ti ti-arrow-down" aria-hidden="true" style={{ fontSize: 13 }} />
+              {formatPct(stepRates[i])} of {stages[i - 1].label.toLowerCase()}
+            </div>
+          )}
+          <div className="bar-row">
+            <span className="bar-label">{s.label}</span>
+            <div className="bar-bg">
+              <div className="bar-fill" style={{ width: `${Math.round((Math.max(0, s.value) / top) * 100)}%`, background: STAGE_COLORS[i] }} />
+            </div>
+            <span className="bar-val">{formatCurrency(s.value)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Year-over-year trend as a static inline-SVG area+line (same coordinate math as
+// the HTML export). `series` is yearDeltas() output, chronological.
+function TrendChart({ series, metricLabel }) {
+  const W = 600, H = 180, P = 28;
+  const innerW = W - 2 * P, innerH = H - 2 * P - 18;
+  const n = series.length;
+  const max = series.reduce((m, p) => Math.max(m, p.value), 0) || 1;
+  const pts = series.map((p, i) => ({
+    ...p,
+    x: P + (n > 1 ? (i / (n - 1)) * innerW : innerW / 2),
+    y: P + innerH - (max > 0 ? (p.value / max) * innerH : 0),
+  }));
+  const line = pts.map(p => `${p.x},${p.y}`).join(' ');
+  const baseY = P + innerH;
+  const area = `${pts[0].x},${baseY} ${line} ${pts[n - 1].x},${baseY}`;
+  const deltaColor = d => (d === 'up' ? '#1a7f4b' : d === 'down' ? '#c0392b' : 'var(--text-muted)');
+  return (
+    <div className="card">
+      <div className="card-title"><i className="ti ti-chart-line" aria-hidden="true" /> {metricLabel} Trend</div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`${metricLabel} by year`} style={{ display: 'block' }}>
+        <polygon points={area} fill="rgba(0,95,134,0.12)" />
+        <polyline points={line} fill="none" stroke="var(--blue)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {pts.map(p => (
+          <g key={p.year}>
+            <circle cx={p.x} cy={p.y} r="3.5" fill="var(--navy)" />
+            <text x={p.x} y={H - 14} textAnchor="middle" fontSize="12" fill="var(--text-muted)">{p.year}</text>
+            {p.deltaPct != null && (
+              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fontWeight="700" fill={deltaColor(p.deltaDir)}>
+                {p.deltaDir === 'down' ? '▼' : '▲'} {Math.abs(p.deltaPct)}%
+              </text>
+            )}
+          </g>
+        ))}
+      </svg>
     </div>
   );
 }
@@ -217,6 +388,12 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
     [matched, groupField, primaryMetric]);
   const maxVal        = chartData.reduce((m, d) => Math.max(m, d.value), 0);
 
+  // Storytelling aggregations (shared with the HTML export).
+  const stages  = useMemo(() => journeyStages(matched), [matched]);
+  const rates   = useMemo(() => realizationRate(stages), [stages]);
+  const trend   = useMemo(() => yearDeltas(yearSeries(matched, primaryMetric)), [matched, primaryMetric]);
+  const barsPct = useMemo(() => withPercent(chartData), [chartData]);
+
   const pubScope = pubMode === 'All publishers'
     ? 'All publishers'
     : `${selPubs.length} publisher${selPubs.length === 1 ? '' : 's'}`;
@@ -276,9 +453,13 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
               {options.clients.length === 0 ? (
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No clients in the data yet.</p>
               ) : (
-                <select value={client} onChange={e => setClient(e.target.value)}>
-                  {options.clients.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <SearchableSelect
+                  options={options.clients}
+                  value={client}
+                  onChange={setClient}
+                  placeholder="Search clients…"
+                  emptyText="No clients match your search"
+                />
               )}
             </div>
 
@@ -384,31 +565,41 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
                     </div>
                   );
                 })}
-                <div className="metric-card">
-                  <div className="metric-label">Matched Records</div>
-                  <div className="metric-value">{matched.length}</div>
-                  <div className="metric-delta muted">{client || 'all clients'}</div>
-                </div>
               </div>
 
-              <div className="card">
-                <div className="card-title">
-                  <i className="ti ti-chart-bar" aria-hidden="true" /> {labelFor(primaryMetric)} by {groupField === 'year' ? 'Year' : 'Publisher'}
-                </div>
-                {maxVal <= 0 ? (
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No data for {labelFor(primaryMetric)} in the matched records.</p>
-                ) : (
-                  chartData.map((d, i) => (
+              {stages[0].value > 0 && <JourneyFunnel stages={stages} rates={rates} />}
+
+              {/* A single bar tells no story — only show the comparison when 2+ bars carry data. */}
+              {maxVal > 0 && barsPct.length > 1 && (
+                <div className="card">
+                  <div className="card-title">
+                    <i className="ti ti-chart-bar" aria-hidden="true" /> {labelFor(primaryMetric)} by {groupField === 'year' ? 'Year' : 'Publisher'}
+                  </div>
+                  {barsPct.slice(0, MAX_BARS).map((d, i) => (
                     <div className="bar-row" key={d.label}>
-                      <span className="bar-label">{d.label}</span>
+                      <span className="bar-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        {d.label}
+                        {d.isTop && (
+                          <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--navy)', background: 'var(--gold)', borderRadius: 6, padding: '1px 7px' }}>Top</span>
+                        )}
+                      </span>
                       <div className="bar-bg">
                         <div className="bar-fill" style={{ width: `${Math.round((d.value / maxVal) * 100)}%`, background: BAR_COLORS[i % BAR_COLORS.length] }} />
                       </div>
-                      <span className="bar-val">{formatCurrency(d.value)}</span>
+                      <span className="bar-val">{formatCurrency(d.value)} · {Math.round(d.pct)}%</span>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                  {barsPct.length > MAX_BARS && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                      + {barsPct.length - MAX_BARS} more
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {trend.length >= 2 && trend.some(p => p.value > 0) && (
+                <TrendChart series={trend} metricLabel={labelFor(primaryMetric)} />
+              )}
             </>
           )}
         </div>
@@ -488,6 +679,12 @@ export default function DashboardsView() {
     const maxVal = chartData.reduce((m, d) => Math.max(m, d.value), 0);
     const colors = ['#001941', '#005f86', '#0089af', '#ffad00'];
 
+    // Storytelling aggregations (mirror the live preview, same helpers).
+    const stages = journeyStages(matched);
+    const rates = realizationRate(stages);
+    const trend = yearDeltas(yearSeries(matched, primaryMetric));
+    const barsPct = withPercent(chartData);
+
     const pubScope = dash.pubMode === 'All publishers'
       ? 'All publishers'
       : `${dash.selPubs?.length || 0} publisher${(dash.selPubs?.length || 0) === 1 ? '' : 's'}`;
@@ -516,32 +713,81 @@ export default function DashboardsView() {
       </div>`;
     }).join('\n');
 
-    const recordsCard = `      <div class="metric-card">
-        <div class="metric-label">Matched Records</div>
-        <div class="metric-value">${matched.length}</div>
-        <div class="metric-delta" style="color:rgba(255,255,255,0.35)">${escapeHtml(dash.client || 'all clients')}</div>
-      </div>`;
-
-    // Bar chart (mirrors the builder preview).
-    const bars = maxVal <= 0
-      ? `<p style="font-size:14px;color:#5a6e8c;margin:0">No data for ${escapeHtml(labelFor(primaryMetric))} in the matched records.</p>`
-      : chartData.map((d, i) => `      <div class="bar-row">
-        <span class="bar-label">${escapeHtml(d.label)}</span>
+    // Bar chart with contribution callouts (mirrors the builder preview).
+    // A single bar tells no story — only render the card when 2+ bars carry data.
+    const bars = barsPct.slice(0, MAX_BARS).map((d, i) => `      <div class="bar-row">
+        <span class="bar-label">${escapeHtml(d.label)}${d.isTop ? ' <span class="top-pill">Top</span>' : ''}</span>
         <div class="bar-bg"><div class="bar-fill" style="width:${Math.round((d.value / maxVal) * 100)}%;background:${colors[i % colors.length]}"></div></div>
-        <span class="bar-val">${escapeHtml(formatCurrency(d.value))}</span>
-      </div>`).join('\n');
+        <span class="bar-val">${escapeHtml(formatCurrency(d.value))} · ${Math.round(d.pct)}%</span>
+      </div>`).join('\n')
+        + (barsPct.length > MAX_BARS
+          ? `\n      <div style="font-size:12px;color:#5a6e8c;margin-top:4px">+ ${barsPct.length - MAX_BARS} more</div>`
+          : '');
+    const barCard = (maxVal > 0 && barsPct.length > 1)
+      ? `  <div class="card">
+    <div class="card-title">${escapeHtml(labelFor(primaryMetric))} by ${groupField === 'year' ? 'Year' : 'Publisher'}</div>
+${bars}
+  </div>\n`
+      : '';
+
+    // ROI Journey funnel (Identified → Accomplished → Realized).
+    const stageColors = ['#001941', '#005f86', '#ffad00'];
+    const journeyTop = Math.max(...stages.map(s => s.value), 1);
+    const stepRates = [null, rates.accToId, rates.realToAcc];
+    const journeyRows = stages.map((s, i) => {
+      const chip = i > 0
+        ? `      <div class="rate-chip">↓ ${escapeHtml(formatPct(stepRates[i]))} of ${escapeHtml(stages[i - 1].label.toLowerCase())}</div>\n`
+        : '';
+      return `${chip}      <div class="bar-row">
+        <span class="bar-label">${escapeHtml(s.label)}</span>
+        <div class="bar-bg"><div class="bar-fill" style="width:${Math.round((Math.max(0, s.value) / journeyTop) * 100)}%;background:${stageColors[i]}"></div></div>
+        <span class="bar-val">${escapeHtml(formatCurrency(s.value))}</span>
+      </div>`;
+    }).join('\n');
+    const journeyCard = stages[0].value > 0
+      ? `  <div class="card">
+    <div class="card-title">ROI Journey</div>
+${journeyRows}
+  </div>\n`
+      : '';
+
+    // Year-over-year trend as a static inline SVG (mirrors TrendChart).
+    let trendCard = '';
+    if (trend.length >= 2 && trend.some(p => p.value > 0)) {
+      const W = 600, H = 180, P = 28, innerW = W - 2 * P, innerH = H - 2 * P - 18;
+      const n = trend.length;
+      const tMax = trend.reduce((m, p) => Math.max(m, p.value), 0) || 1;
+      const pts = trend.map((p, i) => ({
+        ...p,
+        x: P + (n > 1 ? (i / (n - 1)) * innerW : innerW / 2),
+        y: P + innerH - (tMax > 0 ? (p.value / tMax) * innerH : 0),
+      }));
+      const line = pts.map(p => `${p.x},${p.y}`).join(' ');
+      const baseY = P + innerH;
+      const area = `${pts[0].x},${baseY} ${line} ${pts[n - 1].x},${baseY}`;
+      const dots = pts.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="#001941"></circle>`).join('');
+      const yearLabels = pts.map(p => `<text x="${p.x}" y="${H - 14}" text-anchor="middle" font-size="12" fill="#5a6e8c">${p.year}</text>`).join('');
+      const deltas = pts.filter(p => p.deltaPct != null).map(p =>
+        `<text x="${p.x}" y="${p.y - 10}" text-anchor="middle" font-size="11" font-weight="700" fill="${p.deltaDir === 'down' ? '#c0392b' : '#1a7f4b'}">${p.deltaDir === 'down' ? '▼' : '▲'} ${Math.abs(p.deltaPct)}%</text>`).join('');
+      trendCard = `\n  <div class="card">
+    <div class="card-title">${escapeHtml(labelFor(primaryMetric))} Trend</div>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" style="display:block">
+      <polygon points="${area}" fill="rgba(0,95,134,0.12)"></polygon>
+      <polyline points="${line}" fill="none" stroke="#005f86" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+      ${dots}
+      ${yearLabels}
+      ${deltas}
+    </svg>
+  </div>`;
+    }
 
     const body = matched.length === 0
       ? `  <div class="card" style="text-align:center;color:#5a6e8c;padding:40px">No records match these filters.</div>`
       : `  <div class="metric-grid">
 ${metricCards}
-${recordsCard}
   </div>
 
-  <div class="card">
-    <div class="card-title">${escapeHtml(labelFor(primaryMetric))} by ${groupField === 'year' ? 'Year' : 'Publisher'}</div>
-${bars}
-  </div>`;
+${journeyCard}${barCard}${trendCard}`;
 
     return `<!doctype html>
 <html lang="en">
@@ -570,6 +816,8 @@ ${bars}
     .bar-bg { flex: 1; height: 8px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
     .bar-fill { height: 100%; border-radius: 4px; }
     .bar-val { min-width: 60px; text-align: right; font-size: 13px; font-weight: 700; color: var(--text-muted); }
+    .top-pill { font-size: 10px; font-weight: 800; color: #001941; background: var(--gold); border-radius: 6px; padding: 1px 7px; margin-left: 8px; }
+    .rate-chip { padding-left: 150px; font-size: 12px; font-weight: 700; color: #005f86; margin-bottom: 8px; }
     .brandbar { display: flex; align-items: center; gap: 12px; padding: 14px 20px; background: var(--navy); border-bottom: 3px solid var(--gold); border-radius: 12px 12px 0 0; }
     .brandbar img { height: 30px; }
     .brand-name { color: #fff; font-weight: 800; font-size: 16px; letter-spacing: 1px; }
@@ -635,24 +883,61 @@ ${body}
 
   return (
     <>
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Start from a template</div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Pick a layout — you'll configure filters and see a live preview before saving.</div>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--navy)' }}>Create a dashboard</div>
+        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.45 }}>
+          Start from a <strong>preset template</strong>, or build one from scratch with <strong>custom filters</strong>. Either way you'll configure the details and see a live preview before saving.
+        </div>
       </div>
-      <div className="db-grid">
-        {TEMPLATES.map(t => (
-          <button key={t.id} className="db-card" onClick={() => setBuilding({ templateId: t.id, initial: null })}>
-            <div className="db-card-head">
+
+      {/* ── Preset templates ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.7, color: 'var(--text-muted)' }}>Preset templates</span>
+        <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+      </div>
+      <div className="db-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 14 }}>
+        {TEMPLATES.filter(t => t.id !== 'custom').map(t => (
+          <button key={t.id} className="db-card" style={{ padding: 16 }} onClick={() => setBuilding({ templateId: t.id, initial: null })}>
+            <div className="db-card-head" style={{ marginBottom: 6 }}>
               <i className={`ti ${t.icon}`} aria-hidden="true" />
               <div className="db-card-title">{t.title}</div>
             </div>
             <div className="db-card-sub">{t.sub}</div>
-            <div className="db-tags">
+            <div className="db-tags" style={{ marginTop: 10 }}>
               {t.tags.map(tag => <Badge key={tag} color={t.tagColor || 'navy'}>{tag}</Badge>)}
             </div>
           </button>
         ))}
       </div>
+
+      {/* ── Or build your own ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.7, color: 'var(--text-muted)' }}>Or build your own</span>
+        <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+      </div>
+      <button
+        onClick={() => setBuilding({ templateId: 'custom', initial: null })}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 14, width: '100%',
+          textAlign: 'left', fontFamily: 'inherit', cursor: 'pointer',
+          background: 'var(--surface)', border: '2px dashed var(--gold)',
+          borderRadius: 'var(--radius-card)', padding: '14px 18px', marginBottom: 22,
+        }}
+      >
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 44, height: 44, borderRadius: 10, background: 'rgba(255,173,0,0.12)', flexShrink: 0,
+        }}>
+          <i className="ti ti-sliders" style={{ fontSize: 24, color: 'var(--gold)' }} aria-hidden="true" />
+        </span>
+        <span style={{ flex: 1 }}>
+          <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--navy)' }}>Build a custom dashboard</span>
+          <span style={{ display: 'block', fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2 }}>Mix any combination of clients, publishers, years, and metrics.</span>
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: 'var(--gold)', flexShrink: 0 }}>
+          Custom filters <i className="ti ti-arrow-right" aria-hidden="true" />
+        </span>
+      </button>
 
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Saved Dashboards</div>
       <div className="card" style={{ padding: 14 }}>
