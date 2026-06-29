@@ -5,7 +5,7 @@
     "publisher": "Oracle",
     "date_delivered": null,
     "currency": "USD",
-    "identified_risk": 1080000.0,
+    "identified_risk": 108000,
     "id_cost_avoidance": null,
     "acc_cost_avoidance": 1080000.0,
     "id_cost_optimization": null,
@@ -17,10 +17,12 @@
     "elevate_deliverable": null,
     "confidence": 95,
     "source_file": "test.pptx",
-    "saved_at": "2026-06-02T22:45:08.273838"
+    "saved_at": "2026-06-02T22:45:08.273838",
+    "record_id": "r_e11878082db1",
+    "updated_at": "2026-06-25T15:15:50.855618"
   },
   {
-    "year": 2025,
+    "year": 2026,
     "client": "one main",
     "publisher": "IBM",
     "date_delivered": null,
@@ -38,8 +40,11 @@
     "confidence": 72,
     "source_file": "OneMain - ROAR.pptx",
     "sme": "christina",
-    "stored_name": "c4ac347a474043459f53cd66a595c544.pptx",
-    "saved_at": "2026-06-22T21:35:40.314131"
+    "stored_name": "b25eb74e561c4f888f9cb69bdaacb624.pptx",
+    "saved_at": "2026-06-25T20:19:35.235447",
+    "executive_summary": {
+      "test": true
+    }
   },
   {
     "year": 2025,
@@ -61,18 +66,19 @@
     "source_file": "2025 06 - Regeneron - Quest ROAR v.1_FINAL (1).pptx",
     "sme": "christina",
     "stored_name": "c7792a5c367649ad8068c292ecfb17ef.pptx",
-    "saved_at": "2026-06-12T18:48:31.026177"
+    "saved_at": "2026-06-12T18:48:31.026177",
+    "record_id": "r_5d65de1d5b91"
   },
   {
-    "year": 2026,
-    "client": "",
-    "publisher": "",
+    "year": 2025,
+    "client": "UPS",
+    "publisher": "IBM",
     "date_delivered": null,
     "currency": "USD",
-    "identified_risk": null,
-    "id_cost_avoidance": null,
-    "acc_cost_avoidance": null,
-    "id_cost_optimization": null,
+    "identified_risk": 1080000.0,
+    "id_cost_avoidance": 1080000.0,
+    "acc_cost_avoidance": 1080000.0,
+    "id_cost_optimization": 7810175.0,
     "acc_cost_optimization": null,
     "realized_savings": null,
     "contract_spend": null,
@@ -82,8 +88,113 @@
     "confidence": 85,
     "source_file": "UPS_IBM_ROAR_2025.pdf",
     "sme": "christina",
-    "stored_name": "",
-    "saved_at": "2026-06-12T22:15:31.399394"
+    "stored_name": "5a3a6b14233c4509abff1e91a90aba90.pdf",
+    "executive_summary": {
+      "overview": "Anglepoint conducted an IBM Risk & Opportunity Assessment for UPS, covering up to 250 IBM products across 70,000 servers, 270,000 workstations, and 5 physical mainframes. The engagement identified $8.9M in total optimization potential through cost avoidance and savings opportunities, with full remediation of $1.08M in identified compliance risks.",
+      "key_accomplishments": [
+        "Achieved 100% cost avoidance on $1.08M identified compliance risk across 8 IBM products, reducing remaining risk to $0",
+        "Identified $3.59M in potential cost savings from sub-capacity products with low utilization rates (0%-63%)",
+        "Identified $2.56M in potential cost savings from non-ILMT products with underutilization",
+        "Discovered 115 total IBM distributed products with more licenses than in use, representing $7.81M optimization opportunity",
+        "Tracked deployment trends showing significant reduction in IBM ODM Server (23,400 to 7,420 units) yielding $858K savings value"
+      ],
+      "key_metrics": [
+        {
+          "label": "Total Optimization Identified",
+          "value": "$8.9M",
+          "context": "Combined cost avoidance and savings potential over 1-year period"
+        },
+        {
+          "label": "Identified Risk",
+          "value": "$1.08M",
+          "context": "Financial impact from under or incorrectly licensed IBM software"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$1.08M",
+          "context": "Full risk remediation achieved with $0 remaining risk"
+        },
+        {
+          "label": "Sub-Capacity Cost Savings",
+          "value": "$3.59M",
+          "context": "Potential savings from 23 products with excess licenses"
+        },
+        {
+          "label": "Non-ILMT Cost Savings",
+          "value": "$2.56M",
+          "context": "Potential savings from 75 products with underutilization"
+        },
+        {
+          "label": "Products with Excess Licenses",
+          "value": "115",
+          "context": "IBM distributed products found with more licenses than deployed"
+        }
+      ],
+      "recommendations": [
+        "Remove 23 IBM sub-capacity products with excess licenses from upcoming renewal if no growth plans exist ($2.34M savings potential) - Target: June 30, 2025",
+        "Validate and remove 17 sub-capacity products with active S&S but 0 deployments from renewal ($2.91M savings potential) - Target: June 30, 2025",
+        "Review 43 non-ILMT products with excess licenses for renewal reduction ($1.82M savings potential) - Target: June 30, 2025",
+        "Confirm usage and remove 32 non-ILMT products with active S&S and 0 deployments ($743K savings potential) - Target: June 30, 2025",
+        "Validate deployments for products showing 0% utilization including IBM Storage Suite, IBM Sterling Family, and IBM Cognos Analytics for Non-Production",
+        "Schedule WatsonX Implementation with product stakeholders as next strategic initiative"
+      ],
+      "primary_risks": [
+        "IBM InfoSphere DataStage Linux for System z under-licensing exposure of $339,517 (remediated)",
+        "IBM WebSphere Application Server Network Deployment compliance gap of $303,635 (remediated)",
+        "IBM DB2 Enterprise Server Edition deployment increased from 43,280 to 46,800 units, adding $107K in additional license value required",
+        "Multiple products with 0% utilization require deployment validation to confirm accurate reporting"
+      ],
+      "market_risks": [
+        "ELA Renewal deadline of June 30, 2025 requires immediate decision on license quantities for all products on ELA",
+        "IASP (US/Canada) ELP Delivery to IBM due July 31, 2025 for all sub-capacity products covered under IASP",
+        "IBM Cloud Pak for Business Automation at 36.59% utilization with $768K savings potential indicates possible over-provisioning"
+      ],
+      "additional_insights": [
+        "IBM ODM Server deployment decreased dramatically from 23,400 to 7,420 units, representing $858K in realized value",
+        "IBM MQ deployment reduced from 292,280 to 266,700 units, yielding $85K in license value reduction",
+        "6 products showed deployment increases over the past year, adding incremental licensing costs of approximately $136K",
+        "Reducing renewals not recommended for products with utilization over 60% per Anglepoint methodology",
+        "26 ACEL revenue placeholder products identified in ELA for subscription and support tracking"
+      ],
+      "next_steps": [
+        "Implement cost savings recommendations by June 30, 2025 to capture renewal optimization",
+        "Schedule WatsonX Implementation with product stakeholders",
+        "Begin Non-PVU data collection to work towards annual baseline establishment",
+        "Register and track risk remediation and opportunity realization in Elevate platform",
+        "Report realized cost savings and avoidance in upcoming Quarterly Service Review"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "$1.08M"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$1.08M"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Sub-Capacity Cost Savings",
+            "value": 3590000
+          },
+          {
+            "name": "Non-ILMT Cost Savings",
+            "value": 2560000
+          },
+          {
+            "name": "Cost Avoidance",
+            "value": 1080000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 12,
+          "remaining": 88
+        }
+      }
+    },
+    "saved_at": "2026-06-29T15:37:24.057041"
   },
   {
     "year": 2025,
@@ -105,28 +216,277 @@
     "source_file": "2025 06 - Regeneron - Quest ROAR v.1_FINAL.pptx",
     "sme": "christina",
     "stored_name": "2f9507e156df402c9a1df7512a964027.pptx",
-    "saved_at": "2026-06-16T21:53:18.060681"
+    "saved_at": "2026-06-16T21:53:18.060681",
+    "record_id": "r_f07312a69521"
   },
   {
-    "year": 2026,
-    "client": "ABB",
-    "publisher": "SAP",
-    "date_delivered": null,
+    "record_id": "r_8e830bcdda5c",
+    "year": 2024,
+    "client": "OneMain Financial",
+    "publisher": "IBM",
+    "date_delivered": "August 2024",
     "currency": "USD",
-    "identified_risk": 27100000.0,
+    "identified_risk": null,
     "id_cost_avoidance": null,
-    "acc_cost_avoidance": null,
-    "id_cost_optimization": 297300.0,
-    "acc_cost_optimization": 0.0,
+    "acc_cost_avoidance": 21100.0,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
     "realized_savings": null,
-    "contract_spend": 0.0,
+    "contract_spend": 398000.0,
     "pricing_available": null,
     "notes": null,
     "elevate_deliverable": null,
-    "confidence": 75,
-    "source_file": "ROAR 2026 March 30  - ABB - SAP_DRAFT.pdf",
-    "sme": "Porter",
-    "stored_name": "af7f2117d107452fb60053c6bc8d990b.pdf",
-    "saved_at": "2026-06-25T20:20:52.536102"
+    "confidence": 77,
+    "source_file": "2024 08 OneMain_IBM_ROAR.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "contract_spend": {
+        "source_slide": 12,
+        "confidence": 92.0,
+        "alternates": null
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 61.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.274733"
+  },
+  {
+    "record_id": "r_2cc46a833b73",
+    "year": 2026,
+    "client": "Encova Insurance",
+    "publisher": "IBM",
+    "date_delivered": "January 2026",
+    "currency": "USD",
+    "identified_risk": 222000.0,
+    "id_cost_avoidance": 222000.0,
+    "acc_cost_avoidance": 222000.0,
+    "id_cost_optimization": 507000.0,
+    "acc_cost_optimization": 282000.0,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 91,
+    "source_file": "2025 December_Encova Insurance_IBM_ROAR_v1.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 89.0,
+        "alternates": null
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": null
+      },
+      "acc_cost_optimization": {
+        "source_slide": 13,
+        "confidence": 95.0,
+        "alternates": [
+          {
+            "value": "$507,000",
+            "confidence": 62
+          }
+        ]
+      },
+      "id_cost_optimization": {
+        "source_slide": 12,
+        "confidence": 92.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.285693"
+  },
+  {
+    "record_id": "r_b3c6f4845738",
+    "year": 2026,
+    "client": "KeyBank",
+    "publisher": "IBM",
+    "date_delivered": "2026",
+    "currency": "USD",
+    "identified_risk": 31600.0,
+    "id_cost_avoidance": 31600.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 5200000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 79,
+    "source_file": "2026 04 KeyBank_IBMRH_ROAR_Draft_v2.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "id_cost_optimization": {
+        "source_slide": 12,
+        "confidence": 75.0,
+        "alternates": [
+          {
+            "value": "$714,300",
+            "confidence": 55
+          }
+        ]
+      },
+      "identified_risk": {
+        "source_slide": 11,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 79.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.293955"
+  },
+  {
+    "record_id": "r_7e346cfc8760",
+    "year": 2026,
+    "client": "Walmart",
+    "publisher": "Oracle",
+    "date_delivered": "May 2026",
+    "currency": "USD",
+    "identified_risk": 9300000.0,
+    "id_cost_avoidance": 9300000.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 85,
+    "source_file": "2026 05 06 - Walmart - Oracle ROAR.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 15,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 14,
+        "confidence": 88.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.298934"
+  },
+  {
+    "record_id": "r_84ef007ffbf7",
+    "year": 2025,
+    "client": "NASDAQ (IASP)",
+    "publisher": "IBM",
+    "date_delivered": "May 2025",
+    "currency": "USD",
+    "identified_risk": 0.0,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 82,
+    "source_file": "NASDAQ IBM ROAR 20250501.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 10,
+        "confidence": 82.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.301765"
+  },
+  {
+    "record_id": "r_53501fdbf057",
+    "year": 2023,
+    "client": "Nike",
+    "publisher": "Microsoft",
+    "date_delivered": "May 2023",
+    "currency": "USD",
+    "identified_risk": 685000.0,
+    "id_cost_avoidance": 5400000.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 81,
+    "source_file": "Nike_ROAR_5.5.23.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 11,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 79.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.314733"
+  },
+  {
+    "record_id": "r_685460c42924",
+    "year": 2024,
+    "client": "State of Utah",
+    "publisher": "IBM Risk & Opportunity Assessment Report (ROAR)",
+    "date_delivered": "July 2024",
+    "currency": "USD",
+    "identified_risk": 2800000.0,
+    "id_cost_avoidance": 2100000.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 81,
+    "source_file": "State of Utah_IBM_ROAR 2024 2024.07.18.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 10,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 10,
+        "confidence": 79.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.327597"
   }
 ]

@@ -59,7 +59,10 @@ Usage:
 
 import math
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from pptx import Presentation
@@ -88,6 +91,46 @@ CURRENCY_SYMBOLS = [
 # Value magnitude multipliers
 MULTIPLIERS = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}
 
+
+def _find_pdf_converter() -> str | None:
+    """Return the first available LibreOffice/soffice converter binary."""
+    for command in ("soffice", "libreoffice"):
+        if shutil.which(command):
+            return command
+    return None
+
+
+def convert_pdf_to_pptx(pdf_path: Path, output_dir: Path) -> Path:
+    """Convert a PDF to PPTX via LibreOffice and return the output path."""
+    converter = _find_pdf_converter()
+    if converter is None:
+        raise RuntimeError(
+            "PDF conversion requires LibreOffice or soffice to be installed. "
+            "Install LibreOffice, or upload a PPTX file instead."
+        )
+
+    command = [
+        converter,
+        "--headless",
+        "--convert-to",
+        "pptx",
+        "--outdir",
+        str(output_dir),
+        str(pdf_path),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"PDF conversion failed: exit {result.returncode}. "
+            f"stdout={result.stdout!r} stderr={result.stderr!r}"
+        )
+
+    converted_path = output_dir / f"{pdf_path.stem}.pptx"
+    if not converted_path.exists():
+        raise RuntimeError(f"Expected converted PPTX not found: {converted_path}")
+    return converted_path
+
+
 # Month + year detection on ROAR cover slides.
 # Month and year are detected INDEPENDENTLY so that whichever is present gets
 # populated — a cover showing only "2026" yields a year with no month, and
@@ -114,13 +157,15 @@ YEAR_RE = re.compile(r"\b(19\d{2}|20\d{2})\b")
 
 # ROI field label patterns — matched case-insensitively against individual
 # shape text strings (NOT across shape boundaries).
+# Note: patterns also recognize "potential" variants (e.g., "potential risk" for "identified_risk")
+# and now also recognize "initial risk" for identified risk.
 FIELD_PATTERNS = {
-    "identified_risk":               r"identified\s+(?:financial\s+)?risk",
-    "identified_cost_avoidance":     r"identified\s+(?:cost\s+)?avoidance",
+    "identified_risk":               r"(?:identified|potential|initial)\s+(?:financial\s+)?risk",
+    "identified_cost_avoidance":     r"(?:identified|potential)\s+(?:cost\s+)?avoidance",
     "accomplished_cost_avoidance":   r"accomplished\s+(?:cost\s+)?avoidance",
-    "identified_cost_optimization":  r"identified\s+cost\s+optimi[sz]ation",
+    "identified_cost_optimization":  r"(?:identified|potential)\s+cost\s+optimi[sz]ation",
     "accomplished_cost_optimization":r"accomplished\s+cost\s+optimi[sz]ation",
-    "remaining_risk":                r"remaining\s+(?:financial\s+)?risk",
+    "remaining_risk":                r"(?:remaining|potential)\s+(?:financial\s+)?risk",
     "realized_cost_savings":         r"reali[sz]ed\s+cost\s+savings",
 }
 
@@ -309,6 +354,66 @@ def is_design_element(text: str) -> bool:
     )
 
 
+def _is_likely_same_box_label_value_pair(text: str, label_match, value_match) -> bool:
+    """
+    Return True if the shape text looks like a discrete label/value pair.
+
+    Same-box extraction is powerful, but it can also mis-handle narrative
+    sentences such as "Anglepoint identified potential cost avoidance and
+    savings totaling $5.3M." That kind of phrasing is not a dedicated field
+    label/value pair, so we should avoid extracting it as a standalone field.
+    """
+    if value_match.start() < label_match.start():
+        return False
+
+    suffix = text[label_match.end():value_match.start()].strip()
+    if not suffix:
+        return True
+
+    # Common separators between label and value.
+    if suffix in (':', '-', '—', '–', ';'):
+        return True
+
+    if _is_likely_multi_field_suffix(suffix):
+        return False
+
+    return True
+
+
+def _is_likely_adjacency_label_value_pair(text: str, label_match) -> bool:
+    """
+    Return True if the shape text looks like a standalone label whose value may
+    live in the next text entry.
+
+    Reject narrative continuation like
+    "Anglepoint identified potential cost avoidance and savings totaling"
+    because that is not a dedicated field label/value pair.
+    """
+    suffix = text[label_match.end():].strip()
+    if not suffix:
+        return True
+
+    if suffix in (':', '-', '—', '–', ';'):
+        return True
+
+    if _is_likely_multi_field_suffix(suffix):
+        return False
+
+    return True
+
+
+def _is_likely_multi_field_suffix(text: str) -> bool:
+    """
+    Return True if the suffix looks like it is referring to more than one ROI
+    concept, e.g. "and savings totaling" after a label.
+    """
+    text_l = text.lower()
+    return bool(re.search(
+        r'\b(?:and|plus|with|including|totaling|which|along with)\b.*\b(?:savings|optimization|risk|cost avoidance|cost savings|cost optimization|identified risk|remaining risk|potential cost avoidance|accomplished cost avoidance|identified cost optimization|accomplished cost optimization|realized cost savings)\b',
+        text_l
+    ))
+
+
 def parse_dollar_match(match) -> tuple[float | None, str]:
     """
     Convert a DOLLAR_VALUE_RE regex match to (numeric value, ISO currency code).
@@ -492,23 +597,25 @@ def extract_roi_fields_from_slide(slide) -> dict:
 
             # Graded label match: how cleanly the canonical label appears here.
             label_fit = fuzz.partial_ratio(canonical, s.lower()) / 100.0
+            label_match = label_re.search(s)
 
             # Phase 1: value in the same box as the label.
             val_match = DOLLAR_VALUE_RE.search(s)
-            if val_match:
-                value, currency = parse_dollar_match(val_match)
-                if value is not None:
-                    candidates.setdefault(field, []).append({
-                        "value": value, "currency": currency, "raw": s.strip(),
-                        "proximity": PROXIMITY_SAME_BOX, "label_fit": label_fit,
-                        "shape_id": entry["shape_id"], "shape_name": entry["shape_name"],
-                    })
+            if val_match and label_match:
+                if _is_likely_same_box_label_value_pair(s, label_match, val_match):
+                    value, currency = parse_dollar_match(val_match)
+                    if value is not None:
+                        candidates.setdefault(field, []).append({
+                            "value": value, "currency": currency, "raw": s.strip(),
+                            "proximity": PROXIMITY_SAME_BOX, "label_fit": label_fit,
+                            "shape_id": entry["shape_id"], "shape_name": entry["shape_name"],
+                        })
                 continue  # handled this label hit; keep scanning for more
 
             # Phase 2: value in an adjacent box (next 1–3 entries).
             for dist, j in enumerate(range(i + 1, min(i + 4, len(entries))), start=1):
                 val_match = DOLLAR_VALUE_RE.search(entries[j]["text"])
-                if val_match:
+                if val_match and _is_likely_adjacency_label_value_pair(s, label_match):
                     value, currency = parse_dollar_match(val_match)
                     if value is not None:
                         candidates.setdefault(field, []).append({
@@ -782,6 +889,51 @@ def extract_roar(filepath: str) -> dict:
 
     if not path.exists():
         raise FileNotFoundError(f"File not found: {filepath}")
+
+    if path.suffix.lower() == ".pdf":
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            path = convert_pdf_to_pptx(path, temp_dir)
+            warnings_out.append(f"Converted PDF to PPTX: {path.name}")
+
+            prs = Presentation(str(path))
+            core_props = extract_core_properties(prs)
+
+            cover = extract_cover_info(prs)
+            if not cover["client"]:
+                warnings_out.append("Could not extract client name from Slide 1.")
+            if not cover["publisher"]:
+                warnings_out.append("Could not extract publisher from Slide 1 title.")
+            if not cover["month"]:
+                warnings_out.append("Could not extract month from Slide 1.")
+            if not cover["year"]:
+                warnings_out.append("Could not extract year from Slide 1.")
+
+            exec_indices = find_exec_summary_slides(prs)
+            if not exec_indices:
+                warnings_out.append("Executive Summary section not found. No ROI fields extracted.")
+                roi_fields = {}
+                dominant_currency = "USD"
+            else:
+                raw = extract_roi_from_slides(prs, exec_indices)
+                dominant_currency = raw.pop("_currency", "USD")
+                roi_fields = raw
+
+            fields_not_found = [f for f in FIELD_PATTERNS if f not in roi_fields]
+
+            return {
+                "file":              Path(filepath).name,
+                "core_properties":   core_props,
+                "client":            cover["client"],
+                "publisher":         cover["publisher"],
+                "month":             cover["month"],
+                "year":              cover["year"],
+                "currency":          dominant_currency,
+                "roi_fields":        roi_fields,
+                "fields_not_found":  fields_not_found,
+                "warnings":          warnings_out,
+            }
+
     if path.suffix.lower() not in (".pptx", ".ppt"):
         warnings_out.append(f"Unexpected file extension: {path.suffix}")
 
@@ -839,6 +991,6 @@ if __name__ == "__main__":
     # print(sys.argv[1])
 
     # result = extract_roar(sys.argv[1])
-    result = extract_roar(r'/Users/chrissi/Documents/OneMain - ROAR.pptx')
-    # result = extract_roar(r"/Users/chrissi/Documents/2025 December_Encova Insurance_IBM_ROAR_v1.pptx")
+    # result = extract_roar(r'/Users/chrissi/Documents/OneMain - ROAR.pptx')
+    result = extract_roar(r"/Users/chrissi/Documents/2025 December_Encova Insurance_IBM_ROAR_v1.pptx")
     print(json.dumps(result, indent=2, default=str))

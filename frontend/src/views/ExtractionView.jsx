@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
-import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, generateExecutiveSummary } from '../services/api';
+import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
+import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, generateExecutiveSummary, saveExecutiveSummary } from '../services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -939,7 +940,38 @@ function deriveCommonMeta(results) {
 }
 
 // Build the flat ROI record the backend expects from a file's meta + fields.
-function buildRecord(meta, fields, sme) {
+// Canonical UI label → backend model key. Used for BOTH value extraction and
+// per-field provenance, so the two always stay in sync.
+const LABEL_TO_KEY = {
+  'Identified Risk':                'identified_risk',
+  'Identified Cost Avoidance':      'id_cost_avoidance',
+  'Accomplished Cost Avoidance':    'acc_cost_avoidance',
+  'Identified Cost Optimization':   'id_cost_optimization',
+  'Accomplished Cost Optimization': 'acc_cost_optimization',
+  'Identified Cost Savings':        'realized_savings',
+  'Realized Cost Savings':          'contract_spend',
+};
+
+// Build per-field provenance (source slide + confidence + alternates) from the
+// script extractor's scriptData map, keyed by backend model field name. Returns
+// null when there's no provenance to attach (e.g. aggregate records).
+function buildFieldMeta(scriptData) {
+  if (!scriptData || typeof scriptData !== 'object') return null;
+  const out = {};
+  for (const [label, key] of Object.entries(LABEL_TO_KEY)) {
+    const s = scriptData[label];
+    if (!s) continue;
+    if (s.sourceSlide == null && s.confidence == null && !(s.alternates?.length)) continue;
+    out[key] = {
+      source_slide: s.sourceSlide ?? null,
+      confidence:   s.confidence ?? null,
+      alternates:   (s.alternates || []).map(a => ({ value: a.value, confidence: a.confidence })),
+    };
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function buildRecord(meta, fields, sme, scriptData = null) {
   const getValue = (label) => {
     const f = fields.find(x => x.label === label);
     const n = parseDollar(f?.value);
@@ -960,6 +992,7 @@ function buildRecord(meta, fields, sme) {
     source_file:           meta?.filename || meta?.name || meta?.file_path || '',
     stored_name:           meta?.stored_name || '',
     sme:                   sme || '',
+    field_meta:            buildFieldMeta(scriptData),
   };
 }
 
@@ -2229,10 +2262,9 @@ function DollarTooltip({ active, payload, label }) {
 }
 
 function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onDashboards }) {
-  const [summary, setSummary]       = useState(null);
+  const [summary, setSummary]             = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summaryError, setSummaryError]     = useState(null);
-  const doneRef = useRef(null);
+  const [summaryError, setSummaryError]   = useState(null);
   const summaryRef = useRef(null);
 
   const parseDollar = (v) => {
@@ -2250,13 +2282,13 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   const fields = finalFields || [];
   const get = (label) => parseDollar(fields.find(f => f.label === label)?.value);
 
-  const idRisk         = get('Identified Risk');
-  const idAvoidance    = get('Identified Cost Avoidance');
-  const accAvoidance   = get('Accomplished Cost Avoidance');
-  const idOptimization = get('Identified Cost Optimization');
-  const accOptimization= get('Accomplished Cost Optimization');
-  const realizedSavings= get('Identified Cost Savings');
-  const contractSpend  = get('Realized Cost Savings');
+  const idRisk          = get('Identified Risk');
+  const idAvoidance     = get('Identified Cost Avoidance');
+  const accAvoidance    = get('Accomplished Cost Avoidance');
+  const idOptimization  = get('Identified Cost Optimization');
+  const accOptimization = get('Accomplished Cost Optimization');
+  const realizedSavings = get('Identified Cost Savings');
+  const contractSpend   = get('Realized Cost Savings');
 
   const totalSavings = idAvoidance + idOptimization + realizedSavings || idRisk || 0;
   const netROI       = accAvoidance + accOptimization || 0;
@@ -2271,25 +2303,6 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   const year      = selectedFile?.year      || selectedFile?.upYear      || '';
   const subtitle  = [client, publisher, year].filter(Boolean).join(' · ');
 
-  // Bar chart data
-  const COLORS = ['#005f86', '#0089af', '#ffad00', '#2d9e5c', '#001941', '#4a6a9c'];
-  const barData = [
-    { name: 'Id. Risk',      value: idRisk },
-    { name: 'Id. Avoidance', value: idAvoidance },
-    { name: 'Acc. Avoidance',value: accAvoidance },
-    { name: 'Id. Optim.',    value: idOptimization },
-    { name: 'Acc. Optim.',   value: accOptimization },
-    { name: 'Realized',      value: realizedSavings },
-  ].filter(d => d.value > 0);
-
-  // Donut chart: Identified vs Accomplished
-  const donutData = [
-    { name: 'Accomplished', value: netROI },
-    { name: 'Remaining',    value: Math.max(0, totalSavings - netROI) },
-  ].filter(d => d.value > 0);
-  const DONUT_COLORS = ['#005f86', '#e6e8ec'];
-
-  // Fetch executive summary once on mount
   useEffect(() => {
     if (!fields.length) return;
     setSummaryLoading(true);
@@ -2307,7 +2320,14 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
       stored_name:           selectedFile?.stored_name || null,
       file_path:             selectedFile?.file_path   || null,
     })
-      .then(data => setSummary(data))
+      .then(data => {
+        setSummary(data);
+        // Persist the summary onto the saved record so the Tracker can show it without re-generating
+        const sourceFile = selectedFile?.stored_name || selectedFile?.name || selectedFile?.file_path;
+        if (sourceFile) {
+          saveExecutiveSummary(sourceFile, data).catch(() => {});
+        }
+      })
       .catch(() => setSummaryError('Could not generate summary. Check your API key.'))
       .finally(() => setSummaryLoading(false));
   }, []);
@@ -2330,7 +2350,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   };
 
   return (
-    <div ref={doneRef}>
+    <div>
       {/* Header */}
       <div className="done-hero">
         <div className="done-check">
@@ -2346,8 +2366,8 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
           <Badge color="green">
             <i className="ti ti-circle-check" aria-hidden="true" /> All records stored
           </Badge>
-          <button className="btn ghost small no-print" onClick={handleDownloadPDF}>
-            <i className="ti ti-file-type-pdf" aria-hidden="true" /> Download Executive Summary PDF
+          <button className="btn ghost small no-print" onClick={handleDownloadPDF} disabled={!summary}>
+            <i className="ti ti-file-type-pdf" aria-hidden="true" /> Download PDF
           </button>
         </div>
       </div>
@@ -2371,124 +2391,35 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
         </div>
       </div>
 
-      {/* Charts */}
-      {barData.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: donutData.length > 1 ? '1fr 1fr' : '1fr', gap: 16, marginBottom: 16 }}>
-
-          {/* Bar chart */}
-          <div className="card">
-            <div className="card-title">
-              <i className="ti ti-chart-bar" aria-hidden="true" />
-              ROI Breakdown{client ? ` — ${client}` : ''}
-            </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#5a6e8c' }} />
-                <YAxis tickFormatter={v => v >= 1e6 ? `$${(v/1e6).toFixed(0)}M` : v >= 1e3 ? `$${(v/1e3).toFixed(0)}K` : `$${v}`} tick={{ fontSize: 10, fill: '#5a6e8c' }} width={52} />
-                <Tooltip content={<DollarTooltip />} />
-                <Bar dataKey="value" name="Value" radius={[4, 4, 0, 0]}>
-                  {barData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Donut chart */}
-          {donutData.length > 1 && (
-            <div className="card">
-              <div className="card-title">
-                <i className="ti ti-chart-donut" aria-hidden="true" />
-                Accomplished vs Remaining
-              </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={donutData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} dataKey="value" paddingAngle={2}>
-                    {donutData.map((_, i) => <Cell key={i} fill={DONUT_COLORS[i]} />)}
-                  </Pie>
-                  <Tooltip content={<DollarTooltip />} />
-                  <Legend formatter={(v) => <span style={{ fontSize: 12, color: '#001941' }}>{v}</span>} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Executive Summary */}
-      <div className="card" style={{ marginBottom: 16 }} ref={summaryRef}>
-        <div className="card-title" style={{ marginBottom: 12 }}>
-          <i className="ti ti-file-description" aria-hidden="true" />
-          Executive Summary{subtitle ? ` — ${subtitle}` : ''}
+      {/* Executive Summary Report */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <i className="ti ti-file-description" style={{ fontSize: 18, color: 'var(--blue)' }} />
+          <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--navy)' }}>
+            Executive Summary{subtitle ? ` — ${subtitle}` : ''}
+          </span>
         </div>
 
         {summaryLoading && (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} />
-            Generating executive summary with Claude AI…
+          <div className="card" style={{ color: 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, padding: 24 }}>
+            <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite', fontSize: 20 }} />
+            Generating executive summary with Claude AI… This may take 15–30 seconds.
           </div>
         )}
 
         {summaryError && (
-          <div style={{ color: 'var(--red)', fontSize: 13 }}>{summaryError}</div>
+          <div className="card" style={{ color: 'var(--red)', fontSize: 13 }}>{summaryError}</div>
         )}
 
         {summary && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-            {/* Objective */}
-            <div style={{ background: 'var(--navy)', borderRadius: 8, padding: '14px 18px', color: '#fff' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 6 }}>Engagement Objective</div>
-              <p style={{ fontSize: 14, lineHeight: 1.6, margin: 0 }}>{summary.objective}</p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              {/* Accomplishments */}
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--blue)', marginBottom: 10 }}>
-                  <i className="ti ti-circle-check" /> Accomplishments
-                </div>
-                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {(summary.accomplishments || []).map((item, i) => (
-                    <li key={i} style={{ display: 'flex', gap: 10, fontSize: 13, lineHeight: 1.5 }}>
-                      <span style={{ color: 'var(--green)', fontWeight: 700, flexShrink: 0 }}>✓</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Recommendations */}
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--blue)', marginBottom: 10 }}>
-                  <i className="ti ti-bulb" /> Recommendations
-                </div>
-                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {(summary.recommendations || []).map((item, i) => (
-                    <li key={i} style={{ display: 'flex', gap: 10, fontSize: 13, lineHeight: 1.5 }}>
-                      <span style={{ color: 'var(--gold)', fontWeight: 700, flexShrink: 0 }}>→</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* Highlights */}
-            {summary.highlights?.length > 0 && (
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {summary.highlights.map((h, i) => (
-                  <div key={i} style={{ background: 'var(--blue-pale)', borderRadius: 8, padding: '10px 16px', flex: '1 1 140px' }}>
-                    <div style={{ fontSize: 11, color: 'var(--blue)', fontWeight: 600 }}>{h.label}</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)' }}>{h.value}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-              Generated by Claude AI · Anglepoint ROI Extraction Platform · {new Date().toLocaleDateString()}
-            </div>
-          </div>
+          <ExecutiveSummaryReport
+            summary={summary}
+            subtitle={subtitle}
+            client={client}
+            publisher={publisher}
+            kpiFields={fields}
+            innerRef={summaryRef}
+          />
         )}
       </div>
 
@@ -2569,7 +2500,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
   // Write a record per (non-excluded) file, plus the aggregate row when storing
   // a real multi-file batch. A single-file batch stores exactly one record, with
   // any Store-screen edits applied — matching the original behavior.
-  const handleStore = (editedAggregateFields) => {
+  const handleStore = async (editedAggregateFields) => {
     const sme = smeName || loggedInUser || '';
     const active = fileResults.filter(r => !r.excluded && r.finalFields);
     const isMulti = active.length > 1;
@@ -2577,11 +2508,12 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     if (!isMulti) {
       const only = active[0];
       const meta = only?.fileMeta || files[0] || {};
-      saveRecord(buildRecord(meta, editedAggregateFields, sme))
+      // Single-file: provenance comes from that file's script extraction.
+      saveRecord(buildRecord(meta, editedAggregateFields, sme, only?.scriptData))
         .catch(err => console.error('[Store] saveRecord failed:', err));
     } else {
       active.forEach(r => {
-        saveRecord(buildRecord(r.fileMeta, r.finalFields, sme))
+        saveRecord(buildRecord(r.fileMeta, r.finalFields, sme, r.scriptData))
           .catch(err => console.error('[Store] saveRecord failed:', err));
       });
       if (storeAggregate) {
@@ -2592,7 +2524,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
         };
         const aggRecord = buildRecord(aggMeta, editedAggregateFields, sme);
         aggRecord.source_file = `Aggregate — ${commonMeta.client || 'Multi-client'} ${commonMeta.year || ''}`.trim();
-        saveRecord(aggRecord).catch(err => console.error('[Store] aggregate saveRecord failed:', err));
+        await saveRecord(aggRecord).catch(err => console.error('[Store] aggregate saveRecord failed:', err));
       }
     }
 
