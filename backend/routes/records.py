@@ -2,6 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse, Response
+from typing import Optional
 from pydantic import BaseModel
 
 from config import TRACKER_API_KEY
@@ -69,6 +70,24 @@ def list_records():
     return get_all_records()
 
 
+class SummaryPatch(BaseModel):
+    identifier: Optional[str] = None   # record_id, stored_name, or source_file
+    source_file: Optional[str] = None  # legacy field name kept for compatibility
+    executive_summary: dict
+
+
+@router.patch("/records/executive-summary")
+def update_executive_summary(body: SummaryPatch):
+    """Attach a generated executive summary to an existing record."""
+    identifier = body.identifier or body.source_file
+    if not identifier:
+        raise HTTPException(status_code=400, detail="identifier or source_file required")
+    updated = patch_executive_summary(identifier, body.executive_summary)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Record not found for identifier: {identifier}")
+    return {"status": "updated", "record_id": updated.get("record_id")}
+
+
 @router.patch("/records/{record_id}")
 def edit_record(record_id: str, update: RecordUpdate):
     """Apply a partial edit to a stored record. Each changed field is logged to
@@ -98,18 +117,6 @@ def audit_log():
 def list_records_secure(_auth: None = Depends(require_tracker_api_key)):
     """Return all saved ROI records via a secure API endpoint."""
     return get_all_records()
-class SummaryPatch(BaseModel):
-    source_file: str
-    executive_summary: dict
-
-
-@router.patch("/records/executive-summary")
-def update_executive_summary(body: SummaryPatch):
-    """Attach a generated executive summary to an existing record by source_file."""
-    updated = patch_executive_summary(body.source_file, body.executive_summary)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Record not found")
-    return {"status": "updated"}
 
 
 @router.get("/records/export.csv")

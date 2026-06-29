@@ -71,24 +71,33 @@ def _save(records: list[dict]):
 
 
 def save_record(record: ROIRecord) -> dict:
-    """Upsert an ROI record by source_file — prevents duplicates. Assigns a
-    stable record_id (preserved across re-saves) and logs the store event."""
+    """Upsert an ROI record by stored_name or source_file — prevents duplicates.
+    Assigns a stable record_id and preserves the executive_summary on re-save."""
     records = _load()
     entry = record.model_dump()
     entry["saved_at"] = datetime.utcnow().isoformat()
 
-    if entry.get("source_file"):
-        for i, r in enumerate(records):
-            if r.get("source_file") == entry["source_file"]:
-                # Re-store of an existing file: keep its id, record an update event.
-                entry["record_id"] = r.get("record_id") or _new_record_id()
-                records[i] = entry
-                _save(records)
-                audit.append_event(
-                    entry["record_id"], "update", user=entry.get("sme"),
-                    note="Re-stored from extraction",
-                )
-                return entry
+    # Match by stored_name (UUID hash) first, then by source_file (original name).
+    def _matches(r):
+        if entry.get("stored_name") and r.get("stored_name") == entry["stored_name"]:
+            return True
+        if entry.get("source_file") and r.get("source_file") == entry["source_file"]:
+            return True
+        return False
+
+    for i, r in enumerate(records):
+        if _matches(r):
+            entry["record_id"] = r.get("record_id") or _new_record_id()
+            # Never wipe an existing executive_summary when re-saving.
+            if not entry.get("executive_summary") and r.get("executive_summary"):
+                entry["executive_summary"] = r["executive_summary"]
+            records[i] = entry
+            _save(records)
+            audit.append_event(
+                entry["record_id"], "update", user=entry.get("sme"),
+                note="Re-stored from extraction",
+            )
+            return entry
 
     # Brand-new record.
     entry["record_id"] = entry.get("record_id") or _new_record_id()
@@ -125,11 +134,13 @@ def update_record(record_id: str, changes: dict, user: str | None = None,
     raise KeyError(record_id)
 def patch_executive_summary(identifier: str, summary: dict) -> dict | None:
     """Attach an executive summary to an existing record.
-    Matches by stored_name first (the UUID filename), then by source_file (original name).
+    Matches by record_id, stored_name, or source_file — whichever works first.
     """
     records = _load()
     for i, r in enumerate(records):
-        if r.get("stored_name") == identifier or r.get("source_file") == identifier:
+        if (r.get("record_id") == identifier
+                or r.get("stored_name") == identifier
+                or r.get("source_file") == identifier):
             records[i]["executive_summary"] = summary
             _save(records)
             return records[i]

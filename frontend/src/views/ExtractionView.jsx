@@ -2323,10 +2323,15 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
     })
       .then(data => {
         setSummary(data);
-        // Persist the summary onto the saved record so the Tracker can show it without re-generating
-        const sourceFile = selectedFile?.stored_name || selectedFile?.name || selectedFile?.file_path;
-        if (sourceFile) {
-          saveExecutiveSummary(sourceFile, data).catch(() => {});
+        // Persist the summary — prefer record_id (unambiguous), fall back to stored_name/name.
+        const identifier = selectedFile?.record_id
+          || selectedFile?.stored_name
+          || selectedFile?.name
+          || selectedFile?.file_path;
+        if (identifier) {
+          saveExecutiveSummary(identifier, data).catch(err =>
+            console.error('[ScreenDone] auto-save executive summary failed:', err)
+          );
         }
       })
       .catch(() => setSummaryError('Could not generate summary. Check your API key.'))
@@ -2335,14 +2340,18 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
 
   const handleSaveToTracker = async () => {
     if (!summary) return;
-    const sourceFile = selectedFile?.stored_name || selectedFile?.name || selectedFile?.file_path;
-    if (!sourceFile) { setSaveStatus('error'); return; }
+    const identifier = selectedFile?.record_id
+      || selectedFile?.stored_name
+      || selectedFile?.name
+      || selectedFile?.file_path;
+    if (!identifier) { setSaveStatus('error'); return; }
     setSaveStatus('saving');
     try {
-      await saveExecutiveSummary(sourceFile, summary);
+      await saveExecutiveSummary(identifier, summary);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus(null), 3000);
-    } catch {
+    } catch (err) {
+      console.error('[SaveToTracker] failed:', err);
       setSaveStatus('error');
       setTimeout(() => setSaveStatus(null), 4000);
     }
@@ -2478,6 +2487,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
   const [aggregateFields, setAggregateFields]   = useState(null);
   const [storeAggregate, setStoreAggregate]     = useState(true);
   const [filters, setFilters]                   = useState({});
+  const [savedRecordId, setSavedRecordId]       = useState(null);
 
   // Both the upload card and the Files scan hand back an array of files.
   const handleFilesSelected = (picked) => {
@@ -2532,17 +2542,20 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     const active = fileResults.filter(r => !r.excluded && r.finalFields);
     const isMulti = active.length > 1;
 
+    let primaryRecordId = null;
+
     if (!isMulti) {
       const only = active[0];
       const meta = only?.fileMeta || files[0] || {};
-      // Single-file: provenance comes from that file's script extraction.
-      await saveRecord(buildRecord(meta, editedAggregateFields, sme, only?.scriptData))
-        .catch(err => console.error('[Store] saveRecord failed:', err));
+      const saved = await saveRecord(buildRecord(meta, editedAggregateFields, sme, only?.scriptData))
+        .catch(err => { console.error('[Store] saveRecord failed:', err); return null; });
+      primaryRecordId = saved?.record_id || null;
     } else {
-      await Promise.all(active.map(r =>
+      const results = await Promise.all(active.map(r =>
         saveRecord(buildRecord(r.fileMeta, r.finalFields, sme, r.scriptData))
-          .catch(err => console.error('[Store] saveRecord failed:', err))
+          .catch(err => { console.error('[Store] saveRecord failed:', err); return null; })
       ));
+      primaryRecordId = results[0]?.record_id || null;
       if (storeAggregate) {
         const aggMeta = {
           client:    commonMeta.client,
@@ -2551,10 +2564,12 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
         };
         const aggRecord = buildRecord(aggMeta, editedAggregateFields, sme);
         aggRecord.source_file = `Aggregate — ${commonMeta.client || 'Multi-client'} ${commonMeta.year || ''}`.trim();
-        await saveRecord(aggRecord).catch(err => console.error('[Store] aggregate saveRecord failed:', err));
+        const aggSaved = await saveRecord(aggRecord).catch(err => { console.error('[Store] aggregate saveRecord failed:', err); return null; });
+        if (!primaryRecordId) primaryRecordId = aggSaved?.record_id || null;
       }
     }
 
+    setSavedRecordId(primaryRecordId);
     setAggregateFields(editedAggregateFields);
     setStep(6);
   };
@@ -2587,6 +2602,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     stored_name: activeResults[0]?.fileMeta?.stored_name || null,
     file_path:   activeResults[0]?.fileMeta?.file_path   || null,
     name:        activeResults.length > 1 ? `${activeResults.length} files` : (activeResults[0]?.fileMeta?.name || ''),
+    record_id:   savedRecordId,
   };
 
   const screens = [
