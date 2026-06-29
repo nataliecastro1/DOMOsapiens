@@ -386,23 +386,15 @@ function TabROIData() {
           <table className="data-table">
             <thead>
               <tr>
-                <th style={{ width: 30 }}>#</th>
-                {visibleCols.map(col => (
-                  <th
-                    key={col.key}
-                    draggable
-                    onDragStart={() => { dragKey.current = col.key; }}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => { reorder(dragKey.current, col.key); dragKey.current = null; }}
-                    style={{ cursor: 'grab', whiteSpace: 'nowrap' }}
-                    title="Drag to reorder"
-                  >
-                    {col.label}{col.editable && <i className="ti ti-pencil" style={{ fontSize: 11, marginLeft: 4, color: 'var(--text-faint)' }} aria-hidden="true" />}
-                  </th>
-                ))}
-                <th>#</th><th>Client</th><th>Publisher</th><th>Year</th>
-                <th>Total Savings</th><th>Confidence</th>
-                <th>SME</th><th>Source File</th><th>Status</th>
+                <th>#</th>
+                <th>Client</th>
+                <th>Publisher</th>
+                <th>Year</th>
+                <th>Total Savings</th>
+                <th>Confidence</th>
+                <th>SME</th>
+                <th>Source File</th>
+                <th>Status</th>
                 <th>Exec. Summary</th>
               </tr>
             </thead>
