@@ -608,19 +608,55 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
   );
 }
 
+// Banner shown when the view is scoped to a filtered subset sent from the Tracker.
+function ScopeBanner({ count, onClear }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
+      padding: '10px 14px', borderRadius: 10,
+      background: 'rgba(255,173,0,0.10)', border: '1.5px solid var(--gold)',
+    }}>
+      <i className="ti ti-filter-cog" style={{ fontSize: 18, color: 'var(--gold)', flexShrink: 0 }} aria-hidden="true" />
+      <span style={{ flex: 1, fontSize: 13, color: 'var(--navy)' }}>
+        Scoped to a filtered view from the Tracker — <strong>{count} record{count === 1 ? '' : 's'}</strong>.
+        Builder filters &amp; charts only see these rows.
+      </span>
+      <button className="btn ghost small" onClick={onClear} title="Return to all records">
+        <i className="ti ti-x" aria-hidden="true" /> Use all records
+      </button>
+    </div>
+  );
+}
+
 // ─── Dashboards view ──────────────────────────────────────────────────────────
-export default function DashboardsView() {
-  const [records, setRecords]   = useState([]);
+export default function DashboardsView({ seed = null, onSeedConsumed }) {
+  const [allRecords, setAllRecords] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [savedList, setSavedList] = useState(loadSaved);
   const [building, setBuilding] = useState(null); // { templateId, initial }
+  // When set, the view is scoped to a filtered subset handed over from the
+  // Tracker rather than the full dataset. Null = work off every record.
+  const [scopedRecords, setScopedRecords] = useState(null);
 
   useEffect(() => {
     getRecords()
-      .then(data => setRecords(Array.isArray(data) ? data : []))
-      .catch(() => setRecords([]))
+      .then(data => setAllRecords(Array.isArray(data) ? data : []))
+      .catch(() => setAllRecords([]))
       .finally(() => setLoading(false));
   }, []);
+
+  // The Tracker handed over a filtered subset: scope to it and jump straight
+  // into the custom builder. Consume the seed so a later normal visit resets.
+  useEffect(() => {
+    if (seed && seed.length) {
+      setScopedRecords(seed);
+      setBuilding({ templateId: 'custom', initial: null });
+      onSeedConsumed?.();
+    }
+  }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const records = scopedRecords ?? allRecords;
+  const clearScope = () => { setScopedRecords(null); setBuilding(null); };
 
   const options = useMemo(() => deriveOptions(records), [records]);
 
@@ -870,19 +906,23 @@ ${body}
 
   if (building) {
     return (
-      <DashboardBuilder
-        templateId={building.templateId}
-        initial={building.initial}
-        options={options}
-        records={records}
-        onClose={() => setBuilding(null)}
-        onSave={handleSave}
-      />
+      <>
+        {scopedRecords && <ScopeBanner count={scopedRecords.length} onClear={clearScope} />}
+        <DashboardBuilder
+          templateId={building.templateId}
+          initial={building.initial}
+          options={options}
+          records={records}
+          onClose={() => setBuilding(null)}
+          onSave={handleSave}
+        />
+      </>
     );
   }
 
   return (
     <>
+      {scopedRecords && <ScopeBanner count={scopedRecords.length} onClear={clearScope} />}
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--navy)' }}>Create a dashboard</div>
         <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.45 }}>

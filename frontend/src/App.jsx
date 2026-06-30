@@ -36,7 +36,16 @@ export default function App() {
   const [clients, setClients]           = useState(null);
   const [clientHandles, setClientHandles] = useState(null);
   const [extractionKey, setExtractionKey] = useState(0);
+  // A filtered subset of records handed off from the Tracker → Dashboards.
+  // Null when the user opens Dashboards normally (works off the full dataset).
+  const [dashboardSeed, setDashboardSeed] = useState(null);
   const meta = VIEW_META[activeView] || VIEW_META.extract;
+
+  // Jump to Dashboards scoped to exactly the rows currently shown in the Tracker.
+  const sendToDashboards = (records) => {
+    setDashboardSeed(Array.isArray(records) ? records : null);
+    setActiveView('dashboards');
+  };
 
   const handleLogin = (username) => {
     setLoggedIn(true);
@@ -71,8 +80,8 @@ export default function App() {
   const renderView = () => {
     switch (activeView) {
       case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} />;
-      case 'dashboards': return <DashboardsView />;
-      case 'tracker':    return <TrackerView loggedInUser={loggedInUser} />;
+      case 'dashboards': return <DashboardsView seed={dashboardSeed} onSeedConsumed={() => setDashboardSeed(null)} />;
+      case 'tracker':    return <TrackerView loggedInUser={loggedInUser} onSendToDashboards={sendToDashboards} />;
       case 'clients':    return <ClientsView />;
       case 'help':       return <HelpView />;
       case 'settings':   return <SettingsView theme={theme} onThemeChange={setTheme} />;

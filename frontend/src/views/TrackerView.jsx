@@ -236,7 +236,7 @@ function ExecSummaryDrawer({ record, onClose }) {
 }
 
 // ─── Tab: ROI Data (editable) ──────────────────────────────────────────────────
-function TabROIData() {
+function TabROIData({ onSendToDashboards }) {
   const { catalog, columns, colByKey, loading: fieldsLoading } = useFields();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -514,6 +514,16 @@ function TabROIData() {
           <button className="btn ghost small" onClick={exportView} disabled={filteredRecords.length === 0} title="Export only the rows & columns currently shown (active filters + visible columns) to CSV">
             <i className="ti ti-file-export" aria-hidden="true" /> Export filtered view ({filteredRecords.length})
           </button>
+          {onSendToDashboards && (
+            <button
+              className="btn ghost small"
+              onClick={() => onSendToDashboards(filteredRecords)}
+              disabled={filteredRecords.length === 0}
+              title="Open the Dashboards builder scoped to exactly the rows currently shown (active filters)"
+            >
+              <i className="ti ti-chart-histogram" aria-hidden="true" /> Send to Dashboards ({filteredRecords.length})
+            </button>
+          )}
         </div>
       </div>
 
@@ -794,7 +804,7 @@ const TABS = [
   { id: 'sources',    label: 'Source Files'     },
 ];
 
-export default function TrackerView() {
+export default function TrackerView({ onSendToDashboards }) {
   const [activeTab, setActiveTab] = useState('data');
 
   return (
@@ -817,7 +827,7 @@ export default function TrackerView() {
         ))}
       </div>
 
-      {activeTab === 'data'       && <TabROIData    />}
+      {activeTab === 'data'       && <TabROIData onSendToDashboards={onSendToDashboards} />}
       {activeTab === 'provenance' && <TabFieldProvenance />}
       {activeTab === 'audit'      && <TabAuditLog   />}
       {activeTab === 'sources'    && <TabSourceFiles />}
