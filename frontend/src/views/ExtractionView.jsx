@@ -89,6 +89,7 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
   const [upClient, setUpClient]       = useState('');
   const [upYear, setUpYear]           = useState(YEARS[0]);
   const [upPublisher, setUpPublisher] = useState(PUBLISHERS[0]);
+  const [showElpModal, setShowElpModal] = useState(false);
 
   const addFiles = (incoming) => {
     setUploadError(null);
@@ -254,7 +255,7 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
             {['ROAR', 'ELP'].map(type => (
               <button
                 key={type}
-                onClick={() => setDocType(type)}
+                onClick={() => type === 'ELP' ? setShowElpModal(true) : setDocType(type)}
                 className={`doctype-btn ${docType === type ? 'active' : ''}`}
               >
                 {type}
@@ -316,6 +317,21 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
             <div className="modal-btn-row">
               <button className="btn primary" onClick={() => setShowNoClient(false)}>
                 Back to search
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showElpModal && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <i className="ti ti-clock modal-icon" aria-hidden="true" />
+            <div className="modal-title">This feature is coming soon!</div>
+            <p className="modal-text">ELP extraction is not yet available. Please use a ROAR document for now.</p>
+            <div className="modal-btn-row">
+              <button className="btn primary" onClick={() => setShowElpModal(false)}>
+                Got it
               </button>
             </div>
           </div>
@@ -437,6 +453,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
   // Multi-select: a Set of file keys (`${path}/${name}`) chosen for the batch.
   const [selected, setSelected]     = useState(new Set());
   const [preparing, setPreparing]   = useState(false);
+  const [showElpModal, setShowElpModal] = useState(false);
 
   const { client = '', year = '', publisher = '' } = filters;
 
@@ -646,7 +663,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
             {files.filter(f => f.docType === 'ELP' && !f._isDraft).length === 0
               ? <div className="files-column-empty">No ELP files</div>
               : files.filter(f => f.docType === 'ELP' && !f._isDraft).map(f => (
-                  <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={toggleFile} />
+                  <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={() => setShowElpModal(true)} />
                 ))}
           </div>
         </div>
@@ -677,7 +694,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
                 {files.filter(f => f.docType === 'ELP' && f._isDraft).length === 0
                   ? <div className="files-column-empty">No ELP drafts</div>
                   : files.filter(f => f.docType === 'ELP' && f._isDraft).map(f => (
-                      <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={toggleFile} />
+                      <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={() => setShowElpModal(true)} />
                     ))}
               </div>
             </div>
@@ -707,6 +724,21 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
           </button>
         )}
       </div>
+
+      {showElpModal && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <i className="ti ti-clock modal-icon" aria-hidden="true" />
+            <div className="modal-title">This feature is coming soon!</div>
+            <p className="modal-text">ELP extraction is not yet available. Please use a ROAR document for now.</p>
+            <div className="modal-btn-row">
+              <button className="btn primary" onClick={() => setShowElpModal(false)}>
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
