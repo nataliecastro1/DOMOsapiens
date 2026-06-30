@@ -700,8 +700,8 @@ function TabROIData() {
           background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         }} onClick={() => { setDeleteTarget(null); setDeleteError(false); }}>
           <div style={{
-            background: 'var(--surface-1)', borderRadius: 14, padding: '28px 32px', width: 380,
-            boxShadow: '0 8px 40px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', gap: 16,
+            background: '#ffffff', borderRadius: 14, padding: '28px 32px', width: 380,
+            boxShadow: '0 8px 40px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', gap: 16,
           }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <i className="ti ti-trash" style={{ color: 'var(--red)', fontSize: 20 }} />
