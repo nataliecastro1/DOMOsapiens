@@ -1,0 +1,43 @@
+device_id_raw,anomaly_type,detail,rule_function,rule_line,action_taken
+NVT-LT-7001,field_swap,"Publisher/Product appear swapped: publisher_raw='Microsoft Office Professional Plus 2019', product_raw='Microsoft Corporation'",apply_field_swap_and_null_checks,311,Swapped values into correct columns; field_swap_flag=True
+MER-LT-0112,null_field,Missing field(s): publisher,apply_field_swap_and_null_checks,338,Flagged only; no value fabricated
+MER-SV-0269,null_field,Missing field(s): publisher,apply_field_swap_and_null_checks,338,Flagged only; no value fabricated
+NVT-MB-0102,null_field,Missing field(s): publisher,apply_field_swap_and_null_checks,338,Flagged only; no value fabricated
+MER-LT-0739,null_field,Missing field(s): publisher,apply_field_swap_and_null_checks,338,Flagged only; no value fabricated
+NVT-OF-0094,null_field,Missing field(s): publisher,apply_field_swap_and_null_checks,338,Flagged only; no value fabricated
+NVT-LT-7002,reseller_oem_publisher,"Publisher 'CDW LLC' is a reseller/OEM, not the software vendor, for product 'Microsoft 365 E3'",apply_publisher_normalization,578,publisher_normalized set to 'Microsoft' via product lookup; original preserved in publisher_source
+NVT-LT-7003,reseller_oem_publisher,"Publisher 'Dell Inc.' is a reseller/OEM, not the software vendor, for product 'Microsoft Office Home & Business'",apply_publisher_normalization,578,publisher_normalized set to 'Microsoft' via product lookup; original preserved in publisher_source
+NVT-LT-7004,version_outlier,"Placeholder value, not a real version: 'Current'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-LT-7005,version_outlier,Wildcard/non-specific version string: '24.x',apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-SV-7777,version_outlier,"Placeholder value, not a real version: 'Latest'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-OF-0617,version_outlier,"Placeholder value, not a real version: 'Latest.1'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-OF-0196,version_outlier,"Placeholder value, not a real version: 'Current'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-OF-0887,version_outlier,"Placeholder value, not a real version: 'Latest'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-LT-0455,future_install_date,Parsed date 2027-02-12 is after script run date 2026-07-10,apply_outlier_checks,398,Flagged only
+NVT-SV-0391,future_install_date,Parsed date 2026-12-04 is after script run date 2026-07-10,apply_outlier_checks,398,Flagged only
+NVT-MB-0824,version_outlier,"Placeholder value, not a real version: 'Latest'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-SV-0603,future_install_date,Parsed date 2027-01-15 is after script run date 2026-07-10,apply_outlier_checks,398,Flagged only
+WKSTN-76,version_outlier,"Placeholder value, not a real version: 'Latest'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+MER-LT-0739,version_outlier,"Placeholder value, not a real version: 'Latest'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-SV-0704,version_outlier,"Placeholder value, not a real version: 'Latest'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-LT-0809,version_outlier,Wildcard/non-specific version string: '9.x',apply_outlier_checks,387,Flagged only; original version_raw untouched
+MER-SV-0803,version_outlier,"Placeholder value, not a real version: 'Current'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-SV-0837,future_install_date,Parsed date 2026-09-04 is after script run date 2026-07-10,apply_outlier_checks,398,Flagged only
+MER-SV-0666,future_install_date,Parsed date 2026-08-30 is after script run date 2026-07-10,apply_outlier_checks,398,Flagged only
+MER-SV-0107,version_outlier,"Placeholder value, not a real version: 'Current'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+MER-SV-0107,future_install_date,Parsed date 2026-10-07 is after script run date 2026-07-10,apply_outlier_checks,398,Flagged only
+NVT-SV-0043,version_outlier,"Placeholder value, not a real version: 'TBD'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-OF-0617,version_outlier,"Placeholder value, not a real version: 'Latest'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-LT-0130,version_outlier,Wildcard/non-specific version string: '24.x',apply_outlier_checks,387,Flagged only; original version_raw untouched
+MER-SV-0076,version_outlier,Wildcard/non-specific version string: '24.x',apply_outlier_checks,387,Flagged only; original version_raw untouched
+MER-LT-0158,version_outlier,"Placeholder value, not a real version: 'Current'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+DESKTOP-74,version_outlier,"Placeholder value, not a real version: 'Latest'",apply_outlier_checks,387,Flagged only; original version_raw untouched
+NVT-MB-0610; NVT-MB-0610,duplicate_likely,"Same Device ID + Product + Install Date, versions differ/blank ['7700.1.0.1234', None], reported by tools ['Flexera', 'Flexera']",apply_duplicate_checks,517,Flagged only (duplicate_likely_flag=True); no rows dropped or merged
+NVT-OF-0357; NVT-OF-0357,duplicate_likely,"Same Device ID + Product + Install Date, versions differ/blank ['1.7.4', '1.7.4.1'], reported by tools ['Flexera', 'SCCM']",apply_duplicate_checks,517,Flagged only (duplicate_likely_flag=True); no rows dropped or merged
+DESKTOP-88; DESKTOP-88,duplicate_likely,"Same Device ID + Product + Install Date, versions differ/blank [None, '25.0'], reported by tools ['ServiceNow', 'Manual']",apply_duplicate_checks,517,Flagged only (duplicate_likely_flag=True); no rows dropped or merged
+NVT-OF-0617; NVT-OF-0617,duplicate_likely,"Same Device ID + Product + Install Date, versions differ/blank ['Latest.1', 'Latest'], reported by tools ['Manual', 'ServiceNow']",apply_duplicate_checks,517,Flagged only (duplicate_likely_flag=True); no rows dropped or merged
+MER-SV-0426; MER-SV-0426,duplicate_likely,"Same Device ID + Product + Install Date, versions differ/blank ['1.8.0_351', None], reported by tools ['ServiceNow', 'ServiceNow']",apply_duplicate_checks,517,Flagged only (duplicate_likely_flag=True); no rows dropped or merged
+MER-LT-0849; MER-LT-0849,duplicate_likely,"Same Device ID + Product + Install Date, versions differ/blank [None, '17.5'], reported by tools ['ServiceNow', 'Manual']",apply_duplicate_checks,517,Flagged only (duplicate_likely_flag=True); no rows dropped or merged
+MER-SV-0345; MER-SV-0345,duplicate_likely,"Same Device ID + Product + Install Date, versions differ/blank ['17.5', None], reported by tools ['ServiceNow', 'SCCM']",apply_duplicate_checks,517,Flagged only (duplicate_likely_flag=True); no rows dropped or merged
+NVT-LT-0868; NVT-LT-0868,duplicate_likely,"Same Device ID + Product + Install Date, versions differ/blank [None, '8u351'], reported by tools ['ServiceNow', 'ServiceNow']",apply_duplicate_checks,517,Flagged only (duplicate_likely_flag=True); no rows dropped or merged
+MER-LT-0287; MER-LT-0287,duplicate_likely,"Same Device ID + Product + Install Date, versions differ/blank ['14.3.5413', None], reported by tools ['SCCM', 'SCCM']",apply_duplicate_checks,517,Flagged only (duplicate_likely_flag=True); no rows dropped or merged

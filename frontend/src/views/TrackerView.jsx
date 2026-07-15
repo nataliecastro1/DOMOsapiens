@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
-import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog, getFields } from '../services/api';
+import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog, getFields, generateExecutiveSummary, saveExecutiveSummary, deleteRecord } from '../services/api';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
 
 // ─── Field catalog ──────────────────────────────────────────────────────────
@@ -83,6 +83,8 @@ const fmtAmount = (n) => {
   return Number.isNaN(num) ? String(n) : `$${num.toLocaleString()}`;
 };
 const confColor = (c) => (c >= 90 ? 'green' : c >= 75 ? 'amber' : 'red');
+// Bucket a raw confidence % into a plain-language category for display.
+const confLabel = (c) => (c >= 90 ? 'High' : c >= 75 ? 'Medium' : 'Low');
 
 // ─── Columns menu (show/hide) ──────────────────────────────────────────────────
 function ColumnsMenu({ columns, prefs, onToggle, onReset }) {
@@ -247,6 +249,10 @@ function TabROIData({ onSendToDashboards }) {
   const [editor, setEditor] = useState('');
   const [saving, setSaving] = useState(false);
   const [summaryRecord, setSummaryRecord] = useState(null);
+  const [generating, setGenerating] = useState(null); // record_id being generated
+  const [deleteTarget, setDeleteTarget] = useState(null); // { record_id, client }
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteError, setDeleteError] = useState(false);
   // Filter builder: a list of { field, query } conditions, AND-ed together.
   // field === ANY_FIELD searches across every field on the record. A trailing
   // blank row is kept so a new condition appears as soon as one is filled in.
@@ -440,7 +446,7 @@ function TabROIData({ onSendToDashboards }) {
 
     switch (col.type) {
       case 'conf':
-        return record.confidence != null ? <Badge color={confColor(record.confidence)}>{record.confidence}%</Badge> : '—';
+        return record.confidence != null ? <Badge color={confColor(record.confidence)}>{confLabel(record.confidence)}</Badge> : '—';
       case 'num':
         return fmtAmount(record[col.key]);
       case 'file':
@@ -452,9 +458,57 @@ function TabROIData({ onSendToDashboards }) {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    const reason = deleteReason.trim().toLowerCase();
+    if (reason !== 'duplicate' && reason !== 'error') {
+      setDeleteError(true);
+      return;
+    }
+    try {
+      await deleteRecord(deleteTarget.record_id, reason);
+      setRecords(prev => prev.filter(r => r.record_id !== deleteTarget.record_id));
+      setDeleteTarget(null);
+      setDeleteReason('');
+      setDeleteError(false);
+    } catch {
+      setDeleteError(true);
+    }
+  };
+
+  const handleGenerate = async (r) => {
+    setGenerating(r.record_id);
+    try {
+      const data = await generateExecutiveSummary({
+        client:               r.client,
+        publisher:            r.publisher,
+        year:                 r.year,
+        identified_risk:      r.identified_risk,
+        id_cost_avoidance:    r.id_cost_avoidance,
+        acc_cost_avoidance:   r.acc_cost_avoidance,
+        id_cost_optimization: r.id_cost_optimization,
+        acc_cost_optimization:r.acc_cost_optimization,
+        realized_savings:     r.realized_savings,
+        contract_spend:       r.contract_spend,
+        confidence:           r.confidence,
+        stored_name:          r.stored_name,
+      });
+      const identifier = r.stored_name || r.source_file;
+      if (identifier) await saveExecutiveSummary(identifier, data).catch(() => {});
+      // Update local state so drawer opens immediately
+      setRecords(prev => prev.map(rec =>
+        rec.record_id === r.record_id ? { ...rec, executive_summary: data } : rec
+      ));
+      setSummaryRecord({ ...r, executive_summary: data });
+    } catch (e) {
+      alert('Could not generate summary. Check your API key.');
+    } finally {
+      setGenerating(null);
+    }
+  };
+
   if (loading || fieldsLoading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading records…</p>;
 
-  const totalCols = visibleCols.length + 2; // index + exec summary
+  const totalCols = visibleCols.length + 3; // index + exec summary + delete
 
   return (
     <>
@@ -547,6 +601,7 @@ function TabROIData({ onSendToDashboards }) {
                   </th>
                 ))}
                 <th>Exec. Summary</th>
+                <th style={{ width: 40 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -563,17 +618,53 @@ function TabROIData({ onSendToDashboards }) {
                     </td>
                   ))}
                   <td onClick={e => e.stopPropagation()}>
+                    {r.executive_summary ? (
+                      <button
+                        onClick={() => setSummaryRecord(r)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          background: 'var(--blue-pale)', color: 'var(--blue)',
+                          border: '1.5px solid var(--blue)', borderRadius: 8,
+                          padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <i className="ti ti-file-description" /> View
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleGenerate(r)}
+                        disabled={generating === r.record_id}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          background: generating === r.record_id ? 'var(--surface-3)' : 'var(--gold-pale)',
+                          color: generating === r.record_id ? 'var(--text-muted)' : 'var(--gold-text)',
+                          border: `1.5px solid ${generating === r.record_id ? 'var(--border)' : 'var(--gold)'}`,
+                          borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600,
+                          cursor: generating === r.record_id ? 'not-allowed' : 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {generating === r.record_id
+                          ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Generating…</>
+                          : <><i className="ti ti-sparkles" /> Generate</>}
+                      </button>
+                    )}
+                  </td>
+                  <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
                     <button
-                      onClick={() => setSummaryRecord(r)}
+                      onClick={() => { setDeleteTarget(r); setDeleteReason(''); setDeleteError(false); }}
+                      title="Delete record"
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 5,
-                        background: 'var(--blue-pale)', color: 'var(--blue)',
-                        border: '1.5px solid var(--blue)', borderRadius: 8,
-                        padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                        whiteSpace: 'nowrap',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--text-faint)', padding: '2px 6px', borderRadius: 6,
+                        fontSize: 15, lineHeight: 1,
+                        transition: 'color 0.15s',
                       }}
+                      onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}
                     >
-                      <i className="ti ti-file-description" /> View
+                      <i className="ti ti-trash" />
                     </button>
                   </td>
                 </tr>
@@ -612,6 +703,64 @@ function TabROIData({ onSendToDashboards }) {
 
       {summaryRecord && (
         <ExecSummaryDrawer record={summaryRecord} onClose={() => setSummaryRecord(null)} />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => { setDeleteTarget(null); setDeleteError(false); }}>
+          <div style={{
+            background: '#ffffff', borderRadius: 14, padding: '28px 32px', width: 380,
+            boxShadow: '0 8px 40px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', gap: 16,
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <i className="ti ti-trash" style={{ color: 'var(--red)', fontSize: 20 }} />
+              <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--navy)' }}>Delete Record</span>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              <strong>{deleteTarget.client || deleteTarget.record_id}</strong> will be permanently removed. Select a reason:
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {['duplicate', 'error'].map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => { setDeleteReason(opt); setDeleteError(false); }}
+                  style={{
+                    flex: 1, padding: '8px 0', borderRadius: 8, fontWeight: 600, fontSize: 13,
+                    cursor: 'pointer', border: '2px solid',
+                    borderColor: deleteReason === opt ? 'var(--red)' : 'var(--border)',
+                    background: deleteReason === opt ? 'var(--red)' : 'var(--surface-2)',
+                    color: deleteReason === opt ? '#fff' : 'var(--text)',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {opt === 'duplicate' ? '🔁 Duplicate' : '⚠️ Error'}
+                </button>
+              ))}
+            </div>
+            {deleteError && (
+              <div style={{ background: 'var(--red-pale,#fff0f0)', border: '1px solid var(--red)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--red)', fontWeight: 600 }}>
+                Could not delete — please select a reason and try again.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setDeleteTarget(null); setDeleteError(false); }}
+                style={{ padding: '7px 18px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                style={{ padding: '7px 18px', borderRadius: 8, border: 'none', background: 'var(--red)', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -784,7 +933,7 @@ function TabFieldProvenance() {
                   <td>{row.metric}</td>
                   <td>{fmtAmount(row.value)}</td>
                   <td style={{ textAlign: 'center' }}>{row.source_slide ?? '—'}</td>
-                  <td>{row.confidence != null ? <Badge color={confColor(row.confidence)}>{row.confidence}%</Badge> : '—'}</td>
+                  <td>{row.confidence != null ? <Badge color={confColor(row.confidence)}>{confLabel(row.confidence)}</Badge> : '—'}</td>
                   <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{row.alternates || '—'}</td>
                 </tr>
               ))}

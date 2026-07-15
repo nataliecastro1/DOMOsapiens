@@ -6,6 +6,7 @@ import { getRecords } from '../services/api';
 function ClientDetail({ client, records, onClose }) {
   const fmt = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
   const confColor = (c) => c >= 90 ? 'green' : c >= 75 ? 'amber' : 'red';
+  const confLabel = (c) => c >= 90 ? 'High' : c >= 75 ? 'Medium' : 'Low';
 
   const totalSavings = (r) => {
     const sum = [r.id_cost_avoidance, r.acc_cost_avoidance, r.id_cost_optimization,
@@ -41,7 +42,7 @@ function ClientDetail({ client, records, onClose }) {
                 <td>{r.year}</td>
                 <td>{r.publisher}</td>
                 <td style={{ fontWeight: 600 }}>{totalSavings(r)}</td>
-                <td>{r.confidence != null ? <Badge color={confColor(r.confidence)}>{r.confidence}%</Badge> : '—'}</td>
+                <td>{r.confidence != null ? <Badge color={confColor(r.confidence)}>{confLabel(r.confidence)}</Badge> : '—'}</td>
                 <td>{r.sme || '—'}</td>
                 <td style={{ fontSize: 11 }}>
                   {r.stored_name

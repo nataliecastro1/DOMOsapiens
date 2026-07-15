@@ -89,6 +89,7 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
   const [upClient, setUpClient]       = useState('');
   const [upYear, setUpYear]           = useState(YEARS[0]);
   const [upPublisher, setUpPublisher] = useState(PUBLISHERS[0]);
+  const [showElpModal, setShowElpModal] = useState(false);
 
   const addFiles = (incoming) => {
     setUploadError(null);
@@ -254,7 +255,7 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
             {['ROAR', 'ELP'].map(type => (
               <button
                 key={type}
-                onClick={() => setDocType(type)}
+                onClick={() => type === 'ELP' ? setShowElpModal(true) : setDocType(type)}
                 className={`doctype-btn ${docType === type ? 'active' : ''}`}
               >
                 {type}
@@ -316,6 +317,21 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
             <div className="modal-btn-row">
               <button className="btn primary" onClick={() => setShowNoClient(false)}>
                 Back to search
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showElpModal && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <i className="ti ti-clock modal-icon" aria-hidden="true" />
+            <div className="modal-title">This feature is coming soon!</div>
+            <p className="modal-text">ELP extraction is not yet available. Please use a ROAR document for now.</p>
+            <div className="modal-btn-row">
+              <button className="btn primary" onClick={() => setShowElpModal(false)}>
+                Got it
               </button>
             </div>
           </div>
@@ -437,6 +453,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
   // Multi-select: a Set of file keys (`${path}/${name}`) chosen for the batch.
   const [selected, setSelected]     = useState(new Set());
   const [preparing, setPreparing]   = useState(false);
+  const [showElpModal, setShowElpModal] = useState(false);
 
   const { client = '', year = '', publisher = '' } = filters;
 
@@ -646,7 +663,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
             {files.filter(f => f.docType === 'ELP' && !f._isDraft).length === 0
               ? <div className="files-column-empty">No ELP files</div>
               : files.filter(f => f.docType === 'ELP' && !f._isDraft).map(f => (
-                  <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={toggleFile} />
+                  <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={() => setShowElpModal(true)} />
                 ))}
           </div>
         </div>
@@ -677,7 +694,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
                 {files.filter(f => f.docType === 'ELP' && f._isDraft).length === 0
                   ? <div className="files-column-empty">No ELP drafts</div>
                   : files.filter(f => f.docType === 'ELP' && f._isDraft).map(f => (
-                      <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={toggleFile} />
+                      <FileCard key={`${f.path}/${f.name}`} f={f} selected={selected.has(`${f.path}/${f.name}`)} onToggle={() => setShowElpModal(true)} />
                     ))}
               </div>
             </div>
@@ -707,6 +724,21 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
           </button>
         )}
       </div>
+
+      {showElpModal && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <i className="ti ti-clock modal-icon" aria-hidden="true" />
+            <div className="modal-title">This feature is coming soon!</div>
+            <p className="modal-text">ELP extraction is not yet available. Please use a ROAR document for now.</p>
+            <div className="modal-btn-row">
+              <button className="btn primary" onClick={() => setShowElpModal(false)}>
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2265,6 +2297,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   const [summary, setSummary]             = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError]   = useState(null);
+  const [saveStatus, setSaveStatus]       = useState(null); // null | 'saving' | 'saved' | 'error'
   const summaryRef = useRef(null);
 
   const parseDollar = (v) => {
@@ -2322,15 +2355,39 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
     })
       .then(data => {
         setSummary(data);
-        // Persist the summary onto the saved record so the Tracker can show it without re-generating
-        const sourceFile = selectedFile?.stored_name || selectedFile?.name || selectedFile?.file_path;
-        if (sourceFile) {
-          saveExecutiveSummary(sourceFile, data).catch(() => {});
+        // Persist the summary — prefer record_id (unambiguous), fall back to stored_name/name.
+        const identifier = selectedFile?.record_id
+          || selectedFile?.stored_name
+          || selectedFile?.name
+          || selectedFile?.file_path;
+        if (identifier) {
+          saveExecutiveSummary(identifier, data).catch(err =>
+            console.error('[ScreenDone] auto-save executive summary failed:', err)
+          );
         }
       })
       .catch(() => setSummaryError('Could not generate summary. Check your API key.'))
       .finally(() => setSummaryLoading(false));
   }, []);
+
+  const handleSaveToTracker = async () => {
+    if (!summary) return;
+    const identifier = selectedFile?.record_id
+      || selectedFile?.stored_name
+      || selectedFile?.name
+      || selectedFile?.file_path;
+    if (!identifier) { setSaveStatus('error'); return; }
+    setSaveStatus('saving');
+    try {
+      await saveExecutiveSummary(identifier, summary);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err) {
+      console.error('[SaveToTracker] failed:', err);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(null), 4000);
+    }
+  };
 
   const handleDownloadPDF = () => {
     import('html2pdf.js').then(mod => {
@@ -2366,6 +2423,17 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
           <Badge color="green">
             <i className="ti ti-circle-check" aria-hidden="true" /> All records stored
           </Badge>
+          <button
+            className="btn ghost small no-print"
+            onClick={handleSaveToTracker}
+            disabled={!summary || summaryLoading || saveStatus === 'saving'}
+            style={saveStatus === 'saved' ? { color: 'var(--green)' } : saveStatus === 'error' ? { color: 'var(--red)' } : {}}
+          >
+            {saveStatus === 'saving' && <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} aria-hidden="true" /> Saving…</>}
+            {saveStatus === 'saved'  && <><i className="ti ti-circle-check" aria-hidden="true" /> Saved to Tracker</>}
+            {saveStatus === 'error'  && <><i className="ti ti-alert-circle" aria-hidden="true" /> Save Failed</>}
+            {!saveStatus            && <><i className="ti ti-device-floppy" aria-hidden="true" /> Save Executive Summary</>}
+          </button>
           <button className="btn ghost small no-print" onClick={handleDownloadPDF} disabled={!summary}>
             <i className="ti ti-file-type-pdf" aria-hidden="true" /> Download PDF
           </button>
@@ -2451,6 +2519,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
   const [aggregateFields, setAggregateFields]   = useState(null);
   const [storeAggregate, setStoreAggregate]     = useState(true);
   const [filters, setFilters]                   = useState({});
+  const [savedRecordId, setSavedRecordId]       = useState(null);
 
   // Both the upload card and the Files scan hand back an array of files.
   const handleFilesSelected = (picked) => {
@@ -2505,17 +2574,20 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     const active = fileResults.filter(r => !r.excluded && r.finalFields);
     const isMulti = active.length > 1;
 
+    let primaryRecordId = null;
+
     if (!isMulti) {
       const only = active[0];
       const meta = only?.fileMeta || files[0] || {};
-      // Single-file: provenance comes from that file's script extraction.
-      saveRecord(buildRecord(meta, editedAggregateFields, sme, only?.scriptData))
-        .catch(err => console.error('[Store] saveRecord failed:', err));
+      const saved = await saveRecord(buildRecord(meta, editedAggregateFields, sme, only?.scriptData))
+        .catch(err => { console.error('[Store] saveRecord failed:', err); return null; });
+      primaryRecordId = saved?.record_id || null;
     } else {
-      active.forEach(r => {
+      const results = await Promise.all(active.map(r =>
         saveRecord(buildRecord(r.fileMeta, r.finalFields, sme, r.scriptData))
-          .catch(err => console.error('[Store] saveRecord failed:', err));
-      });
+          .catch(err => { console.error('[Store] saveRecord failed:', err); return null; })
+      ));
+      primaryRecordId = results[0]?.record_id || null;
       if (storeAggregate) {
         const aggMeta = {
           client:    commonMeta.client,
@@ -2524,10 +2596,12 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
         };
         const aggRecord = buildRecord(aggMeta, editedAggregateFields, sme);
         aggRecord.source_file = `Aggregate — ${commonMeta.client || 'Multi-client'} ${commonMeta.year || ''}`.trim();
-        await saveRecord(aggRecord).catch(err => console.error('[Store] aggregate saveRecord failed:', err));
+        const aggSaved = await saveRecord(aggRecord).catch(err => { console.error('[Store] aggregate saveRecord failed:', err); return null; });
+        if (!primaryRecordId) primaryRecordId = aggSaved?.record_id || null;
       }
     }
 
+    setSavedRecordId(primaryRecordId);
     setAggregateFields(editedAggregateFields);
     setStep(6);
   };
@@ -2560,6 +2634,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     stored_name: activeResults[0]?.fileMeta?.stored_name || null,
     file_path:   activeResults[0]?.fileMeta?.file_path   || null,
     name:        activeResults.length > 1 ? `${activeResults.length} files` : (activeResults[0]?.fileMeta?.name || ''),
+    record_id:   savedRecordId,
   };
 
   const screens = [
