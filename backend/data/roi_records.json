@@ -740,5 +740,205 @@
       }
     },
     "saved_at": "2026-07-07T20:41:30.114653"
+  },
+  {
+    "record_id": "r_89feeffeeef7",
+    "year": 2026,
+    "client": "",
+    "publisher": "",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": null,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 330000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 78,
+    "source_file": "OneMain - ROAR (1).pptx",
+    "sme": "christina",
+    "stored_name": "7fb0adace1c8450eb85a624c9d5b532d.pptx",
+    "field_meta": {
+      "id_cost_optimization": {
+        "source_slide": 10,
+        "confidence": 92.5,
+        "alternates": []
+      }
+    },
+    "executive_summary": {
+      "overview": "Anglepoint conducted an IBM Risk & Opportunity Assessment Report (ROAR) engagement for OneMain in 2026, covering up to 38 IBM Distributed products across 1,900 servers with one ILMT instance. The engagement focused on license compliance assessment and cost optimization opportunities.",
+      "key_accomplishments": [
+        "Completed comprehensive IBM license position assessment covering 38 distributed products",
+        "Analyzed deployment across 1,900 servers running IBM products",
+        "Identified $330K in cost optimization opportunities over a 1-year period"
+      ],
+      "key_metrics": [
+        {
+          "label": "Identified Cost Optimization",
+          "value": "$330K",
+          "context": "Total optimization opportunities identified over a 1-year period"
+        },
+        {
+          "label": "Servers Assessed",
+          "value": "1,900",
+          "context": "Servers running IBM products included in scope"
+        },
+        {
+          "label": "IBM Products Analyzed",
+          "value": "38",
+          "context": "IBM Distributed products assessed for license compliance"
+        }
+      ],
+      "recommendations": [
+        "Implement product-specific tactical actions to achieve strategic program outcomes",
+        "Execute actionable cost savings recommendations identified during the engagement",
+        "Address business needs related to maintenance renewal"
+      ],
+      "primary_risks": [],
+      "market_risks": [],
+      "additional_insights": [
+        "Engagement scope excluded Mainframe, Red Hat, and HCL Products",
+        "ILMT instance management is critical for IBM sub-capacity licensing compliance",
+        "Six-step process followed: Contract Discovery, Deployment Discovery, Effective Entitlement Position, Consumption Position, Effective License Position, and ROAR"
+      ],
+      "next_steps": [
+        "Complete Q2 Effective License Position (ELP) assessment",
+        "Address identified business needs",
+        "Prepare for upcoming maintenance renewal"
+      ],
+      "highlights": [
+        {
+          "label": "Identified Cost Optimization",
+          "value": "$330K"
+        },
+        {
+          "label": "Total Identified Risk",
+          "value": "$0"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Identified Cost Optimization",
+            "value": 330000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 0,
+          "remaining": 100
+        }
+      }
+    },
+    "saved_at": "2026-07-16T21:18:24.520622"
+  },
+  {
+    "record_id": "r_a75197475c98",
+    "year": 2026,
+    "client": "",
+    "publisher": "",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": null,
+    "id_cost_avoidance": 11050000.0,
+    "acc_cost_avoidance": 10400000.0,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": 420000.0,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 85,
+    "source_file": "GeneralMills_QSR_FINAL.pptx",
+    "sme": "christina",
+    "stored_name": "c88e02183ef04c4a8910dcd776648e05.pptx",
+    "field_meta": null,
+    "executive_summary": {
+      "overview": "General Mills SAM engagement spanning from 2019 to 2026, focused on governing the Software Asset Lifecycle and providing actionable asset intelligence to optimize costs, minimize risks, and maximize negotiation leverage across material software assets.",
+      "key_accomplishments": [
+        "$10.4M in cost avoidance accomplished out of $11.1M identified",
+        "Delivered $11M in value over 18 months",
+        "Transitioned from initial engagement to continuous outcomes structure since 2019",
+        "Established SAM Charter Statement governing software asset lifecycle"
+      ],
+      "key_metrics": [
+        {
+          "label": "Identified Cost Avoidance",
+          "value": "$11.1M",
+          "context": "Total cost avoidance opportunities identified across engagement"
+        },
+        {
+          "label": "Accomplished Cost Avoidance",
+          "value": "$10.4M",
+          "context": "Successfully realized cost avoidance representing 94% accomplishment rate"
+        },
+        {
+          "label": "Annual Contract Spend",
+          "value": "$420K",
+          "context": "Current annual SAM service investment"
+        },
+        {
+          "label": "Value Delivered",
+          "value": "$11M",
+          "context": "Total value delivered over 18-month period"
+        }
+      ],
+      "recommendations": [
+        "Confirm SAP expansion approval and initiate scoping as the most critical unassessed software relationship",
+        "Begin Oracle Java initial assessment conversation",
+        "Finalize renewal SOW for signature",
+        "Meet with Marcus and Priya to align on SOW structure and ServiceNow SAM Pro boundary"
+      ],
+      "primary_risks": [
+        "SAP remains unassessed despite being the most critical software relationship at General Mills",
+        "Audit exposure from common triggers including economic downturn, contract cancellations, and publisher licensing model changes"
+      ],
+      "market_risks": [
+        "Multiple publishers actively auditing clients due to economic conditions and publisher revenue pressures",
+        "Risk from customers not following publisher strategy including cloud and subscription transitions",
+        "Exposure from support tickets raised for unlicensed programs"
+      ],
+      "additional_insights": [
+        "Engagement has evolved from initial 2019 engagement to continuous outcomes structure in 2026",
+        "Common audit triggers include M&A activity, employee count changes, agreement expirations, and failure to meet obligations like true-ups and ILMT reporting"
+      ],
+      "next_steps": [
+        "Deliver SAP scoping output and get SAP workstream live in Elevate",
+        "Deliver first SAP findings to Marcus and Sandra",
+        "Activate renewal contract",
+        "Begin Oracle Java initial assessment conversation"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "N/A"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$10.4M"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Cost Avoidance Accomplished",
+            "value": 10400000
+          },
+          {
+            "name": "Remaining Identified Opportunity",
+            "value": 700000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 94,
+          "remaining": 6
+        }
+      }
+    },
+    "saved_at": "2026-07-16T22:10:42.626669"
   }
 ]

@@ -127,8 +127,8 @@ export async function augmentExecutiveSummary(data) {
 }
 
 /** Check an uploaded file for red flags (draft/copy/version, client+publisher match). */
-export async function checkUpload(storedName, { client = '', publisher = '', original_filename = '' } = {}) {
-  const params = new URLSearchParams({ client, publisher, original_filename });
+export async function checkUpload(storedName, { client = '', publisher = '', year = '', original_filename = '' } = {}) {
+  const params = new URLSearchParams({ client, publisher, year, original_filename });
   return get(`/uploads/${encodeURIComponent(storedName)}/check?${params}`);
 }
 

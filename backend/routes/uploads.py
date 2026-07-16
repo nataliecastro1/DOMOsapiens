@@ -1,8 +1,10 @@
+import io
 import os
 import re
+import zipfile
 from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from services.uploads import UploadError, UPLOAD_DIR, list_uploads, save_upload
 
@@ -84,9 +86,9 @@ def get_uploads():
 
 
 @router.get("/uploads/{stored_name}/check")
-def check_upload(stored_name: str, client: str = '', publisher: str = '', original_filename: str = ''):
+def check_upload(stored_name: str, client: str = '', publisher: str = '', year: str = '', original_filename: str = ''):
     """Scan an uploaded file for red flags: draft/copy/versioned filename, and
-    whether the first page text mentions the expected client and publisher."""
+    whether the first page text mentions the expected client, publisher, and year."""
     safe = os.path.basename(stored_name)
     path = os.path.join(UPLOAD_DIR, safe)
     if not os.path.exists(path):
@@ -99,20 +101,65 @@ def check_upload(stored_name: str, client: str = '', publisher: str = '', origin
     first_text = _first_slide_text(path)
     title = first_text[:120] if first_text else safe
 
-    # Client / publisher presence check
-    client_found = bool(client and re.search(re.escape(client), first_text, re.IGNORECASE))
-    publisher_found = bool(publisher and re.search(re.escape(publisher), first_text, re.IGNORECASE))
-
-    if client and not client_found:
-        warnings.append(f'Client "{client}" was not found on the first page.')
-    if publisher and not publisher_found:
-        warnings.append(f'Publisher "{publisher}" was not found on the first page.')
+    # Client / publisher / year presence check (all case-insensitive)
+    if client and not re.search(re.escape(client), first_text, re.IGNORECASE):
+        warnings.append(f'No match found for client "{client}" — this document may belong to a different client.')
+    if publisher and not re.search(re.escape(publisher), first_text, re.IGNORECASE):
+        warnings.append(f'No match found for publisher "{publisher}" — this document may be for a different publisher.')
+    if year and not re.search(re.escape(year), first_text):
+        warnings.append(f'No match found for "{year}" — the document might be from a different year.')
 
     return {
         'title': title,
         'warnings': warnings,
         'is_ok': len(warnings) == 0,
     }
+
+
+@router.get("/uploads/{stored_name}/thumbnail")
+def serve_thumbnail(stored_name: str):
+    """Return the cover thumbnail for a document.
+    PPTX: extracts the embedded docProps/thumbnail.jpeg (instant, zero conversion).
+    PDF: renders page 1 at 2× via fitz."""
+    safe = os.path.basename(stored_name)
+    path = os.path.join(UPLOAD_DIR, safe)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    ext = Path(path).suffix.lower()
+
+    if ext in ('.pptx', '.ppt'):
+        with zipfile.ZipFile(path) as z:
+            for candidate in ('docProps/thumbnail.jpeg', 'docProps/thumbnail.jpg', 'docProps/thumbnail.png'):
+                if candidate in z.namelist():
+                    mime = 'image/png' if candidate.endswith('.png') else 'image/jpeg'
+                    return Response(z.read(candidate), media_type=mime)
+        raise HTTPException(status_code=404, detail="No embedded thumbnail")
+
+    if ext == '.pdf':
+        try:
+            import fitz
+            doc = fitz.open(path)
+            page = doc[0]
+            pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+            data = pix.tobytes('png')
+            doc.close()
+            return Response(data, media_type='image/png')
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    raise HTTPException(status_code=415, detail="Preview not supported for this file type")
+
+
+@router.get("/uploads/{stored_name}/preview.pdf")
+def serve_preview_pdf(stored_name: str):
+    """Serve a PDF for in-browser rendering via PDF.js (PDFs only)."""
+    safe = os.path.basename(stored_name)
+    path = os.path.join(UPLOAD_DIR, safe)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    if Path(path).suffix.lower() != '.pdf':
+        raise HTTPException(status_code=415, detail="PDF only")
+    return FileResponse(path, media_type='application/pdf')
 
 
 @router.get("/uploads/{stored_name}")

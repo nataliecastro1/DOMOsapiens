@@ -50,31 +50,11 @@ export default function App() {
   const handleLogin = (username) => {
     setLoggedIn(true);
     setLoggedInUser(username);
-    setShowClientGate(true);   // ask to load the client list before the app loads
-  };
-
-  // Called when the client-folder gate finishes — either with a loaded list or
-  // a skip (result === null). Tutorial follows once the gate is dismissed.
-  const finishClientGate = (result) => {
-    if (result && result.clients && result.clients.length) {
-      setClients(result.clients);
-      setClientHandles(result.handles);
-    }
-    setShowClientGate(false);
     if (shouldShowTutorial()) setShowTutorial(true);
   };
 
   if (!loggedIn) {
     return <LoginView onLogin={handleLogin} />;
-  }
-
-  if (showClientGate) {
-    return (
-      <ClientFolderGate
-        onLoaded={finishClientGate}
-        onSkip={() => finishClientGate(null)}
-      />
-    );
   }
 
   const renderView = () => {
