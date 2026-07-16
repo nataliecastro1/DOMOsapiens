@@ -631,7 +631,8 @@ function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultNa
   const [decision, setDecision] = useState('approve');
   const [smeName, setSmeName]   = useState(defaultName);
   const [smeNotes, setSmeNotes] = useState('');
-  const [docChecks, setDocChecks] = useState({}); // { stored_name: { is_ok, warnings, title } }
+  const [docChecks, setDocChecks] = useState({});
+  const [showBackConfirm, setShowBackConfirm] = useState(false);
   const timestamp = useRef(new Date().toLocaleString());
   const batch = files.length ? files : (selectedFile ? [selectedFile] : []);
   const isMulti = batch.length > 1;
@@ -823,7 +824,7 @@ function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultNa
           <div className="sme-btn-row">
             <button
               className="btn sme-back-btn"
-              onClick={onBack}
+              onClick={() => setShowBackConfirm(true)}
             >
               <i className="ti ti-arrow-left" aria-hidden="true" /> Back
             </button>
@@ -836,6 +837,41 @@ function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultNa
           </div>
         </div>
       </div>
+
+      {/* ── Back confirmation modal ── */}
+      {showBackConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => setShowBackConfirm(false)}>
+          <div style={{
+            background: '#ffffff', borderRadius: 14, padding: '28px 32px', width: 380,
+            boxShadow: '0 8px 40px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', gap: 16,
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <i className="ti ti-arrow-back-up" style={{ color: 'var(--gold)', fontSize: 22 }} />
+              <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--navy)' }}>Go back to upload?</span>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              Going back will clear your uploaded {batch.length > 1 ? `${batch.length} files` : 'file'} and you'll need to start the upload over.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowBackConfirm(false)}
+                style={{ padding: '7px 18px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              >
+                Stay here
+              </button>
+              <button
+                onClick={onBack}
+                style={{ padding: '7px 18px', borderRadius: 8, border: 'none', background: 'var(--navy)', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              >
+                Yes, go back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
