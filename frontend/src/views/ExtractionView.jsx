@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
-import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, generateExecutiveSummary, saveExecutiveSummary } from '../services/api';
+import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, generateExecutiveSummary, saveExecutiveSummary, checkUpload } from '../services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -30,7 +30,6 @@ const BLANK_FIELDS = EXTRACTED_FIELDS.map(f => ({
 // ─── Journey Bar ──────────────────────────────────────────────────────────────
 const STEP_DEFS = [
   { label: 'Request',      icon: 'ti-adjustments-horizontal' },
-  { label: 'Files',        icon: 'ti-files'                  },
   { label: 'SME Validate', icon: 'ti-user-check'             },
   { label: 'Extract',      icon: 'ti-cpu'                    },
   { label: 'Compare',      icon: 'ti-git-compare'            },
@@ -81,15 +80,11 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
   const MAX_FILES = 4;
   const [dragOver, setDragOver]       = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [docType, setDocType]         = useState('ROAR');
   const [uploading, setUploading]     = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef                  = useRef(null);
 
-  const [upClient, setUpClient]       = useState('');
   const [upYear, setUpYear]           = useState(YEARS[0]);
-  const [upPublisher, setUpPublisher] = useState(PUBLISHERS[0]);
-  const [showElpModal, setShowElpModal] = useState(false);
 
   const addFiles = (incoming) => {
     setUploadError(null);
@@ -129,12 +124,9 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
           ...meta,
           name: meta.filename,
           version: 'Uploaded',
-          docType,
-          client: upClient,
-          publisher: upPublisher,
           year: upYear,
           source: 'uploaded',
-          file,   // raw File retained so the Extract step can run the script extractor
+          file,
         });
       }
       onUploaded(batch);
@@ -148,53 +140,20 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
   return (
     <div className="request-grid">
 
-      {/* ── Card 1: SharePoint Search ── */}
-      <div id="search-card" className="card">
-        <div className="card-title">
-          <i className="ti ti-adjustments-horizontal" aria-hidden="true" />
-          Search SharePoint
-        </div>
-        <div className="field-group">
-          <label className="field-label" htmlFor="req-client">Client</label>
-          <ClientSelect value={client} onChange={setClient} clients={clients} />
-        </div>
-        <div className="grid-2">
-          <div className="field-group">
-            <label className="field-label" htmlFor="req-year">Year</label>
-            <select id="req-year" value={year} onChange={e => setYear(e.target.value)}>
-              <option value="">Any year</option>
-              {YEARS.map(y => <option key={y}>{y}</option>)}
-            </select>
-          </div>
-          <div className="field-group">
-            <label className="field-label" htmlFor="req-publisher">Publisher</label>
-            <select id="req-publisher" value={publisher} onChange={e => setPub(e.target.value)}>
-              <option value="">Any publisher</option>
-              {PUBLISHERS.map(p => <option key={p}>{p}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="btn-row">
-          <button
-            className="btn primary"
-            onClick={() => {
-              if (!client.trim()) { setShowNoClient(true); return; }
-              onNext({ client, year, publisher });
-            }}
-          >
-            Find Files <i className="ti ti-arrow-right" aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-
-      {/* ── Card 2: Manual Upload ── */}
+      {/* ── Upload Raw File ── */}
       <div id="upload-card" className="card">
         <div className="card-title">
-          <i className="ti ti-upload" aria-hidden="true" />
-          Upload Files
-          <span className="upload-count">
-            {selectedFiles.length}/{MAX_FILES} files
-          </span>
+          <i className="ti ti-file-upload" aria-hidden="true" />
+          Upload Raw File
+          <span className="upload-count">{selectedFiles.length}/{MAX_FILES}</span>
+        </div>
+
+        {/* Year */}
+        <div className="field-group">
+          <label className="field-label">Year</label>
+          <select value={upYear} onChange={e => setUpYear(e.target.value)}>
+            {YEARS.map(y => <option key={y}>{y}</option>)}
+          </select>
         </div>
 
         {/* Drag & drop zone */}
@@ -230,17 +189,9 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
             {selectedFiles.map((f, i) => (
               <div key={i} className="upload-file-chip">
                 <i className="ti ti-file-description upload-file-chip-icon" />
-                <span className="upload-file-chip-name">
-                  {f.name}
-                </span>
-                <span className="upload-file-chip-size">
-                  {(f.size / 1024).toFixed(0)} KB
-                </span>
-                <button
-                  onClick={() => removeFile(i)}
-                  className="upload-file-chip-remove"
-                  title="Remove"
-                >
+                <span className="upload-file-chip-name">{f.name}</span>
+                <span className="upload-file-chip-size">{(f.size / 1024).toFixed(0)} KB</span>
+                <button onClick={() => removeFile(i)} className="upload-file-chip-remove" title="Remove">
                   <i className="ti ti-x" />
                 </button>
               </div>
@@ -248,49 +199,9 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
           </div>
         )}
 
-        {/* Document type */}
-        <div className="field-group">
-          <label className="field-label">Document Type</label>
-          <div className="doctype-row">
-            {['ROAR', 'ELP'].map(type => (
-              <button
-                key={type}
-                onClick={() => type === 'ELP' ? setShowElpModal(true) : setDocType(type)}
-                className={`doctype-btn ${docType === type ? 'active' : ''}`}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-          <div className="doctype-hint">
-            {docType === 'ROAR'
-              ? 'Return on Anglepoint Relationship — PowerPoint (.pptx)'
-              : 'ELP deliverable — PowerPoint / slide deck'}
-          </div>
-        </div>
-
-        {/* Client / Publisher / Year — manually set for this upload */}
-        <div className="field-group">
-          <label className="field-label">Client</label>
-          <ClientSelect value={upClient} onChange={setUpClient} clients={clients} />
-        </div>
-        <div className="grid-2">
-          <div className="field-group">
-            <label className="field-label">Year</label>
-            <select value={upYear} onChange={e => setUpYear(e.target.value)}>
-              {YEARS.map(y => <option key={y}>{y}</option>)}
-            </select>
-          </div>
-          <div className="field-group">
-            <label className="field-label">Publisher</label>
-            <ClientSelect value={upPublisher} onChange={setUpPublisher} clients={PUBLISHERS} />
-          </div>
-        </div>
-
         {uploadError && (
           <div className="upload-error">
-            <i className="ti ti-alert-triangle" aria-hidden="true" />
-            {uploadError}
+            <i className="ti ti-alert-triangle" aria-hidden="true" /> {uploadError}
           </div>
         )}
 
@@ -302,41 +213,11 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
           >
             {uploading
               ? <><i className="ti ti-loader-2 spinning" aria-hidden="true" /> Uploading…</>
-              : <>Upload &amp; Use {selectedFiles.length > 1 ? `These ${selectedFiles.length} Files` : 'This File'} <i className="ti ti-arrow-right" aria-hidden="true" /></>
+              : <>Continue <i className="ti ti-arrow-right" aria-hidden="true" /></>
             }
           </button>
         </div>
       </div>
-
-      {showNoClient && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <i className="ti ti-alert-triangle modal-icon" aria-hidden="true" />
-            <div className="modal-title">No client selected</div>
-            <p className="modal-text">Choose a client before searching for files.</p>
-            <div className="modal-btn-row">
-              <button className="btn primary" onClick={() => setShowNoClient(false)}>
-                Back to search
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showElpModal && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <i className="ti ti-clock modal-icon" aria-hidden="true" />
-            <div className="modal-title">This feature is coming soon!</div>
-            <p className="modal-text">ELP extraction is not yet available. Please use a ROAR document for now.</p>
-            <div className="modal-btn-row">
-              <button className="btn primary" onClick={() => setShowElpModal(false)}>
-                Got it
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
@@ -750,9 +631,20 @@ function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultNa
   const [decision, setDecision] = useState('approve');
   const [smeName, setSmeName]   = useState(defaultName);
   const [smeNotes, setSmeNotes] = useState('');
+  const [docChecks, setDocChecks] = useState({}); // { stored_name: { is_ok, warnings, title } }
   const timestamp = useRef(new Date().toLocaleString());
   const batch = files.length ? files : (selectedFile ? [selectedFile] : []);
   const isMulti = batch.length > 1;
+
+  // Run document checks on mount for uploaded files
+  useEffect(() => {
+    batch.forEach(f => {
+      if (!f?.stored_name) return;
+      checkUpload(f.stored_name, { client: f.client || '', publisher: f.publisher || '', original_filename: f.name || '' })
+        .then(result => setDocChecks(prev => ({ ...prev, [f.stored_name]: result })))
+        .catch(() => {});
+    });
+  }, []);
 
   const handleConfirm = () => {
     if (decision === 'flag') { onBack(); return; }
@@ -793,6 +685,43 @@ function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultNa
           </div>
         </div>
       </div>
+
+      {/* ── Document validation banners ── */}
+      {batch.filter(f => f?.stored_name && docChecks[f.stored_name]).map(f => {
+        const check = docChecks[f.stored_name];
+        return (
+          <div key={f.stored_name} style={{
+            marginBottom: 12,
+            borderRadius: 10,
+            padding: '12px 16px',
+            display: 'flex',
+            gap: 12,
+            alignItems: 'flex-start',
+            background: check.is_ok ? 'var(--green-pale, #edfaf4)' : '#fff8ec',
+            border: `1.5px solid ${check.is_ok ? 'var(--green, #22c55e)' : '#f59e0b'}`,
+          }}>
+            <i className={`ti ${check.is_ok ? 'ti-circle-check' : 'ti-alert-triangle'}`}
+              style={{ fontSize: 20, color: check.is_ok ? 'var(--green, #22c55e)' : '#f59e0b', marginTop: 1 }} />
+            <div>
+              {isMulti && <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 2 }}>{f.name}</div>}
+              {check.is_ok ? (
+                <div style={{ fontWeight: 700, color: '#15803d', fontSize: 14 }}>
+                  Your document looks good — ready to continue.
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontWeight: 700, color: '#b45309', fontSize: 14, marginBottom: 4 }}>
+                    Are you sure this is the right document?
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#92400e' }}>
+                    {check.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
 
       <div className="sme-two-col">
         <div className="sme-col-left">

@@ -11,7 +11,10 @@ import io
 import json
 import os
 import uuid
+import threading
 from datetime import datetime
+
+_lock = threading.Lock()
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from models import ROIRecord
@@ -66,84 +69,79 @@ def _load() -> list[dict]:
 
 def _save(records: list[dict]):
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    with open(DATA_FILE, "w") as f:
+    tmp = DATA_FILE + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(records, f, indent=2, default=str)
+    os.replace(tmp, DATA_FILE)  # atomic — prevents partial-write corruption
 
 
 def save_record(record: ROIRecord) -> dict:
     """Upsert an ROI record by stored_name or source_file — prevents duplicates.
     Assigns a stable record_id and preserves the executive_summary on re-save."""
-    records = _load()
-    entry = record.model_dump()
-    entry["saved_at"] = datetime.utcnow().isoformat()
+    with _lock:
+        records = _load()
+        entry = record.model_dump()
+        entry["saved_at"] = datetime.utcnow().isoformat()
 
-    # Match by stored_name (UUID hash) first, then by source_file (original name).
-    def _matches(r):
-        if entry.get("stored_name") and r.get("stored_name") == entry["stored_name"]:
-            return True
-        if entry.get("source_file") and r.get("source_file") == entry["source_file"]:
-            return True
-        return False
+        def _matches(r):
+            if entry.get("stored_name") and r.get("stored_name") == entry["stored_name"]:
+                return True
+            if entry.get("source_file") and r.get("source_file") == entry["source_file"]:
+                return True
+            return False
 
-    for i, r in enumerate(records):
-        if _matches(r):
-            entry["record_id"] = r.get("record_id") or _new_record_id()
-            # Never wipe an existing executive_summary when re-saving.
-            if not entry.get("executive_summary") and r.get("executive_summary"):
-                entry["executive_summary"] = r["executive_summary"]
-            records[i] = entry
-            _save(records)
-            audit.append_event(
-                entry["record_id"], "update", user=entry.get("sme"),
-                note="Re-stored from extraction",
-            )
-            return entry
+        for i, r in enumerate(records):
+            if _matches(r):
+                entry["record_id"] = r.get("record_id") or _new_record_id()
+                if not entry.get("executive_summary") and r.get("executive_summary"):
+                    entry["executive_summary"] = r["executive_summary"]
+                records[i] = entry
+                _save(records)
+                audit.append_event(entry["record_id"], "update", user=entry.get("sme"), note="Re-stored from extraction")
+                return entry
 
-    # Brand-new record.
-    entry["record_id"] = entry.get("record_id") or _new_record_id()
-    records.append(entry)
-    _save(records)
-    audit.append_event(
-        entry["record_id"], "create", user=entry.get("sme"),
-        note="Stored from extraction",
-    )
-    return entry
+        entry["record_id"] = entry.get("record_id") or _new_record_id()
+        records.append(entry)
+        _save(records)
+        audit.append_event(entry["record_id"], "create", user=entry.get("sme"), note="Stored from extraction")
+        return entry
 
 
 def update_record(record_id: str, changes: dict, user: str | None = None,
                   note: str | None = None) -> dict:
     """Apply a partial edit to a stored record, persist it, and append one
     immutable audit event per changed field. Raises KeyError if not found."""
-    records = _load()
-    for r in records:
-        if r.get("record_id") == record_id:
-            for field, new_value in changes.items():
-                if field in ("record_id", "saved_at"):
-                    continue  # never editable
-                old_value = r.get(field)
-                if old_value == new_value:
-                    continue  # no-op, don't log
-                r[field] = new_value
-                audit.append_event(
-                    record_id, "edit", user=user, field=field,
-                    old_value=old_value, new_value=new_value, note=note,
-                )
-            r["updated_at"] = datetime.utcnow().isoformat()
-            _save(records)
-            return r
+    with _lock:
+        records = _load()
+        for r in records:
+            if r.get("record_id") == record_id:
+                for field, new_value in changes.items():
+                    if field in ("record_id", "saved_at"):
+                        continue
+                    old_value = r.get(field)
+                    if old_value == new_value:
+                        continue
+                    r[field] = new_value
+                    audit.append_event(record_id, "edit", user=user, field=field, old_value=old_value, new_value=new_value, note=note)
+                r["updated_at"] = datetime.utcnow().isoformat()
+                _save(records)
+                return r
     raise KeyError(record_id)
+
+
 def patch_executive_summary(identifier: str, summary: dict) -> dict | None:
     """Attach an executive summary to an existing record.
     Matches by record_id, stored_name, or source_file — whichever works first.
     """
-    records = _load()
-    for i, r in enumerate(records):
-        if (r.get("record_id") == identifier
-                or r.get("stored_name") == identifier
-                or r.get("source_file") == identifier):
-            records[i]["executive_summary"] = summary
-            _save(records)
-            return records[i]
+    with _lock:
+        records = _load()
+        for i, r in enumerate(records):
+            if (r.get("record_id") == identifier
+                    or r.get("stored_name") == identifier
+                    or r.get("source_file") == identifier):
+                records[i]["executive_summary"] = summary
+                _save(records)
+                return records[i]
     return None
 
 
