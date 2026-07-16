@@ -229,5 +229,27 @@
     "old_value": null,
     "new_value": null,
     "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "e790f7aabd8b41d9b3937fd5993af042",
+    "record_id": "r_89feeffeeef7",
+    "timestamp": "2026-07-16T21:18:24.526311",
+    "user": "christina",
+    "action": "create",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Stored from extraction"
+  },
+  {
+    "event_id": "a29e4ccc7d9c4554beba65a9fafcd48e",
+    "record_id": "r_a75197475c98",
+    "timestamp": "2026-07-16T22:10:42.629754",
+    "user": "christina",
+    "action": "create",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Stored from extraction"
   }
 ]
