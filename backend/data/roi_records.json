@@ -22,36 +22,6 @@
     "updated_at": "2026-06-25T15:15:50.855618"
   },
   {
-    "record_id": "r_6a50050ff780",
-    "year": 2026,
-    "client": "ONE MAIN ",
-    "publisher": "IBM",
-    "date_delivered": null,
-    "currency": "USD",
-    "identified_risk": null,
-    "id_cost_avoidance": null,
-    "acc_cost_avoidance": null,
-    "id_cost_optimization": 330000.0,
-    "acc_cost_optimization": null,
-    "realized_savings": null,
-    "contract_spend": null,
-    "pricing_available": null,
-    "notes": null,
-    "elevate_deliverable": null,
-    "confidence": 72,
-    "source_file": "OneMain - ROAR.pptx",
-    "sme": "christina",
-    "stored_name": "aebd8720cd1c44769f826780b34cb647.pptx",
-    "field_meta": {
-      "id_cost_optimization": {
-        "source_slide": 10,
-        "confidence": 92.5,
-        "alternates": []
-      }
-    },
-    "saved_at": "2026-06-29T21:00:04.051894"
-  },
-  {
     "year": 2025,
     "client": "Regeneron",
     "publisher": "Oracle",
@@ -73,150 +43,6 @@
     "stored_name": "c7792a5c367649ad8068c292ecfb17ef.pptx",
     "saved_at": "2026-06-12T18:48:31.026177",
     "record_id": "r_5d65de1d5b91"
-  },
-  {
-    "record_id": "r_f6486bba9285",
-    "year": 2025,
-    "client": "UPS",
-    "publisher": "IBM",
-    "date_delivered": null,
-    "currency": "USD",
-    "identified_risk": 1080000.0,
-    "id_cost_avoidance": 1080000.0,
-    "acc_cost_avoidance": 1080000.0,
-    "id_cost_optimization": 6150000.0,
-    "acc_cost_optimization": null,
-    "realized_savings": null,
-    "contract_spend": null,
-    "pricing_available": null,
-    "notes": null,
-    "elevate_deliverable": null,
-    "confidence": 85,
-    "source_file": "UPS_IBM_ROAR_2025.pdf",
-    "sme": "christina",
-    "stored_name": "d11df2ce36474f72945d619ed659edfe.pdf",
-    "field_meta": null,
-    "saved_at": "2026-06-29T20:45:47.804597"
-  },
-  {
-    "record_id": "r_f07312a69521",
-    "year": 2025,
-    "client": "REGENERON",
-    "publisher": "Quest",
-    "date_delivered": null,
-    "currency": "USD",
-    "identified_risk": 165000.0,
-    "id_cost_avoidance": 24000.0,
-    "acc_cost_avoidance": 141000.0,
-    "id_cost_optimization": null,
-    "acc_cost_optimization": null,
-    "realized_savings": null,
-    "contract_spend": null,
-    "pricing_available": null,
-    "notes": null,
-    "elevate_deliverable": null,
-    "confidence": 85,
-    "source_file": "2025 06 - Regeneron - Quest ROAR v.1_FINAL.pptx",
-    "sme": "christina",
-    "stored_name": "bdb3da4631214bc7ae882d8af07fb97e.pptx",
-    "field_meta": {
-      "identified_risk": {
-        "source_slide": 10,
-        "confidence": 82.5,
-        "alternates": []
-      },
-      "id_cost_avoidance": {
-        "source_slide": 9,
-        "confidence": 100.0,
-        "alternates": []
-      },
-      "acc_cost_avoidance": {
-        "source_slide": 11,
-        "confidence": 61.02,
-        "alternates": []
-      }
-    },
-    "saved_at": "2026-06-29T21:14:19.209527",
-    "executive_summary": {
-      "overview": "Anglepoint conducted a Quest software asset management engagement for Regeneron, delivering a Risk & Opportunity Assessment Report (ROAR) in June 2025. The engagement identified compliance risks and cost avoidance opportunities across Quest products including Change Auditor, Recovery Manager for AD, and Toad, with a renewal date approaching September 15th, 2025.",
-      "key_accomplishments": [
-        "Mitigated $141K of initial compliance risk through additional license purchases for Change Auditor for AD and Recovery Manager for AD",
-        "Identified $24K in cost avoidance opportunities through proactive compliance and financial controls",
-        "Completed comprehensive Effective License Position (ELP) analysis across Quest product portfolio with $248K annual spend"
-      ],
-      "key_metrics": [
-        {
-          "label": "Total Identified Risk",
-          "value": "$165K",
-          "context": "Quantified financial exposure due to non-compliance with Quest licensing terms"
-        },
-        {
-          "label": "Cost Avoidance Identified",
-          "value": "$24K",
-          "context": "Unbudgeted costs preventable through proactive compliance measures"
-        },
-        {
-          "label": "Risk Mitigated",
-          "value": "$141K",
-          "context": "Compliance risk resolved through additional license purchases"
-        },
-        {
-          "label": "Annual Quest Spend",
-          "value": "$248K",
-          "context": "Based on 2024-2025 annual contract spend"
-        }
-      ],
-      "recommendations": [
-        "Obtain Toad license key information by requesting screenshots from end users to determine the edition of Toad deployed and improve Consumption Analysis accuracy",
-        "Optimize Toad installations by removing all products and components not in use from the environment",
-        "Prioritize software inventory based on what is installed, licensed, and needed to identify remediation, optimization, and cancellation opportunities"
-      ],
-      "primary_risks": [
-        "Remaining unmitigated compliance risk exists after $141K remediation, requiring continued monitoring ahead of September 2025 renewal",
-        "Incomplete Toad deployment data limits accuracy of consumption analysis and may mask additional compliance exposure",
-        "No contracts were provided for review, limiting visibility into contractual terms and potential compliance obligations"
-      ],
-      "market_risks": [
-        "Quest renewal approaching September 15th, 2025 requires timely resolution of outstanding compliance and optimization actions"
-      ],
-      "additional_insights": [
-        "Year-over-Year comparison shows sustained cost avoidance accomplishments through proactive license management",
-        "Demand forecasting data collection enables 3-18 month usage projections for strategic planning",
-        "Anglepoint team includes Director of Client Success, Lead Consultant for Specialty & SaaS, and Senior Manager for Specialty & SaaS"
-      ],
-      "next_steps": [
-        "Procure additional licenses for Change Auditor for AD and Recovery Manager for AD - COMPLETED",
-        "Request Toad license key screenshots from end users to determine deployed editions",
-        "Remove unused Toad products and components from environment to optimize license consumption",
-        "Prepare for Quest renewal on September 15th, 2025 with optimized license position"
-      ],
-      "highlights": [
-        {
-          "label": "Total Identified Risk",
-          "value": "$165K"
-        },
-        {
-          "label": "Cost Avoidance Accomplished",
-          "value": "$141K"
-        }
-      ],
-      "charts": {
-        "roi_breakdown": [
-          {
-            "name": "Risk Mitigated",
-            "value": 141000
-          },
-          {
-            "name": "Cost Avoidance Identified",
-            "value": 24000
-          }
-        ],
-        "accomplishment_rate": {
-          "accomplished": 85,
-          "remaining": 15
-        }
-      }
-    }
   },
   {
     "record_id": "r_8e830bcdda5c",
@@ -252,154 +78,6 @@
       }
     },
     "saved_at": "2026-06-25T15:32:32.274733"
-  },
-  {
-    "record_id": "r_2cc46a833b73",
-    "year": 2026,
-    "client": "Encova Insurance",
-    "publisher": "Oracle",
-    "date_delivered": null,
-    "currency": "USD",
-    "identified_risk": 222000.0,
-    "id_cost_avoidance": 222000.0,
-    "acc_cost_avoidance": 222000.0,
-    "id_cost_optimization": 507000.0,
-    "acc_cost_optimization": 282000.0,
-    "realized_savings": null,
-    "contract_spend": null,
-    "pricing_available": null,
-    "notes": null,
-    "elevate_deliverable": null,
-    "confidence": 92,
-    "source_file": "2025 December_Encova Insurance_IBM_ROAR_v1.pptx",
-    "sme": "christina",
-    "stored_name": "dd192d564b724a5b8366696e4964c89a.pptx",
-    "field_meta": {
-      "identified_risk": {
-        "source_slide": 13,
-        "confidence": 90.0,
-        "alternates": []
-      },
-      "id_cost_avoidance": {
-        "source_slide": 13,
-        "confidence": 89.2,
-        "alternates": []
-      },
-      "acc_cost_avoidance": {
-        "source_slide": 13,
-        "confidence": 90.0,
-        "alternates": []
-      },
-      "id_cost_optimization": {
-        "source_slide": 12,
-        "confidence": 92.5,
-        "alternates": []
-      },
-      "acc_cost_optimization": {
-        "source_slide": 13,
-        "confidence": 95.0,
-        "alternates": [
-          {
-            "value": "$507,000",
-            "confidence": 62.5
-          }
-        ]
-      }
-    },
-    "executive_summary": {
-      "overview": "Encova Insurance engaged Anglepoint for IBM software asset management services, covering 9 distributed IBM products across 262 servers and 50 containers with 1 ILMT instance. This ROAR documents the baseline analysis identifying compliance risks and cost optimization opportunities for their IBM estate.",
-      "key_accomplishments": [
-        "Identified and accomplished $222K in cost avoidance through proactive compliance and financial controls",
-        "Achieved $282K in accomplished cost optimization from the $507K total identified optimization potential",
-        "Completed comprehensive analysis of 262 servers and 50 containers running IBM software",
-        "Established baseline Effective License Position for 9 distributed IBM products"
-      ],
-      "key_metrics": [
-        {
-          "label": "Identified Risk",
-          "value": "$222K",
-          "context": "Financial exposure due to non-compliance with IBM licensing terms"
-        },
-        {
-          "label": "Accomplished Cost Avoidance",
-          "value": "$222K",
-          "context": "Prevented unbudgeted costs through proactive compliance measures"
-        },
-        {
-          "label": "Total Identified Optimization",
-          "value": "$507K",
-          "context": "Potential cost avoidance and savings over 1-year period"
-        },
-        {
-          "label": "Accomplished Cost Optimization",
-          "value": "$282K",
-          "context": "Verified cost reductions achieved through license optimization"
-        },
-        {
-          "label": "Servers Analyzed",
-          "value": "262",
-          "context": "Servers running IBM software included in scope"
-        },
-        {
-          "label": "Containers Analyzed",
-          "value": "50",
-          "context": "Containers running IBM software included in scope"
-        }
-      ],
-      "recommendations": [
-        "Continue IBM CVA Services to maintain ongoing IBM software license management through the CVA program",
-        "Execute Annual S&S Renewal considering potential reduction opportunities identified in analysis",
-        "Expand publisher scope to include Oracle, Microsoft, VMware and other major publishers for comprehensive SAM coverage"
-      ],
-      "primary_risks": [
-        "Identified $222K financial exposure due to non-compliance with IBM software licensing or contractual terms requiring corrective action"
-      ],
-      "market_risks": [
-        "IBM licensing complexity across distributed products creates ongoing compliance risk without continuous management"
-      ],
-      "additional_insights": [
-        "Engagement covered 9 distributed IBM products with deployment discovery completed across infrastructure",
-        "$225K optimization opportunity gap remains between identified ($507K) and accomplished ($282K) cost optimization",
-        "ILMT instance provides foundation for ongoing PVU license tracking and compliance monitoring"
-      ],
-      "next_steps": [
-        "Continue quarterly CVA submission for ongoing IBM license management",
-        "Execute SOW renewal to maintain managed services continuity",
-        "Complete Annual S&S Renewal evaluation for potential cost reduction opportunities",
-        "Evaluate expansion to additional publishers including Oracle, Microsoft, and VMware"
-      ],
-      "highlights": [
-        {
-          "label": "Total Identified Risk",
-          "value": "$222K"
-        },
-        {
-          "label": "Cost Avoidance Accomplished",
-          "value": "$222K"
-        }
-      ],
-      "charts": {
-        "roi_breakdown": [
-          {
-            "name": "Accomplished Cost Avoidance",
-            "value": 222000
-          },
-          {
-            "name": "Accomplished Cost Optimization",
-            "value": 282000
-          },
-          {
-            "name": "Remaining Optimization Potential",
-            "value": 225000
-          }
-        ],
-        "accomplishment_rate": {
-          "accomplished": 56,
-          "remaining": 44
-        }
-      }
-    },
-    "saved_at": "2026-07-07T20:41:30.114653"
   },
   {
     "record_id": "r_b3c6f4845738",
@@ -611,6 +289,60 @@
     "saved_at": "2026-06-25T20:20:52.536102"
   },
   {
+    "record_id": "r_f6486bba9285",
+    "year": 2025,
+    "client": "UPS",
+    "publisher": "IBM",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 1080000.0,
+    "id_cost_avoidance": 1080000.0,
+    "acc_cost_avoidance": 1080000.0,
+    "id_cost_optimization": 6150000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 85,
+    "source_file": "UPS_IBM_ROAR_2025.pdf",
+    "sme": "christina",
+    "stored_name": "d11df2ce36474f72945d619ed659edfe.pdf",
+    "field_meta": null,
+    "saved_at": "2026-06-29T20:45:47.804597"
+  },
+  {
+    "record_id": "r_6a50050ff780",
+    "year": 2026,
+    "client": "ONE MAIN ",
+    "publisher": "IBM",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": null,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 330000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 72,
+    "source_file": "OneMain - ROAR.pptx",
+    "sme": "christina",
+    "stored_name": "aebd8720cd1c44769f826780b34cb647.pptx",
+    "field_meta": {
+      "id_cost_optimization": {
+        "source_slide": 10,
+        "confidence": 92.5,
+        "alternates": []
+      }
+    },
+    "saved_at": "2026-06-29T21:00:04.051894"
+  },
+  {
     "record_id": "r_d27aafaeb1ed",
     "year": 2025,
     "client": "UPS",
@@ -735,5 +467,278 @@
       }
     },
     "saved_at": "2026-06-29T21:37:43.855501"
+  },
+  {
+    "record_id": "r_f07312a69521",
+    "year": 2026,
+    "client": "UPS",
+    "publisher": "Quest",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 165000.0,
+    "id_cost_avoidance": 30000.0,
+    "acc_cost_avoidance": 0.0,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 88,
+    "source_file": "2025 06 - Regeneron - Quest ROAR v.1_FINAL.pptx",
+    "sme": "christina",
+    "stored_name": "d9029be1670e4245a8b0aacf6253a7e1.pptx",
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 10,
+        "confidence": 82.5,
+        "alternates": []
+      },
+      "id_cost_avoidance": {
+        "source_slide": 9,
+        "confidence": 100.0,
+        "alternates": []
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 61.02,
+        "alternates": []
+      }
+    },
+    "executive_summary": {
+      "overview": "Regeneron engaged Anglepoint for a Quest software Risk & Opportunity Assessment Report (ROAR) with a renewal date of September 15th, 2025. The engagement identified $165K in total compliance risk and $24K in cost avoidance opportunities, with $141K of initial risk already mitigated through additional license purchases.",
+      "key_accomplishments": [
+        "Identified and quantified $165K in total compliance risk exposure across Quest software estate",
+        "Achieved $141K risk mitigation through procurement of additional licenses for Change Auditor for AD and Recovery Manager for AD",
+        "Identified $24K in actionable cost avoidance opportunities",
+        "Completed comprehensive Effective License Position analysis across Quest product portfolio"
+      ],
+      "key_metrics": [
+        {
+          "label": "Total Annual Quest Spend",
+          "value": "$248K",
+          "context": "Based on 2024-2025 annual spend for Quest software estate"
+        },
+        {
+          "label": "Total Identified Risk",
+          "value": "$165K",
+          "context": "Quantified financial exposure due to non-compliance with Quest licensing terms"
+        },
+        {
+          "label": "Identified Cost Avoidance",
+          "value": "$24K",
+          "context": "Unbudgeted costs that can be prevented through proactive compliance measures"
+        },
+        {
+          "label": "Risk Mitigated",
+          "value": "$141K",
+          "context": "Initial risk reduced through additional license purchases in 2025 renewal"
+        }
+      ],
+      "recommendations": [
+        "Obtain Toad License Key Information: Request screenshots from end users to determine the edition of Toad deployed to improve Consumption Analysis accuracy",
+        "Optimize Toad Installations: Remove all installations and traces of Toad products (including components) that are not in use from the environment",
+        "Prioritize licensing decisions based on what is installed, licensed, and needed framework to optimize spend"
+      ],
+      "primary_risks": [
+        "Remaining compliance risk exposure after mitigation requires continued monitoring ahead of September 15th, 2025 renewal",
+        "Incomplete Toad license key information may result in inaccurate consumption analysis and unidentified compliance gaps",
+        "Software deployed but not needed represents ongoing cost exposure and compliance risk"
+      ],
+      "market_risks": [
+        "Quest renewal approaching September 15th, 2025 requires proactive preparation to optimize contract terms",
+        "Script output completeness gaps may impact accuracy of license position analysis"
+      ],
+      "additional_insights": [
+        "Year-over-Year analysis demonstrates effective risk mitigation through strategic license purchases",
+        "3-18 month demand forecasting data collection underway to support proactive license planning",
+        "No contracts were provided as part of this review, limiting contract terms analysis"
+      ],
+      "next_steps": [
+        "Procure Additional Licenses - COMPLETED: Additional licenses for Change Auditor for AD and Recovery Manager for AD purchased",
+        "Obtain Toad License Key Information: Request end user screenshots to determine deployed Toad editions",
+        "Optimize Installations: Remove unused Toad products and components from the environment"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "$165K"
+        },
+        {
+          "label": "Risk Mitigated",
+          "value": "$141K"
+        },
+        {
+          "label": "Cost Avoidance Identified",
+          "value": "$24K"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Risk Mitigated",
+            "value": 141000
+          },
+          {
+            "name": "Cost Avoidance Identified",
+            "value": 24000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 85,
+          "remaining": 15
+        }
+      }
+    },
+    "saved_at": "2026-06-30T02:56:58.659511"
+  },
+  {
+    "record_id": "r_2cc46a833b73",
+    "year": 2026,
+    "client": "Encova Insurance",
+    "publisher": "Oracle",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 222000.0,
+    "id_cost_avoidance": 222000.0,
+    "acc_cost_avoidance": 222000.0,
+    "id_cost_optimization": 507000.0,
+    "acc_cost_optimization": 282000.0,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 92,
+    "source_file": "2025 December_Encova Insurance_IBM_ROAR_v1.pptx",
+    "sme": "christina",
+    "stored_name": "dd192d564b724a5b8366696e4964c89a.pptx",
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": []
+      },
+      "id_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 89.2,
+        "alternates": []
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": []
+      },
+      "id_cost_optimization": {
+        "source_slide": 12,
+        "confidence": 92.5,
+        "alternates": []
+      },
+      "acc_cost_optimization": {
+        "source_slide": 13,
+        "confidence": 95.0,
+        "alternates": [
+          {
+            "value": "$507,000",
+            "confidence": 62.5
+          }
+        ]
+      }
+    },
+    "executive_summary": {
+      "overview": "Encova Insurance engaged Anglepoint for IBM software asset management services, covering 9 distributed IBM products across 262 servers and 50 containers with 1 ILMT instance. This ROAR documents the baseline analysis identifying compliance risks and cost optimization opportunities for their IBM estate.",
+      "key_accomplishments": [
+        "Identified and accomplished $222K in cost avoidance through proactive compliance and financial controls",
+        "Achieved $282K in accomplished cost optimization from the $507K total identified optimization potential",
+        "Completed comprehensive analysis of 262 servers and 50 containers running IBM software",
+        "Established baseline Effective License Position for 9 distributed IBM products"
+      ],
+      "key_metrics": [
+        {
+          "label": "Identified Risk",
+          "value": "$222K",
+          "context": "Financial exposure due to non-compliance with IBM licensing terms"
+        },
+        {
+          "label": "Accomplished Cost Avoidance",
+          "value": "$222K",
+          "context": "Prevented unbudgeted costs through proactive compliance measures"
+        },
+        {
+          "label": "Total Identified Optimization",
+          "value": "$507K",
+          "context": "Potential cost avoidance and savings over 1-year period"
+        },
+        {
+          "label": "Accomplished Cost Optimization",
+          "value": "$282K",
+          "context": "Verified cost reductions achieved through license optimization"
+        },
+        {
+          "label": "Servers Analyzed",
+          "value": "262",
+          "context": "Servers running IBM software included in scope"
+        },
+        {
+          "label": "Containers Analyzed",
+          "value": "50",
+          "context": "Containers running IBM software included in scope"
+        }
+      ],
+      "recommendations": [
+        "Continue IBM CVA Services to maintain ongoing IBM software license management through the CVA program",
+        "Execute Annual S&S Renewal considering potential reduction opportunities identified in analysis",
+        "Expand publisher scope to include Oracle, Microsoft, VMware and other major publishers for comprehensive SAM coverage"
+      ],
+      "primary_risks": [
+        "Identified $222K financial exposure due to non-compliance with IBM software licensing or contractual terms requiring corrective action"
+      ],
+      "market_risks": [
+        "IBM licensing complexity across distributed products creates ongoing compliance risk without continuous management"
+      ],
+      "additional_insights": [
+        "Engagement covered 9 distributed IBM products with deployment discovery completed across infrastructure",
+        "$225K optimization opportunity gap remains between identified ($507K) and accomplished ($282K) cost optimization",
+        "ILMT instance provides foundation for ongoing PVU license tracking and compliance monitoring"
+      ],
+      "next_steps": [
+        "Continue quarterly CVA submission for ongoing IBM license management",
+        "Execute SOW renewal to maintain managed services continuity",
+        "Complete Annual S&S Renewal evaluation for potential cost reduction opportunities",
+        "Evaluate expansion to additional publishers including Oracle, Microsoft, and VMware"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "$222K"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$222K"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Accomplished Cost Avoidance",
+            "value": 222000
+          },
+          {
+            "name": "Accomplished Cost Optimization",
+            "value": 282000
+          },
+          {
+            "name": "Remaining Optimization Potential",
+            "value": 225000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 56,
+          "remaining": 44
+        }
+      }
+    },
+    "saved_at": "2026-07-07T20:41:30.114653"
   }
 ]

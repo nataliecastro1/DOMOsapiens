@@ -126,6 +126,12 @@ export async function augmentExecutiveSummary(data) {
   return post('/executive-summary/augment', data);
 }
 
+/** Check an uploaded file for red flags (draft/copy/version, client+publisher match). */
+export async function checkUpload(storedName, { client = '', publisher = '', original_filename = '' } = {}) {
+  const params = new URLSearchParams({ client, publisher, original_filename });
+  return get(`/uploads/${encodeURIComponent(storedName)}/check?${params}`);
+}
+
 /** Delete a record permanently. reason must be 'duplicate' or 'error'. */
 export async function deleteRecord(recordId, reason) {
   const res = await fetch(`${BASE}/records/${recordId}?reason=${encodeURIComponent(reason)}`, {
