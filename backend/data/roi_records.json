@@ -315,13 +315,13 @@
   {
     "record_id": "r_6a50050ff780",
     "year": 2026,
-    "client": "ONE MAIN ",
+    "client": "OneMain Financial Holdings, LLC",
     "publisher": "IBM",
     "date_delivered": null,
     "currency": "USD",
-    "identified_risk": null,
-    "id_cost_avoidance": null,
-    "acc_cost_avoidance": null,
+    "identified_risk": 900000.0,
+    "id_cost_avoidance": 100000000.0,
+    "acc_cost_avoidance": 1200000.0,
     "id_cost_optimization": 330000.0,
     "acc_cost_optimization": null,
     "realized_savings": null,
@@ -329,10 +329,10 @@
     "pricing_available": null,
     "notes": null,
     "elevate_deliverable": null,
-    "confidence": 72,
+    "confidence": 75,
     "source_file": "OneMain - ROAR.pptx",
     "sme": "christina",
-    "stored_name": "aebd8720cd1c44769f826780b34cb647.pptx",
+    "stored_name": "e7c5bbc49c4cc7fa1d9f6b2d89201dbf.pptx",
     "field_meta": {
       "id_cost_optimization": {
         "source_slide": 10,
@@ -340,7 +340,90 @@
         "alternates": []
       }
     },
-    "saved_at": "2026-06-29T21:00:04.051894"
+    "executive_summary": {
+      "overview": "OneMain Financial Holdings, LLC engaged Anglepoint for IBM software asset management in 2026, identifying significant compliance risk exposure and substantial cost avoidance opportunities within their IBM licensing portfolio.",
+      "key_accomplishments": [
+        "Achieved $1.2M in accomplished cost avoidance through IBM license optimization",
+        "Identified $100.0M in potential cost avoidance opportunities across IBM estate",
+        "Uncovered $330K in cost optimization opportunities for IBM licensing"
+      ],
+      "key_metrics": [
+        {
+          "label": "Identified Risk Exposure",
+          "value": "$900K",
+          "context": "IBM compliance risk requiring remediation"
+        },
+        {
+          "label": "Accomplished Cost Avoidance",
+          "value": "$1.2M",
+          "context": "Realized savings from IBM license optimization initiatives"
+        },
+        {
+          "label": "Identified Cost Avoidance",
+          "value": "$100.0M",
+          "context": "Total potential savings opportunity identified in IBM portfolio"
+        },
+        {
+          "label": "Identified Cost Optimization",
+          "value": "$330K",
+          "context": "Additional optimization opportunities within IBM licensing"
+        }
+      ],
+      "recommendations": [
+        "Pursue remaining $100.0M identified cost avoidance opportunities through structured IBM license negotiation and optimization",
+        "Address $900K identified compliance risk through license true-up or deployment remediation",
+        "Execute on $330K cost optimization opportunities to reduce ongoing IBM spend"
+      ],
+      "primary_risks": [
+        "$900K identified compliance risk exposure within IBM software portfolio requiring immediate attention"
+      ],
+      "market_risks": [
+        "IBM licensing complexity and audit activity continues to present compliance challenges for enterprise customers"
+      ],
+      "additional_insights": [
+        "Significant gap between identified ($100.0M) and accomplished ($1.2M) cost avoidance indicates substantial unrealized value remaining"
+      ],
+      "next_steps": [
+        "Develop action plan to capture remaining identified cost avoidance opportunities",
+        "Implement remediation strategy for $900K compliance risk exposure",
+        "Prioritize and execute $330K cost optimization initiatives"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "$900K"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$1.2M"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Accomplished Cost Avoidance",
+            "value": 1200000
+          },
+          {
+            "name": "Identified Cost Avoidance",
+            "value": 100000000
+          },
+          {
+            "name": "Identified Cost Optimization",
+            "value": 330000
+          },
+          {
+            "name": "Identified Risk",
+            "value": 900000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 1,
+          "remaining": 99
+        }
+      }
+    },
+    "saved_at": "2026-07-20T18:02:29.864157"
   },
   {
     "record_id": "r_d27aafaeb1ed",

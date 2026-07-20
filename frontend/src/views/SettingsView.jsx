@@ -1,32 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 export default function SettingsView({ theme, onThemeChange }) {
-  const [currentPw, setCurrentPw]   = useState('');
-  const [newPw, setNewPw]           = useState('');
-  const [confirmPw, setConfirmPw]   = useState('');
-  const [pwMsg, setPwMsg]           = useState(null); // { type: 'success'|'error', text }
-
-  const handlePasswordChange = (e) => {
-    e.preventDefault();
-    setPwMsg(null);
-    const stored = localStorage.getItem('app_password') || '123456';
-    if (currentPw !== stored) {
-      setPwMsg({ type: 'error', text: 'Current password is incorrect.' });
-      return;
-    }
-    if (newPw.length < 6) {
-      setPwMsg({ type: 'error', text: 'New password must be at least 6 characters.' });
-      return;
-    }
-    if (newPw !== confirmPw) {
-      setPwMsg({ type: 'error', text: 'Passwords do not match.' });
-      return;
-    }
-    localStorage.setItem('app_password', newPw);
-    setPwMsg({ type: 'success', text: 'Password updated successfully.' });
-    setCurrentPw(''); setNewPw(''); setConfirmPw('');
-  };
-
   return (
     <div style={{ maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
@@ -85,72 +59,6 @@ export default function SettingsView({ theme, onThemeChange }) {
         </div>
       </div>
 
-      {/* Change Password */}
-      <div className="card" style={{ padding: '28px 32px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 18 }}>
-          Security
-        </div>
-        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', marginBottom: 4 }}>Change Password</div>
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>Update your login password.</div>
-
-        <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-              Current Password
-            </label>
-            <input
-              type="password"
-              value={currentPw}
-              onChange={e => setCurrentPw(e.target.value)}
-              className="field-input"
-              placeholder="Enter current password"
-              required
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-              New Password
-            </label>
-            <input
-              type="password"
-              value={newPw}
-              onChange={e => setNewPw(e.target.value)}
-              className="field-input"
-              placeholder="At least 6 characters"
-              required
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-              Confirm New Password
-            </label>
-            <input
-              type="password"
-              value={confirmPw}
-              onChange={e => setConfirmPw(e.target.value)}
-              className="field-input"
-              placeholder="Repeat new password"
-              required
-            />
-          </div>
-
-          {pwMsg && (
-            <div style={{
-              padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-              background: pwMsg.type === 'success' ? 'var(--green-pale)' : 'var(--red-pale)',
-              color:      pwMsg.type === 'success' ? 'var(--green-text)' : 'var(--red-text)',
-              border:     `1px solid ${pwMsg.type === 'success' ? 'var(--green)' : 'var(--red)'}`,
-            }}>
-              <i className={`ti ${pwMsg.type === 'success' ? 'ti-circle-check' : 'ti-alert-circle'}`} style={{ marginRight: 6 }} />
-              {pwMsg.text}
-            </div>
-          )}
-
-          <button type="submit" className="btn primary" style={{ alignSelf: 'flex-start', marginTop: 4 }}>
-            <i className="ti ti-lock" /> Update Password
-          </button>
-        </form>
-      </div>
     </div>
   );
 }

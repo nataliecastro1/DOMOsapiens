@@ -187,6 +187,12 @@ export async function uploadFile(file) {
   return res.json();
 }
 
+/** Delete a raw uploaded file from the server once extraction is complete. */
+export async function deleteUpload(storedName) {
+  await fetch(`${BASE}/uploads/${encodeURIComponent(storedName)}`, { method: 'DELETE' })
+    .catch(() => {});  // best-effort — never throw
+}
+
 /**
  * Run the deterministic ROAR script extractor on an uploaded .pptx.
  * `file` is a browser File object. Returns the full extractor result

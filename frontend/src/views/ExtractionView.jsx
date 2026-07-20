@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
-import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, generateExecutiveSummary, saveExecutiveSummary, checkUpload } from '../services/api';
+import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, deleteUpload } from '../services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -70,18 +70,35 @@ function JourneyBar({ currentStep, onStep }) {
 }
 
 // ─── Screen 0: Request ────────────────────────────────────────────────────────
-function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client, onClientChange, publisher, onPublisherChange, existingBatch = [], onRemoveExisting }) {
+function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client, publisher, existingBatch = [], onRemoveExisting, onOpenRecord }) {
   const MAX_FILES = 4;
   const [dragOver, setDragOver]           = useState(false);
   const [newFiles, setNewFiles]           = useState([]);   // local File objects not yet uploaded
   const [uploading, setUploading]         = useState(false);
   const [uploadError, setUploadError]     = useState(null);
+  const [history, setHistory]             = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const fileInputRef                      = useRef(null);
 
   // Controlled by parent so values survive back-navigation
   const upYear      = year      ?? YEARS[0];
   const upClient    = client    ?? '';
   const upPublisher = publisher ?? '';
+
+  // Load past records for this client whenever the client changes
+  useEffect(() => {
+    setHistoryLoading(true);
+    getRecords()
+      .then(data => {
+        const all = Array.isArray(data) ? data : [];
+        const filtered = upClient
+          ? all.filter(r => (r.client || '').toLowerCase().includes(upClient.toLowerCase()))
+          : all;
+        setHistory(filtered);
+      })
+      .catch(() => setHistory([]))
+      .finally(() => setHistoryLoading(false));
+  }, [upClient]);
 
   const totalCount = existingBatch.length + newFiles.length;
 
@@ -133,43 +150,37 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
   };
 
   return (
-    <div className="request-grid">
+    <div style={{ display: 'flex', gap: 16, alignItems: 'stretch' }}>
 
-      {/* ── Upload Raw File ── */}
-      <div id="upload-card" className="card">
+      {/* ── LEFT: Upload Raw File ── */}
+      <div id="upload-card" className="card" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <div className="card-title">
           <i className="ti ti-file-upload" aria-hidden="true" />
           Upload Raw File
           <span className="upload-count">{totalCount}/{MAX_FILES}</span>
         </div>
 
-        {/* Year / Client / Publisher */}
+        {/* Year */}
         <div className="field-group">
           <label className="field-label">Year</label>
           <select value={upYear} onChange={e => onYearChange(e.target.value)}>
             {YEARS.map(y => <option key={y}>{y}</option>)}
           </select>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div className="field-group" style={{ flex: 1 }}>
-            <label className="field-label">Client</label>
-            <input
-              type="text"
-              placeholder="e.g. Acme Corp"
-              value={upClient}
-              onChange={e => onClientChange(e.target.value)}
-            />
+        {(upClient || upPublisher) && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            {upClient && (
+              <span style={{ fontSize: 12, background: 'var(--accent-bg, #eff6ff)', color: 'var(--accent, #2563eb)', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
+                <i className="ti ti-building" style={{ marginRight: 4 }} />{upClient}
+              </span>
+            )}
+            {upPublisher && (
+              <span style={{ fontSize: 12, background: 'var(--accent-bg, #eff6ff)', color: 'var(--accent, #2563eb)', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
+                <i className="ti ti-brand-windows" style={{ marginRight: 4 }} />{upPublisher}
+              </span>
+            )}
           </div>
-          <div className="field-group" style={{ flex: 1 }}>
-            <label className="field-label">Publisher</label>
-            <input
-              type="text"
-              placeholder="e.g. Microsoft"
-              value={upPublisher}
-              onChange={e => onPublisherChange(e.target.value)}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Drag & drop zone */}
         <div
@@ -242,6 +253,58 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
             }
           </button>
         </div>
+      </div>
+
+      {/* ── RIGHT: Document history for this client ── */}
+      <div className="card" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="card-title">
+          <i className="ti ti-history" aria-hidden="true" />
+          Past Documents
+          {upClient && <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 6 }}>— {upClient}</span>}
+        </div>
+
+        {historyLoading ? (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+            <i className="ti ti-loader-2 spinning" /> Loading…
+          </p>
+        ) : history.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+            {upClient
+              ? `No past documents found for "${upClient}". Upload a new file on the left.`
+              : 'Enter a client name to see past documents here.'}
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', maxHeight: 380 }}>
+            {history.map(r => (
+              <button
+                key={r.record_id}
+                onClick={() => onOpenRecord?.(r)}
+                style={{
+                  display: 'flex', flexDirection: 'column', gap: 3,
+                  textAlign: 'left', fontFamily: 'inherit', cursor: 'pointer',
+                  background: 'var(--surface-alt, rgba(0,0,0,0.03))',
+                  border: '1.5px solid var(--border)',
+                  borderRadius: 'var(--radius)',
+                  padding: '10px 14px',
+                  transition: 'border-color 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--blue)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ti ti-file-description" style={{ color: 'var(--blue)', fontSize: 15 }} />
+                  {r.source_file || 'Untitled document'}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', paddingLeft: 21 }}>
+                  {[r.publisher, r.year].filter(Boolean).join(' · ')}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--blue)', paddingLeft: 21, marginTop: 2 }}>
+                  View dashboard →
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
     </div>
@@ -2654,7 +2717,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
 // ─── ExtractionView ───────────────────────────────────────────────────────────
 // Orchestrates the batch as a thin layer over the per-file screens. A single
 // file is simply a batch of length one, so the original flow is preserved.
-export default function ExtractionView({ onNav, clients, clientHandles, loggedInUser = '' }) {
+export default function ExtractionView({ onNav, clients, clientHandles, loggedInUser = '', initialClient = '', initialPublisher = '', onOpenRecord }) {
   const [step, setStep]                         = useState(0);
   const [files, setFiles]                       = useState([]);            // the batch
   const [currentFileIndex, setCurrentFileIndex] = useState(0);            // file under review at Compare
@@ -2667,8 +2730,8 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
 
   // Lifted request form state — persists when the user navigates back from SME Validate
   const [reqYear, setReqYear]           = useState(YEARS[0]);
-  const [reqClient, setReqClient]       = useState('');
-  const [reqPublisher, setReqPublisher] = useState('');
+  const [reqClient, setReqClient]       = useState(initialClient);
+  const [reqPublisher, setReqPublisher] = useState(initialPublisher);
 
   // Both the upload card and the Files scan hand back an array of files.
   const handleFilesSelected = (picked) => {
@@ -2753,6 +2816,9 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     setSavedRecordId(primaryRecordId);
     setAggregateFields(editedAggregateFields);
     setStep(6);
+
+    // Clean up raw uploaded files — data is now in the JSON record, files no longer needed
+    files.forEach(f => { if (f?.stored_name) deleteUpload(f.stored_name); });
   };
 
   // Reset the entire pipeline so a new extraction starts clean.
@@ -2792,10 +2858,11 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
   const screens = [
     <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFilesSelected} clients={clients}
       year={reqYear} onYearChange={setReqYear}
-      client={reqClient} onClientChange={setReqClient}
-      publisher={reqPublisher} onPublisherChange={setReqPublisher}
+      client={reqClient}
+      publisher={reqPublisher}
       existingBatch={files}
       onRemoveExisting={(idx) => setFiles(prev => prev.filter((_, i) => i !== idx))}
+      onOpenRecord={onOpenRecord}
     />,
     <ScreenFiles    key={1} filters={filters} clientDir={clientDir} onSelect={handleFilesSelected} onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={files[0]} files={files} onConfirm={handleSMEConfirm} onBack={() => setStep(0)} defaultName={loggedInUser} />,
