@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from services.uploads import UploadError, UPLOAD_DIR, list_uploads, save_upload
+from services.uploads import UploadError, UPLOAD_DIR, delete_upload, list_uploads, save_upload
 
 router = APIRouter(prefix="/api")
 
@@ -85,6 +85,38 @@ def get_uploads():
     return list_uploads()
 
 
+# Common legal/corporate suffixes that carry no identifying signal
+_NOISE_WORDS = {
+    'llc', 'inc', 'corp', 'ltd', 'co', 'the', 'and', 'of', 'for',
+    'a', 'an', 'company', 'group', 'holdings', 'financial', 'services',
+    'international', 'solutions', 'technologies', 'technology',
+}
+
+def _name_matches(typed: str, text: str) -> bool:
+    """Return True if the document text contains the typed name or a meaningful
+    portion of it.  Handles cases like typing 'OneMain Financial Holdings, LLC'
+    when the document says 'OneMain' — the core identifying word still matches."""
+    if not typed:
+        return True
+
+    # 1. Fast path: exact substring match
+    if re.search(re.escape(typed), text, re.IGNORECASE):
+        return True
+
+    # 2. Word-level match: pull out significant words (≥3 chars, not noise)
+    words = re.findall(r"[A-Za-z0-9'\-]{3,}", typed)
+    sig = [w for w in words if w.lower() not in _NOISE_WORDS]
+    if not sig:
+        return False
+
+    # At least half the significant words must appear as whole words in the text
+    found = sum(
+        1 for w in sig
+        if re.search(r'\b' + re.escape(w) + r'\b', text, re.IGNORECASE)
+    )
+    return found >= max(1, round(len(sig) * 0.5))
+
+
 @router.get("/uploads/{stored_name}/check")
 def check_upload(stored_name: str, client: str = '', publisher: str = '', year: str = '', original_filename: str = ''):
     """Scan an uploaded file for red flags: draft/copy/versioned filename, and
@@ -94,18 +126,16 @@ def check_upload(stored_name: str, client: str = '', publisher: str = '', year: 
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Always check the ORIGINAL filename — the stored name is a UUID hash
     name_to_check = original_filename if original_filename else safe
     warnings = _check_name(name_to_check)
 
     first_text = _first_slide_text(path)
     title = first_text[:120] if first_text else safe
 
-    # Client / publisher / year presence check (all case-insensitive)
-    if client and not re.search(re.escape(client), first_text, re.IGNORECASE):
-        warnings.append(f'No match found for client "{client}" — this document may belong to a different client.')
-    if publisher and not re.search(re.escape(publisher), first_text, re.IGNORECASE):
-        warnings.append(f'No match found for publisher "{publisher}" — this document may be for a different publisher.')
+    if client and not _name_matches(client, first_text):
+        warnings.append(f'No match found for "{client}" — this document may belong to a different client.')
+    if publisher and not _name_matches(publisher, first_text):
+        warnings.append(f'No match found for "{publisher}" — this document may be for a different publisher.')
     if year and not re.search(re.escape(year), first_text):
         warnings.append(f'No match found for "{year}" — the document might be from a different year.')
 
@@ -170,3 +200,10 @@ def serve_upload(stored_name: str):
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(path)
+
+
+@router.delete("/uploads/{stored_name}")
+def remove_upload(stored_name: str):
+    """Delete an uploaded file once extraction is complete. Best-effort — never errors."""
+    delete_upload(stored_name)
+    return {"status": "deleted"}

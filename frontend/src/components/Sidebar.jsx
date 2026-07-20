@@ -4,7 +4,6 @@ const NAV_ITEMS = [
   { id: 'extract',    icon: 'ti-report-analytics', label: 'ROI Extraction' },
   { id: 'dashboards', icon: 'ti-layout-dashboard',  label: 'Dashboards'     },
   { id: 'tracker',    icon: 'ti-table',              label: 'ROI Tracker'    },
-  { id: 'clients',    icon: 'ti-users',              label: 'Clients'        },
 ];
 
 const BOTTOM_ITEMS = [
