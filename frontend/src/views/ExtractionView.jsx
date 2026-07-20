@@ -31,11 +31,15 @@ const BLANK_FIELDS = EXTRACTED_FIELDS.map(f => ({
 const STEP_DEFS = [
   { label: 'Request',      icon: 'ti-adjustments-horizontal' },
   { label: 'SME Validate', icon: 'ti-user-check'             },
-  { label: 'Extract',      icon: 'ti-cpu'                    },
-  { label: 'Compare',      icon: 'ti-git-compare'            },
-  { label: 'Store',        icon: 'ti-database'               },
+  { label: 'Review',       icon: 'ti-database'               },
   { label: 'Done',         icon: 'ti-circle-check'           },
 ];
+
+// Maps internal step index (0-6) to JourneyBar index (0-3)
+// step: 0=Request  1=Files  2=Validate  3=(unused)  4=Loading  5=Store  6=Done
+const STEP_TO_BAR = [0, 1, 1, 2, 2, 2, 3];
+// Maps JourneyBar click (0-3) back to the internal step to navigate to
+const BAR_TO_STEP = [0, 2, 5, 6];
 
 function JourneyBar({ currentStep, onStep }) {
   return (
@@ -1279,6 +1283,7 @@ function buildScriptData(roar) {
       alternates: alternates.map(a => ({ value: formatDollar(a.value), confidence: a.confidence })),
       capacity: f.capacity,
       sourceSlide: f.source_slide,
+      raw: f.raw ?? null,
     };
   }
   return out;
@@ -1446,16 +1451,21 @@ const ROI_FIELD_META = {
 // When no data came back, fall back to the honest blank template (no mock numbers).
 function buildClaudeFields(extractedData) {
   if (!extractedData) return BLANK_FIELDS;
-  const fmt  = (n)   => n != null ? `$${Number(n).toLocaleString()}` : null;
-  const conf = (key) => extractedData?.confidences?.[key] ?? extractedData?.confidence ?? null;
+  const fmt = (n) => n != null ? `$${Number(n).toLocaleString()}` : null;
+  const fallbackConf = extractedData?.overall_confidence ?? extractedData?.confidence ?? null;
+  // Support both new per-field format {value, confidence, source} and old flat format
+  const fieldVal  = (key) => { const v = extractedData[key]; return (v && typeof v === 'object') ? v.value  : v; };
+  const fieldConf = (key) => { const v = extractedData[key]; return (v && typeof v === 'object') ? (v.confidence ?? null) : fallbackConf; };
+  const fieldSrc  = (key) => { const v = extractedData[key]; return (v && typeof v === 'object') ? (v.source  ?? null) : null; };
+  const entry     = (key) => fieldVal(key) != null ? 'extracted' : null;
   return [
-    { label: 'Identified Risk',                value: fmt(extractedData.identified_risk),         variant: 'green', confidence: conf('identified_risk'),         source: null, flag: null, entryMode: extractedData.identified_risk         != null ? 'extracted' : null },
-    { label: 'Identified Cost Avoidance',      value: fmt(extractedData.id_cost_avoidance),       variant: 'green', confidence: conf('id_cost_avoidance'),       source: null, flag: null, entryMode: extractedData.id_cost_avoidance       != null ? 'extracted' : null },
-    { label: 'Accomplished Cost Avoidance',    value: fmt(extractedData.acc_cost_avoidance),      variant: 'green', confidence: conf('acc_cost_avoidance'),      source: null, flag: null, entryMode: extractedData.acc_cost_avoidance      != null ? 'extracted' : null },
-    { label: 'Identified Cost Optimization',   value: fmt(extractedData.id_cost_optimization),    variant: 'blue',  confidence: conf('id_cost_optimization'),    source: null, flag: null, entryMode: extractedData.id_cost_optimization    != null ? 'extracted' : null },
-    { label: 'Accomplished Cost Optimization', value: fmt(extractedData.acc_cost_optimization),   variant: 'blue',  confidence: conf('acc_cost_optimization'),   source: null, flag: null, entryMode: extractedData.acc_cost_optimization   != null ? 'extracted' : null },
-    { label: 'Identified Cost Savings',        value: fmt(extractedData.identified_cost_savings), variant: 'green', confidence: conf('identified_cost_savings'), source: null, flag: null, entryMode: extractedData.identified_cost_savings != null ? 'extracted' : null },
-    { label: 'Realized Cost Savings',          value: fmt(extractedData.realized_savings),        variant: 'green', confidence: conf('realized_savings'),        source: null, flag: null, entryMode: extractedData.realized_savings        != null ? 'extracted' : null },
+    { label: 'Identified Risk',                value: fmt(fieldVal('identified_risk')),         variant: 'green', confidence: fieldConf('identified_risk'),         source: fieldSrc('identified_risk'),         flag: null, entryMode: entry('identified_risk')         },
+    { label: 'Identified Cost Avoidance',      value: fmt(fieldVal('id_cost_avoidance')),       variant: 'green', confidence: fieldConf('id_cost_avoidance'),       source: fieldSrc('id_cost_avoidance'),       flag: null, entryMode: entry('id_cost_avoidance')       },
+    { label: 'Accomplished Cost Avoidance',    value: fmt(fieldVal('acc_cost_avoidance')),      variant: 'green', confidence: fieldConf('acc_cost_avoidance'),      source: fieldSrc('acc_cost_avoidance'),      flag: null, entryMode: entry('acc_cost_avoidance')      },
+    { label: 'Identified Cost Optimization',   value: fmt(fieldVal('id_cost_optimization')),    variant: 'blue',  confidence: fieldConf('id_cost_optimization'),    source: fieldSrc('id_cost_optimization'),    flag: null, entryMode: entry('id_cost_optimization')    },
+    { label: 'Accomplished Cost Optimization', value: fmt(fieldVal('acc_cost_optimization')),   variant: 'blue',  confidence: fieldConf('acc_cost_optimization'),   source: fieldSrc('acc_cost_optimization'),   flag: null, entryMode: entry('acc_cost_optimization')   },
+    { label: 'Identified Cost Savings',        value: fmt(fieldVal('identified_cost_savings')), variant: 'green', confidence: fieldConf('identified_cost_savings'), source: fieldSrc('identified_cost_savings'), flag: null, entryMode: entry('identified_cost_savings') },
+    { label: 'Realized Cost Savings',          value: fmt(fieldVal('realized_savings')),        variant: 'green', confidence: fieldConf('realized_savings'),        source: fieldSrc('realized_savings'),        flag: null, entryMode: entry('realized_savings')        },
   ];
 }
 
@@ -1887,7 +1897,7 @@ function BatchExtract({ files = [], onComplete }) {
 
         // Claude AI extractor — pass the whole file object so it can use
         // id / stored_name / path, falling back to the filename.
-        const fileRef = (file?.path || file?.id) ? file : (file?.name || '');
+        const fileRef = (file?.path || file?.id || file?.stored_name) ? file : (file?.name || '');
         tasks.push(
           extractFromFile(fileRef)
             .then(res => { extractedData = res.data || res; })
@@ -2051,15 +2061,19 @@ function CompareRow({ field, onResolve }) {
   const bestVal     = field.sme ?? field.claude;
   const scriptMatch = !isSkipped && field.script !== '—' && field.script === bestVal;
 
-  // Store raw number string; format only for display and when notifying parent
   const [editVal,   setEditVal]   = useState(toRaw(bestVal));
   const [confirmed, setConfirmed] = useState(true);
+  const [expanded,  setExpanded]  = useState(false);
 
   useEffect(() => {
     onResolve(field.label, confirmed ? toFormatted(editVal) : null);
   }, [confirmed, editVal]);
 
-  const rowState = isSkipped ? 'skipped' : confirmed ? 'match' : 'mismatch';
+  const scriptConfMed  = field.scriptConfidence != null && field.scriptConfidence >= 70 && field.scriptConfidence < 90;
+  const claudeConfMed  = field.claudeConfidence != null && field.claudeConfidence >= 70 && field.claudeConfidence < 90;
+  const interMismatch  = !isSkipped && field.script !== '—' && field.claude != null && field.script !== field.claude;
+  const rowState = isSkipped ? 'skipped' : (field.scriptUncertain || interMismatch || scriptConfMed || claudeConfMed) ? 'uncertain' : confirmed ? 'match' : 'mismatch';
+  const hasSource = field.scriptRaw || field.claudeSource;
 
   return (
     <div className={`compare-row ${rowState}`}>
@@ -2067,6 +2081,17 @@ function CompareRow({ field, onResolve }) {
       {/* Field name */}
       <span className="compare-cell-field">
         {field.label}
+        {hasSource && (
+          <button
+            className={`compare-source-toggle ${expanded ? 'is-open' : ''}`}
+            onClick={() => setExpanded(e => !e)}
+            aria-label={expanded ? 'Hide extraction source' : 'View extraction source'}
+          >
+            <i className="ti ti-file-search" aria-hidden="true" />
+            <span>{expanded ? 'Hide source' : 'View source'}</span>
+            <i className={`ti ti-chevron-${expanded ? 'up' : 'down'}`} aria-hidden="true" />
+          </button>
+        )}
       </span>
 
       {/* Script value — always shown when the script found one, independent of
@@ -2076,18 +2101,14 @@ function CompareRow({ field, onResolve }) {
         <span className="compare-na">—</span>
       ) : (
         <span className={`compare-script ${(!isSkipped && !scriptMatch) ? 'is-mismatch' : ''}`}>
-          <span>
+          <span
+            className="compare-conf-wrap"
+            data-tip={field.scriptConfidence != null ? `${field.scriptConfidence}% — ${field.scriptConfidence >= 90 ? 'High confidence' : field.scriptConfidence >= 70 ? 'Medium confidence' : 'Low confidence'}` : undefined}
+          >
+            {field.scriptConfidence != null && (
+              <span className={`compare-conf-dot ${field.scriptConfidence >= 90 ? 'high' : field.scriptConfidence >= 70 ? 'med' : 'low'}`} />
+            )}
             {field.script}
-            {field.scriptUncertain && (
-              <i
-                className="ti ti-alert-triangle compare-flag-icon warn"
-                title={`Competing values found: ${field.scriptAlternates.map(a => a.value).filter(Boolean).join(', ')}`}
-                aria-hidden="true"
-              />
-            )}
-            {!field.scriptUncertain && !isSkipped && !scriptMatch && (
-              <i className="ti ti-alert-triangle compare-flag-icon" aria-hidden="true" />
-            )}
           </span>
           {field.scriptUncertain && field.scriptAlternates.length > 0 && (
             <span className="compare-alt">
@@ -2098,14 +2119,19 @@ function CompareRow({ field, onResolve }) {
       )}
 
       {/* Claude AI value */}
-      <span className={field.claude ? 'compare-mono' : 'compare-na'}>
-        {field.claude ?? '—'}
-      </span>
-
-      {/* SME Derived value */}
-      <span className={field.sme ? 'compare-sme' : 'compare-na'}>
-        {isSkipped ? <span className="compare-na">Skipped</span> : (field.sme ?? '—')}
-      </span>
+      {field.claude ? (
+        <span
+          className="compare-mono compare-conf-wrap"
+          data-tip={field.claudeConfidence != null ? `${field.claudeConfidence}% — ${field.claudeConfidence >= 90 ? 'High' : field.claudeConfidence >= 70 ? 'Med' : 'Low'}` : undefined}
+        >
+          {field.claudeConfidence != null && (
+            <span className={`compare-conf-dot ${field.claudeConfidence >= 90 ? 'high' : field.claudeConfidence >= 70 ? 'med' : 'low'}`} />
+          )}
+          {field.claude}
+        </span>
+      ) : (
+        <span className="compare-na">—</span>
+      )}
 
       {/* Final Value — confirmed: value + pencil; editing: input + Done */}
       <div className="compare-final">
@@ -2149,11 +2175,30 @@ function CompareRow({ field, onResolve }) {
           </div>
         )}
       </div>
+
+      {/* Source panel — spans all columns, visible when expanded */}
+      {expanded && hasSource && (
+        <div className="compare-source-panel">
+          {field.scriptRaw && (
+            <div className="compare-source-item">
+              <span className="compare-source-tag script">Script</span>
+              {field.scriptSlide && <span className="compare-source-slide">Slide {field.scriptSlide}</span>}
+              <span className="compare-source-text">"{field.scriptRaw}"</span>
+            </div>
+          )}
+          {field.claudeSource && (
+            <div className="compare-source-item">
+              <span className="compare-source-tag claude">Claude AI</span>
+              <span className="compare-source-text">"{field.claudeSource}"</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null, onNext, onBack }) {
+function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null, onNext, onBack, smeName = '', fileMeta = null }) {
   const isMulti = batchInfo?.total > 1;
   // Build rows from live extracted fields + the script extractor's values.
   // script = deterministic .pptx extractor — real values only (null when no file was
@@ -2174,13 +2219,16 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
       script: s?.value ?? '—',
       scriptUncertain:  s?.uncertain ?? false,
       scriptAlternates: s?.alternates ?? [],
+      scriptConfidence: s?.confidence ?? null,
+      scriptRaw:        s?.raw ?? null,
+      scriptSlide:      s?.sourceSlide ?? null,
       claude: f.entryMode === 'extracted' ? f.value : null,
+      claudeConfidence: f.confidence ?? null,
+      claudeSource:     f.source ?? null,
       sme:    f.entryMode === 'manual'    ? f.value : null,
       flag:   f.flag,
     };
   });
-
-  const uncertainLabels = compareRows.filter(r => r.scriptUncertain).map(r => r.label);
 
   const [resolved, setResolved] = useState({});
 
@@ -2194,8 +2242,31 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
 
   // "Best available" value per row — prefer sme-computed, fall back to claude extracted
   const bestVal = (row) => row.sme ?? row.claude;
-  const matchCount    = compareRows.filter(f => f.flag !== 'SME skipped — data not available' && f.script === bestVal(f)).length;
-  const mismatchCount = resolvableRows.length - matchCount;
+
+  // A row is "ok" only when both extractors agree on a high-confidence value
+  const isInterMismatch = (r) => r.script !== '—' && r.claude != null && r.script !== r.claude;
+  const confOk = (r) =>
+    !r.scriptUncertain &&
+    !isInterMismatch(r) &&
+    (r.scriptConfidence == null || r.scriptConfidence >= 90) &&
+    (r.claudeConfidence == null || r.claudeConfidence >= 90);
+
+  // Group fields needing review by issue type
+  const isCompeting = (r) => r.scriptUncertain || isInterMismatch(r);
+  const isLowConf   = (r) => (r.scriptConfidence != null && r.scriptConfidence < 70) || (r.claudeConfidence != null && r.claudeConfidence < 70);
+  const isMedConf   = (r) => (r.scriptConfidence != null && r.scriptConfidence >= 70 && r.scriptConfidence < 90) || (r.claudeConfidence != null && r.claudeConfidence >= 70 && r.claudeConfidence < 90);
+
+  // Yellow rows = any of the uncertain conditions (mirrors CompareRow rowState logic)
+  const isYellow    = (r) => isCompeting(r) || isLowConf(r) || isMedConf(r);
+  const reviewCount = resolvableRows.filter(isYellow).length;
+  const matchCount  = resolvableRows.length - reviewCount;
+  const lowestConf  = (r) => { const vs = [r.scriptConfidence, r.claudeConfidence].filter(v => v != null); return vs.length ? Math.round(Math.min(...vs)) : null; };
+
+  const reviewGroups = [
+    { key: 'competing', label: 'Competing values',   items: resolvableRows.filter(isCompeting).map(r => r.label) },
+    { key: 'lowconf',   label: 'Low confidence',     items: resolvableRows.filter(r => !isCompeting(r) && isLowConf(r)).map(r => { const p = lowestConf(r); return p != null ? `${r.label} (${p}%)` : r.label; }) },
+    { key: 'medconf',   label: 'Medium confidence',  items: resolvableRows.filter(r => !isCompeting(r) && !isLowConf(r) && isMedConf(r)).map(r => { const p = lowestConf(r); return p != null ? `${r.label} (${p}%)` : r.label; }) },
+  ].filter(g => g.items.length > 0);
 
   const handleNext = () => {
     const resolvedFields = sourceFields.map(f => {
@@ -2230,18 +2301,21 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
           </span>
           <span className="compare-mismatch-label">
             <i className="ti ti-alert-triangle" aria-hidden="true" />
-            {mismatchCount} mismatch{mismatchCount !== 1 ? 'es' : ''} — review required
+            {reviewCount} need{reviewCount === 1 ? 's' : ''} review
           </span>
         </div>
 
-        {uncertainLabels.length > 0 && (
+        {reviewGroups.length > 0 && (
           <div className="compare-uncertain">
-            <i className="ti ti-alert-triangle compare-uncertain-icon" aria-hidden="true" />
-            <span>
-              <strong>Uncertain extraction</strong> — the script found competing values for{' '}
-              {uncertainLabels.length} field{uncertainLabels.length !== 1 ? 's' : ''}
-              {' '}({uncertainLabels.join(', ')}). Verify the Script column against the source before storing.
-            </span>
+            <div className="compare-uncertain-header">
+              <i className="ti ti-alert-triangle compare-uncertain-icon" aria-hidden="true" />
+              <strong>Review required before saving</strong>
+            </div>
+            <ul className="compare-uncertain-list">
+              {reviewGroups.map(g => (
+                <li key={g.key}><strong>{g.label}:</strong> {g.items.join(' · ')}</li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
@@ -2251,7 +2325,6 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
         <span>Field</span>
         <span>Script</span>
         <span>Claude AI</span>
-        <span>SME Derived</span>
         <span>Final Value</span>
       </div>
 
@@ -2260,6 +2333,60 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
         {compareRows.map(f => (
           <CompareRow key={f.label} field={f} onResolve={handleResolve} />
         ))}
+      </div>
+
+      {/* What gets stored */}
+      <div className="compare-stored">
+        <div className="compare-stored-header">
+          <div className="compare-stored-title">
+            <i className="ti ti-database" aria-hidden="true" />
+            WHAT GETS STORED
+          </div>
+          <span className="compare-stored-subtitle">Saved automatically when you click Save &amp; Done</span>
+        </div>
+        <div className="compare-stored-items">
+          <div className="compare-stored-item">
+            <div className="compare-stored-icon-wrap file">
+              <i className="ti ti-file-text" aria-hidden="true" />
+            </div>
+            <div>
+              <span className="compare-stored-label">Source file</span>
+              <span className="compare-stored-value">{fileMeta?.name || batchInfo?.name || '—'}</span>
+            </div>
+          </div>
+          <div className="compare-stored-item">
+            <div className="compare-stored-icon-wrap sme">
+              <i className="ti ti-user-check" aria-hidden="true" />
+            </div>
+            <div>
+              <span className="compare-stored-label">SME checkpoint</span>
+              <span className="compare-stored-value">{smeName || '—'}</span>
+            </div>
+          </div>
+          <div className="compare-stored-item">
+            <div className="compare-stored-icon-wrap audit">
+              <i className="ti ti-clipboard-list" aria-hidden="true" />
+            </div>
+            <div>
+              <span className="compare-stored-label">Audit record</span>
+              <span className="compare-stored-value">Auto-created on save</span>
+            </div>
+          </div>
+        </div>
+        <div className="compare-stored-roi-section">
+          <span className="compare-stored-label">ROI values</span>
+          <div className="compare-stored-roi-chips">
+            {resolvableRows.map(row => {
+              const val = resolved[row.label];
+              return (
+                <span key={row.label} className={`compare-stored-chip ${val ? 'confirmed' : 'pending'}`}>
+                  <i className={`ti ${val ? 'ti-circle-check' : 'ti-circle-dashed'}`} aria-hidden="true" />
+                  {row.label}{val && <strong>{val}</strong>}
+                </span>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Footer */}
@@ -2285,11 +2412,9 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
             disabled={!allDone}
             onClick={handleNext}
           >
-            {isMulti
-              ? (batchInfo.isLast
-                  ? <>Confirm &amp; Aggregate <i className="ti ti-arrow-right" aria-hidden="true" /></>
-                  : <>Confirm &amp; Next File <i className="ti ti-arrow-right" aria-hidden="true" /></>)
-              : <>Confirm &amp; Store <i className="ti ti-arrow-right" aria-hidden="true" /></>
+            {isMulti && !batchInfo.isLast
+              ? <>Confirm &amp; Next File <i className="ti ti-arrow-right" aria-hidden="true" /></>
+              : <>Save &amp; Done <i className="ti ti-arrow-right" aria-hidden="true" /></>
             }
           </button>
         </div>
@@ -2302,18 +2427,35 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
 // For the current file: first let the SME fill/skip any missing fields (the
 // ScreenExtract review), then resolve the Script-vs-Claude comparison. Remounted
 // per file by the parent (keyed on the file index) so each file starts clean.
-function FileReview({ fileResult, fileIndex, total, isLast, onConfirm, onExclude, onBack }) {
-  if (!fileResult) {
+function FileReview({ fileResult, fileIndex, total, isLast, onConfirm, onExclude, onBack, allStatuses = [], files = [], smeName = '' }) {
+  const currentStatus = allStatuses[fileIndex] ?? 'pending';
+
+  if (currentStatus !== 'done') {
     return (
       <div className="card">
         <div className="card-title">
-          <i className="ti ti-git-compare" aria-hidden="true" /> Compare
+          <i className="ti ti-cpu" aria-hidden="true" /> ROI Extraction
         </div>
-        <p className="extract-sub">No extraction data yet. Run the Extract step first.</p>
-        <div className="btn-row">
-          <button className="btn ghost" onClick={onBack}>
-            <i className="ti ti-arrow-left" aria-hidden="true" /> Back
-          </button>
+        <p className="extract-sub">
+          Running the script extractor and Claude AI across {files.length} file{files.length !== 1 ? 's' : ''}…
+        </p>
+        <div className="extract-steps">
+          {files.map((f, i) => {
+            const status = allStatuses[i] || 'pending';
+            return (
+              <div className={`extract-step ${status}`} key={i}>
+                <div className="extract-step-icon">
+                  {status === 'done'    && <i className="ti ti-check" aria-hidden="true" />}
+                  {status === 'running' && <i className="ti ti-loader-2 spinning" aria-hidden="true" />}
+                  {status === 'pending' && <i className="ti ti-circle" aria-hidden="true" />}
+                </div>
+                <span className="extract-step-label">{f.name || `File ${i + 1}`}</span>
+                {status === 'done'    && <Badge color="green"><i className="ti ti-check" /> Done</Badge>}
+                {status === 'running' && <Badge color="blue">Running…</Badge>}
+                {status === 'pending' && <Badge color="navy">Pending</Badge>}
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -2330,6 +2472,8 @@ function FileReview({ fileResult, fileIndex, total, isLast, onConfirm, onExclude
       onExclude={total > 1 ? onExclude : null}
       onNext={onConfirm}
       onBack={onBack}
+      smeName={smeName}
+      fileMeta={fileResult.fileMeta}
     />
   );
 }
@@ -2373,7 +2517,7 @@ function ScreenStore({ fileResults = [], aggregateFields, commonMeta = {}, store
     <div className="card">
       <div className="card-title">
         <i className="ti ti-database" aria-hidden="true" />
-        Store Results
+        Review
       </div>
       <p className="store-sub">
         {multi
@@ -2724,14 +2868,58 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
   const [fileResults, setFileResults]           = useState([]);          // [{ fileMeta, extractedData, scriptData, finalFields, excluded }]
   const [smeName, setSmeName]                   = useState('');
   const [aggregateFields, setAggregateFields]   = useState(null);
-  const [storeAggregate, setStoreAggregate]     = useState(true);
   const [filters, setFilters]                   = useState({});
   const [savedRecordId, setSavedRecordId]       = useState(null);
+  const [fileStatuses, setFileStatuses]         = useState([]);           // 'pending' | 'running' | 'done' per file
+  const extractionCancelRef = useRef(false);
 
   // Lifted request form state — persists when the user navigates back from SME Validate
   const [reqYear, setReqYear]           = useState(YEARS[0]);
   const [reqClient, setReqClient]       = useState(initialClient);
   const [reqPublisher, setReqPublisher] = useState(initialPublisher);
+
+  const startExtraction = (filesToExtract) => {
+    extractionCancelRef.current = false;
+    setFileStatuses(filesToExtract.map(() => 'pending'));
+    setFileResults(filesToExtract.map(f => ({ fileMeta: f, extractedData: null, scriptData: null, finalFields: null, excluded: false })));
+
+    (async () => {
+      for (let i = 0; i < filesToExtract.length; i++) {
+        if (extractionCancelRef.current) return;
+        setFileStatuses(prev => prev.map((s, idx) => idx === i ? 'running' : s));
+
+        const file = filesToExtract[i];
+        let extractedData = null;
+        let scriptData = null;
+        const tasks = [];
+
+        if (file?.file) {
+          tasks.push(
+            extractROAR(file.file)
+              .then(roar => { scriptData = buildScriptData(roar); })
+              .catch(() => {})
+          );
+        }
+
+        const fileRef = (file?.path || file?.id || file?.stored_name) ? file : (file?.name || '');
+        tasks.push(
+          extractFromFile(fileRef)
+            .then(res => { extractedData = res.data || res; })
+            .catch(() => {})
+        );
+
+        await Promise.all(tasks);
+        if (extractionCancelRef.current) return;
+
+        const ed = extractedData;
+        const sd = scriptData;
+        setFileResults(prev => prev.map((r, idx) =>
+          idx === i ? { ...r, extractedData: ed, scriptData: sd } : r
+        ));
+        setFileStatuses(prev => prev.map((s, idx) => idx === i ? 'done' : s));
+      }
+    })();
+  };
 
   // Both the upload card and the Files scan hand back an array of files.
   const handleFilesSelected = (picked) => {
@@ -2741,26 +2929,55 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     setStep(2);
   };
 
-  const handleSMEConfirm = ({ smeName: n }) => { setSmeName(n); setStep(3); };
-
-  // Extraction finished for every file — seed the per-file review.
-  const handleBatchExtracted = (results) => {
-    setFileResults(results.map(r => ({ ...r, finalFields: null, excluded: false })));
-    setCurrentFileIndex(0);
+  const handleSMEConfirm = ({ smeName: n }) => {
+    setSmeName(n);
+    startExtraction(files);
     setStep(4);
   };
 
-  // Advance to the next file, or — once the last file is handled — compute the
-  // aggregate and move on to Store.
+  const performSave = async (results) => {
+    const agg = aggregateFinalFields(results);
+    const sme = smeName || loggedInUser || '';
+    const active = results.filter(r => !r.excluded && r.finalFields);
+    const isMulti = active.length > 1;
+    const cm = deriveCommonMeta(results);
+
+    let primaryRecordId = null;
+
+    if (!isMulti) {
+      const only = active[0];
+      const meta = only?.fileMeta || files[0] || {};
+      const saved = await saveRecord(buildRecord(meta, agg, sme, only?.scriptData))
+        .catch(err => { console.error('[Store] saveRecord failed:', err); return null; });
+      primaryRecordId = saved?.record_id || null;
+    } else {
+      const saved = await Promise.all(active.map(r =>
+        saveRecord(buildRecord(r.fileMeta, r.finalFields, sme, r.scriptData))
+          .catch(err => { console.error('[Store] saveRecord failed:', err); return null; })
+      ));
+      primaryRecordId = saved[0]?.record_id || null;
+      const aggRecord = buildRecord({ client: cm.client, publisher: cm.publisher, year: cm.year }, agg, sme);
+      aggRecord.source_file = `Aggregate — ${cm.client || 'Multi-client'} ${cm.year || ''}`.trim();
+      const aggSaved = await saveRecord(aggRecord)
+        .catch(err => { console.error('[Store] aggregate saveRecord failed:', err); return null; });
+      if (!primaryRecordId) primaryRecordId = aggSaved?.record_id || null;
+    }
+
+    setSavedRecordId(primaryRecordId);
+    setAggregateFields(agg);
+    setFileResults(results);
+    setStep(6);
+    files.forEach(f => { if (f?.stored_name) deleteUpload(f.stored_name); });
+  };
+
+  // Advance to the next file, or save and go to Done on the last file.
   const advanceAfterFile = (results) => {
     const next = currentFileIndex + 1;
-    setFileResults(results);
     if (next < results.length) {
+      setFileResults(results);
       setCurrentFileIndex(next);
     } else {
-      setAggregateFields(aggregateFinalFields(results));
-      setStoreAggregate(results.filter(r => !r.excluded).length > 1);
-      setStep(5);
+      performSave(results);
     }
   };
 
@@ -2778,58 +2995,17 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
 
   const commonMeta = deriveCommonMeta(fileResults);
 
-  // Write a record per (non-excluded) file, plus the aggregate row when storing
-  // a real multi-file batch. A single-file batch stores exactly one record, with
-  // any Store-screen edits applied — matching the original behavior.
-  const handleStore = async (editedAggregateFields) => {
-    const sme = smeName || loggedInUser || '';
-    const active = fileResults.filter(r => !r.excluded && r.finalFields);
-    const isMulti = active.length > 1;
-
-    let primaryRecordId = null;
-
-    if (!isMulti) {
-      const only = active[0];
-      const meta = only?.fileMeta || files[0] || {};
-      const saved = await saveRecord(buildRecord(meta, editedAggregateFields, sme, only?.scriptData))
-        .catch(err => { console.error('[Store] saveRecord failed:', err); return null; });
-      primaryRecordId = saved?.record_id || null;
-    } else {
-      const results = await Promise.all(active.map(r =>
-        saveRecord(buildRecord(r.fileMeta, r.finalFields, sme, r.scriptData))
-          .catch(err => { console.error('[Store] saveRecord failed:', err); return null; })
-      ));
-      primaryRecordId = results[0]?.record_id || null;
-      if (storeAggregate) {
-        const aggMeta = {
-          client:    commonMeta.client,
-          publisher: commonMeta.publisher,
-          year:      commonMeta.year,
-        };
-        const aggRecord = buildRecord(aggMeta, editedAggregateFields, sme);
-        aggRecord.source_file = `Aggregate — ${commonMeta.client || 'Multi-client'} ${commonMeta.year || ''}`.trim();
-        const aggSaved = await saveRecord(aggRecord).catch(err => { console.error('[Store] aggregate saveRecord failed:', err); return null; });
-        if (!primaryRecordId) primaryRecordId = aggSaved?.record_id || null;
-      }
-    }
-
-    setSavedRecordId(primaryRecordId);
-    setAggregateFields(editedAggregateFields);
-    setStep(6);
-
-    // Clean up raw uploaded files — data is now in the JSON record, files no longer needed
-    files.forEach(f => { if (f?.stored_name) deleteUpload(f.stored_name); });
-  };
 
   // Reset the entire pipeline so a new extraction starts clean.
   const handleReset = () => {
+    extractionCancelRef.current = true;
     setStep(0);
     setFiles([]);
     setCurrentFileIndex(0);
     setFileResults([]);
+    setFileStatuses([]);
     setSmeName('');
     setAggregateFields(null);
-    setStoreAggregate(true);
     setFilters({});
     setReqYear(YEARS[0]);
     setReqClient('');
@@ -2866,7 +3042,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     />,
     <ScreenFiles    key={1} filters={filters} clientDir={clientDir} onSelect={handleFilesSelected} onBack={() => setStep(0)} />,
     <ScreenValidate key={2} selectedFile={files[0]} files={files} onConfirm={handleSMEConfirm} onBack={() => setStep(0)} defaultName={loggedInUser} />,
-    <BatchExtract   key={3} files={files} onComplete={handleBatchExtracted} />,
+    null,
     <FileReview
       key={`4-${currentFileIndex}`}
       fileResult={fileResults[currentFileIndex]}
@@ -2875,26 +3051,18 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
       isLast={currentFileIndex === files.length - 1}
       onConfirm={handleFileConfirm}
       onExclude={handleFileExclude}
-      onBack={() => setStep(3)}
-    />,
-    <ScreenStore
-      key={5}
-      fileResults={fileResults}
-      aggregateFields={aggregateFields}
-      commonMeta={commonMeta}
-      storeAggregate={storeAggregate}
-      onToggleAggregate={setStoreAggregate}
+      onBack={() => setStep(2)}
+      allStatuses={fileStatuses}
+      files={files}
       smeName={smeName}
-      multi={activeResults.length > 1}
-      onNext={handleStore}
-      onBack={() => { setCurrentFileIndex(Math.max(0, files.length - 1)); setStep(4); }}
     />,
+    null,
     <ScreenDone     key={6} finalFields={aggregateFields} selectedFile={doneMeta} onNewExtraction={handleReset} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
   ];
 
   return (
     <>
-      <JourneyBar currentStep={step} onStep={setStep} />
+      <JourneyBar currentStep={STEP_TO_BAR[step] ?? 0} onStep={i => setStep(BAR_TO_STEP[i] ?? 0)} />
       {screens[step]}
     </>
   );
