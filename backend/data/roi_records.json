@@ -256,7 +256,7 @@
   {
     "record_id": "r_2cc46a833b73",
     "year": 2026,
-    "client": "Encova Insurance",
+    "client": "",
     "publisher": "Oracle",
     "date_delivered": null,
     "currency": "USD",
@@ -273,7 +273,7 @@
     "confidence": 92,
     "source_file": "2025 December_Encova Insurance_IBM_ROAR_v1.pptx",
     "sme": "christina",
-    "stored_name": "dd192d564b724a5b8366696e4964c89a.pptx",
+    "stored_name": "091dc70ff6c24689869a3f446d13616d.pptx",
     "field_meta": {
       "identified_risk": {
         "source_slide": 13,
@@ -307,66 +307,76 @@
       }
     },
     "executive_summary": {
-      "overview": "Encova Insurance engaged Anglepoint for IBM software asset management services, covering 9 distributed IBM products across 262 servers and 50 containers with 1 ILMT instance. This ROAR documents the baseline analysis identifying compliance risks and cost optimization opportunities for their IBM estate.",
+      "overview": "Encova Insurance IBM Risk & Opportunity Assessment Report for January 2026, covering SAM managed services for 9 distributed IBM products across 262 servers and 50 containers. Anglepoint's IBM License Management team conducted comprehensive license position analysis through their CVA (Contract Value Assessment) program.",
       "key_accomplishments": [
         "Identified and accomplished $222K in cost avoidance through proactive compliance and financial controls",
-        "Achieved $282K in accomplished cost optimization from the $507K total identified optimization potential",
+        "Identified $507K in total cost optimization opportunities over a 1-year period",
+        "Accomplished $282K in verified cost optimization through software and contract adjustments",
         "Completed comprehensive analysis of 262 servers and 50 containers running IBM software",
-        "Established baseline Effective License Position for 9 distributed IBM products"
+        "Analyzed 1 ILMT instance for license compliance monitoring"
       ],
       "key_metrics": [
         {
-          "label": "Identified Risk",
+          "label": "Total Identified Risk",
           "value": "$222K",
-          "context": "Financial exposure due to non-compliance with IBM licensing terms"
+          "context": "Quantified financial exposure due to non-compliance with IBM licensing or contractual terms"
+        },
+        {
+          "label": "Identified Cost Avoidance",
+          "value": "$222K",
+          "context": "Potential unbudgeted costs prevented through proactive compliance controls"
         },
         {
           "label": "Accomplished Cost Avoidance",
           "value": "$222K",
-          "context": "Prevented unbudgeted costs through proactive compliance measures"
+          "context": "100% of identified cost avoidance successfully realized"
         },
         {
-          "label": "Total Identified Optimization",
+          "label": "Identified Cost Optimization",
           "value": "$507K",
-          "context": "Potential cost avoidance and savings over 1-year period"
+          "context": "Opportunities to reduce software expenses through license optimization and contract negotiations"
         },
         {
           "label": "Accomplished Cost Optimization",
           "value": "$282K",
-          "context": "Verified cost reductions achieved through license optimization"
+          "context": "Verified cost reductions achieved through optimization efforts (56% of identified)"
         },
         {
           "label": "Servers Analyzed",
           "value": "262",
-          "context": "Servers running IBM software included in scope"
+          "context": "Distributed servers running IBM software within engagement scope"
         },
         {
           "label": "Containers Analyzed",
           "value": "50",
-          "context": "Containers running IBM software included in scope"
+          "context": "Containerized environments running IBM software"
         }
       ],
       "recommendations": [
         "Continue IBM CVA Services to maintain ongoing IBM software license management through the CVA program",
-        "Execute Annual S&S Renewal considering potential reduction opportunities identified in analysis",
-        "Expand publisher scope to include Oracle, Microsoft, VMware and other major publishers for comprehensive SAM coverage"
+        "Execute Annual S&S Renewal considering potential reduction opportunities identified in the analysis",
+        "Expand Publisher Scope to include Oracle, Microsoft, VMware, and other major publishers for comprehensive SAM coverage"
       ],
       "primary_risks": [
-        "Identified $222K financial exposure due to non-compliance with IBM software licensing or contractual terms requiring corrective action"
+        "Identified compliance risk of $222K due to non-compliance with IBM software licensing or contractual terms requiring corrective action",
+        "Unrealized cost optimization of $225K ($507K identified minus $282K accomplished) represents potential savings not yet captured"
       ],
       "market_risks": [
-        "IBM licensing complexity across distributed products creates ongoing compliance risk without continuous management"
+        "IBM licensing complexity across distributed and containerized environments requires continuous monitoring and ILMT management",
+        "Annual S&S renewal presents opportunity for cost reduction but requires strategic preparation"
       ],
       "additional_insights": [
-        "Engagement covered 9 distributed IBM products with deployment discovery completed across infrastructure",
-        "$225K optimization opportunity gap remains between identified ($507K) and accomplished ($282K) cost optimization",
-        "ILMT instance provides foundation for ongoing PVU license tracking and compliance monitoring"
+        "Engagement scope covers 9 distributed IBM products requiring active license management",
+        "ILMT instance deployment enables sub-capacity licensing compliance tracking",
+        "Anglepoint recognized as Gartner Leader in SAM Managed Services for 6 consecutive years",
+        "Full engagement process includes Contract Discovery, Deployment Discovery, EEP, Consumption Position, ELP, and ROAR deliverables"
       ],
       "next_steps": [
-        "Continue quarterly CVA submission for ongoing IBM license management",
-        "Execute SOW renewal to maintain managed services continuity",
-        "Complete Annual S&S Renewal evaluation for potential cost reduction opportunities",
-        "Evaluate expansion to additional publishers including Oracle, Microsoft, and VMware"
+        "Continue IBM CVA Services for ongoing license management and compliance monitoring",
+        "Execute Annual S&S Renewal with focus on identified reduction opportunities",
+        "Expand publisher scope to Oracle, Microsoft, VMware for comprehensive multi-publisher SAM coverage",
+        "Complete Quarterly CVA Submission as part of managed service cadence",
+        "Initiate SOW Renewal discussions"
       ],
       "highlights": [
         {
@@ -389,17 +399,17 @@
             "value": 282000
           },
           {
-            "name": "Remaining Optimization Potential",
+            "name": "Remaining Cost Optimization",
             "value": 225000
           }
         ],
         "accomplishment_rate": {
-          "accomplished": 56,
-          "remaining": 44
+          "accomplished": 69,
+          "remaining": 31
         }
       }
     },
-    "saved_at": "2026-07-07T20:41:30.114653"
+    "saved_at": "2026-07-15T22:34:35.714267"
   },
   {
     "record_id": "r_b3c6f4845738",
