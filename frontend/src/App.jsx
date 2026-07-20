@@ -9,7 +9,6 @@ import HelpView from './views/HelpView';
 import LoginView from './views/LoginView';
 import SettingsView from './views/SettingsView';
 import TutorialOverlay, { shouldShowTutorial } from './components/TutorialOverlay';
-import ClientFolderGate from './components/ClientFolderGate';
 import './index.css';
 
 const VIEW_META = {
@@ -32,13 +31,15 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [showClientGate, setShowClientGate] = useState(false);
+  const [loginClient, setLoginClient]   = useState('');
+  const [loginPublisher, setLoginPublisher] = useState('');
   const [clients, setClients]           = useState(null);
   const [clientHandles, setClientHandles] = useState(null);
   const [extractionKey, setExtractionKey] = useState(0);
   // A filtered subset of records handed off from the Tracker → Dashboards.
   // Null when the user opens Dashboards normally (works off the full dataset).
   const [dashboardSeed, setDashboardSeed] = useState(null);
+  const [dashboardTarget, setDashboardTarget] = useState(null); // record to open directly
   const meta = VIEW_META[activeView] || VIEW_META.extract;
 
   // Jump to Dashboards scoped to exactly the rows currently shown in the Tracker.
@@ -47,20 +48,11 @@ export default function App() {
     setActiveView('dashboards');
   };
 
-  const handleLogin = (username) => {
+  const handleLogin = (username, client = '', publisher = '') => {
     setLoggedIn(true);
     setLoggedInUser(username);
-    setShowClientGate(true);   // ask to load the client list before the app loads
-  };
-
-  // Called when the client-folder gate finishes — either with a loaded list or
-  // a skip (result === null). Tutorial follows once the gate is dismissed.
-  const finishClientGate = (result) => {
-    if (result && result.clients && result.clients.length) {
-      setClients(result.clients);
-      setClientHandles(result.handles);
-    }
-    setShowClientGate(false);
+    setLoginClient(client);
+    setLoginPublisher(publisher);
     if (shouldShowTutorial()) setShowTutorial(true);
   };
 
@@ -68,24 +60,15 @@ export default function App() {
     return <LoginView onLogin={handleLogin} />;
   }
 
-  if (showClientGate) {
-    return (
-      <ClientFolderGate
-        onLoaded={finishClientGate}
-        onSkip={() => finishClientGate(null)}
-      />
-    );
-  }
-
   const renderView = () => {
     switch (activeView) {
-      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} />;
-      case 'dashboards': return <DashboardsView seed={dashboardSeed} onSeedConsumed={() => setDashboardSeed(null)} />;
+      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} onOpenRecord={r => { setDashboardTarget(r); setActiveView('dashboards'); }} />;
+      case 'dashboards': return <DashboardsView seed={dashboardSeed} onSeedConsumed={() => setDashboardSeed(null)} loginClient={loginClient} loginPublisher={loginPublisher} targetRecord={dashboardTarget} onTargetConsumed={() => setDashboardTarget(null)} />;
       case 'tracker':    return <TrackerView loggedInUser={loggedInUser} onSendToDashboards={sendToDashboards} />;
       case 'clients':    return <ClientsView />;
       case 'help':       return <HelpView />;
       case 'settings':   return <SettingsView theme={theme} onThemeChange={setTheme} />;
-      default:           return <ExtractionView onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} />;
+      default:           return <ExtractionView onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} />;
     }
   };
 

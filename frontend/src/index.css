@@ -463,6 +463,8 @@ textarea { resize: vertical; }
 }
 .sme-option:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.07); }
 .sme-option.selected { border-color: var(--gold); background: rgba(255,173,0,0.10); }
+.sme-option.is-disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+.sme-option.is-disabled:hover { border-color: transparent; background: none; }
 .sme-option-icon { font-size: 22px; margin-top: 1px; flex-shrink: 0; }
 .sme-option-title { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 3px; }
 .sme-option-sub { font-size: 13px; color: rgba(255,255,255,0.5); }
@@ -1041,8 +1043,15 @@ textarea { resize: vertical; }
 
 /* ─── Request screen: search + upload side by side ─ */
 .request-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 20px; align-items: start;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12px 16px;
+}
+
+#upload-card {
+  width: 100%;
+  max-width: 560px;
 }
 
 /* ─── Client folder gate (post-login) ───────── */
@@ -1139,6 +1148,8 @@ textarea { resize: vertical; }
   display: inline-flex; align-items: center; flex-shrink: 0;
 }
 .upload-file-chip-remove:hover { color: var(--red); }
+.upload-file-chip--existing { border-color: var(--green, #22c55e); background: #edfaf4; }
+.upload-file-chip-tag { font-size: 11px; font-weight: 700; color: #15803d; background: #bbf7d0; border-radius: 4px; padding: 1px 6px; flex-shrink: 0; }
 
 /* ─── Document type toggle (ROAR / ELP) ─────── */
 .doctype-row { display: flex; gap: 10px; margin-bottom: 8px; }

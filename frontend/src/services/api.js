@@ -126,6 +126,12 @@ export async function augmentExecutiveSummary(data) {
   return post('/executive-summary/augment', data);
 }
 
+/** Check an uploaded file for red flags (draft/copy/version, client+publisher match). */
+export async function checkUpload(storedName, { client = '', publisher = '', year = '', original_filename = '' } = {}) {
+  const params = new URLSearchParams({ client, publisher, year, original_filename });
+  return get(`/uploads/${encodeURIComponent(storedName)}/check?${params}`);
+}
+
 /** Delete a record permanently. reason must be 'duplicate' or 'error'. */
 export async function deleteRecord(recordId, reason) {
   const res = await fetch(`${BASE}/records/${recordId}?reason=${encodeURIComponent(reason)}`, {
@@ -179,6 +185,12 @@ export async function uploadFile(file) {
     throw new Error(detail?.detail || `Upload failed: ${res.status}`);
   }
   return res.json();
+}
+
+/** Delete a raw uploaded file from the server once extraction is complete. */
+export async function deleteUpload(storedName) {
+  await fetch(`${BASE}/uploads/${encodeURIComponent(storedName)}`, { method: 'DELETE' })
+    .catch(() => {});  // best-effort — never throw
 }
 
 /**

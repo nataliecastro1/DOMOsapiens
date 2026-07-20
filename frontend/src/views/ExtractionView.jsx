@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
-import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, generateExecutiveSummary, saveExecutiveSummary } from '../services/api';
+import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, deleteUpload } from '../services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -30,7 +30,6 @@ const BLANK_FIELDS = EXTRACTED_FIELDS.map(f => ({
 // ─── Journey Bar ──────────────────────────────────────────────────────────────
 const STEP_DEFS = [
   { label: 'Request',      icon: 'ti-adjustments-horizontal' },
-  { label: 'Files',        icon: 'ti-files'                  },
   { label: 'SME Validate', icon: 'ti-user-check'             },
   { label: 'Extract',      icon: 'ti-cpu'                    },
   { label: 'Compare',      icon: 'ti-git-compare'            },
@@ -71,72 +70,77 @@ function JourneyBar({ currentStep, onStep }) {
 }
 
 // ─── Screen 0: Request ────────────────────────────────────────────────────────
-function ScreenRequest({ onNext, onUploaded, clients }) {
-  const [client, setClient]   = useState('');
-  const [year, setYear]       = useState('');
-  const [publisher, setPub]   = useState('');
-  const [showNoClient, setShowNoClient] = useState(false);
-
-  // Upload card state — up to 4 files
+function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client, publisher, existingBatch = [], onRemoveExisting, onOpenRecord }) {
   const MAX_FILES = 4;
-  const [dragOver, setDragOver]       = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [docType, setDocType]         = useState('ROAR');
-  const [uploading, setUploading]     = useState(false);
-  const [uploadError, setUploadError] = useState(null);
-  const fileInputRef                  = useRef(null);
+  const [dragOver, setDragOver]           = useState(false);
+  const [newFiles, setNewFiles]           = useState([]);   // local File objects not yet uploaded
+  const [uploading, setUploading]         = useState(false);
+  const [uploadError, setUploadError]     = useState(null);
+  const [history, setHistory]             = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const fileInputRef                      = useRef(null);
 
-  const [upClient, setUpClient]       = useState('');
-  const [upYear, setUpYear]           = useState(YEARS[0]);
-  const [upPublisher, setUpPublisher] = useState(PUBLISHERS[0]);
-  const [showElpModal, setShowElpModal] = useState(false);
+  // Controlled by parent so values survive back-navigation
+  const upYear      = year      ?? YEARS[0];
+  const upClient    = client    ?? '';
+  const upPublisher = publisher ?? '';
+
+  // Load past records for this client whenever the client changes
+  useEffect(() => {
+    setHistoryLoading(true);
+    getRecords()
+      .then(data => {
+        const all = Array.isArray(data) ? data : [];
+        const filtered = upClient
+          ? all.filter(r => (r.client || '').toLowerCase().includes(upClient.toLowerCase()))
+          : all;
+        setHistory(filtered);
+      })
+      .catch(() => setHistory([]))
+      .finally(() => setHistoryLoading(false));
+  }, [upClient]);
+
+  const totalCount = existingBatch.length + newFiles.length;
 
   const addFiles = (incoming) => {
     setUploadError(null);
-    const all = [...selectedFiles, ...Array.from(incoming)];
-    if (all.length > MAX_FILES) {
+    const all = [...newFiles, ...Array.from(incoming)];
+    const combined = existingBatch.length + all.length;
+    if (combined > MAX_FILES) {
       setUploadError(`You can upload a maximum of ${MAX_FILES} files at a time.`);
-      setSelectedFiles(all.slice(0, MAX_FILES));
+      setNewFiles(all.slice(0, MAX_FILES - existingBatch.length));
     } else {
-      setSelectedFiles(all);
+      setNewFiles(all);
     }
   };
 
-  const removeFile = (idx) => setSelectedFiles(prev => prev.filter((_, i) => i !== idx));
+  const removeNew = (idx) => setNewFiles(prev => prev.filter((_, i) => i !== idx));
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setDragOver(false);
-    addFiles(e.dataTransfer.files);
-  };
-
-  const handleFileChange = (e) => {
-    addFiles(e.target.files);
-    e.target.value = '';
-  };
+  const handleDrop = (e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); };
+  const handleFileChange = (e) => { addFiles(e.target.files); e.target.value = ''; };
 
   const handleUpload = async () => {
-    if (!selectedFiles.length) return;
+    if (totalCount === 0) return;
     setUploading(true);
     setUploadError(null);
     try {
-      // Upload every selected file and start the batch. Each file keeps its raw
-      // File object so the Extract step can run the deterministic script extractor.
-      const batch = [];
-      for (const file of selectedFiles) {
+      // Upload only the new local files; already-uploaded ones are reused as-is
+      const freshUploads = [];
+      for (const file of newFiles) {
         const meta = await uploadFile(file);
-        batch.push({
+        freshUploads.push({
           ...meta,
           name: meta.filename,
           version: 'Uploaded',
-          docType,
-          client: upClient,
-          publisher: upPublisher,
-          year: upYear,
           source: 'uploaded',
-          file,   // raw File retained so the Extract step can run the script extractor
+          file,
         });
       }
+      // Merge: existing files get updated year/client/publisher, then new uploads appended
+      const batch = [
+        ...existingBatch.map(f => ({ ...f, year: upYear, client: upClient.trim(), publisher: upPublisher.trim() })),
+        ...freshUploads.map(f => ({ ...f, year: upYear, client: upClient.trim(), publisher: upPublisher.trim() })),
+      ];
       onUploaded(batch);
     } catch (err) {
       setUploadError(err.message);
@@ -146,71 +150,52 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
   };
 
   return (
-    <div className="request-grid">
+    <div style={{ display: 'flex', gap: 16, alignItems: 'stretch' }}>
 
-      {/* ── Card 1: SharePoint Search ── */}
-      <div id="search-card" className="card">
+      {/* ── LEFT: Upload Raw File ── */}
+      <div id="upload-card" className="card" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <div className="card-title">
-          <i className="ti ti-adjustments-horizontal" aria-hidden="true" />
-          Search SharePoint
+          <i className="ti ti-file-upload" aria-hidden="true" />
+          Upload Raw File
+          <span className="upload-count">{totalCount}/{MAX_FILES}</span>
         </div>
+
+        {/* Year */}
         <div className="field-group">
-          <label className="field-label" htmlFor="req-client">Client</label>
-          <ClientSelect value={client} onChange={setClient} clients={clients} />
+          <label className="field-label">Year</label>
+          <select value={upYear} onChange={e => onYearChange(e.target.value)}>
+            {YEARS.map(y => <option key={y}>{y}</option>)}
+          </select>
         </div>
-        <div className="grid-2">
-          <div className="field-group">
-            <label className="field-label" htmlFor="req-year">Year</label>
-            <select id="req-year" value={year} onChange={e => setYear(e.target.value)}>
-              <option value="">Any year</option>
-              {YEARS.map(y => <option key={y}>{y}</option>)}
-            </select>
+        {(upClient || upPublisher) && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            {upClient && (
+              <span style={{ fontSize: 12, background: 'var(--accent-bg, #eff6ff)', color: 'var(--accent, #2563eb)', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
+                <i className="ti ti-building" style={{ marginRight: 4 }} />{upClient}
+              </span>
+            )}
+            {upPublisher && (
+              <span style={{ fontSize: 12, background: 'var(--accent-bg, #eff6ff)', color: 'var(--accent, #2563eb)', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
+                <i className="ti ti-brand-windows" style={{ marginRight: 4 }} />{upPublisher}
+              </span>
+            )}
           </div>
-          <div className="field-group">
-            <label className="field-label" htmlFor="req-publisher">Publisher</label>
-            <select id="req-publisher" value={publisher} onChange={e => setPub(e.target.value)}>
-              <option value="">Any publisher</option>
-              {PUBLISHERS.map(p => <option key={p}>{p}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="btn-row">
-          <button
-            className="btn primary"
-            onClick={() => {
-              if (!client.trim()) { setShowNoClient(true); return; }
-              onNext({ client, year, publisher });
-            }}
-          >
-            Find Files <i className="ti ti-arrow-right" aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-
-      {/* ── Card 2: Manual Upload ── */}
-      <div id="upload-card" className="card">
-        <div className="card-title">
-          <i className="ti ti-upload" aria-hidden="true" />
-          Upload Files
-          <span className="upload-count">
-            {selectedFiles.length}/{MAX_FILES} files
-          </span>
-        </div>
+        )}
 
         {/* Drag & drop zone */}
         <div
-          className={`upload-dropzone ${dragOver ? 'is-dragover' : ''} ${selectedFiles.length >= MAX_FILES ? 'is-full' : ''}`}
-          onClick={() => selectedFiles.length < MAX_FILES && fileInputRef.current.click()}
+          className={`upload-dropzone ${dragOver ? 'is-dragover' : ''} ${totalCount >= MAX_FILES ? 'is-full' : ''}`}
+          onClick={() => totalCount < MAX_FILES && fileInputRef.current.click()}
           onDragOver={e => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
         >
           <i className="ti ti-file-upload upload-dropzone-icon" aria-hidden="true" />
           <div className="upload-dropzone-title">
-            {selectedFiles.length >= MAX_FILES ? 'Maximum files reached' : 'Drag & drop files here'}
+            {totalCount >= MAX_FILES ? 'Maximum files reached' : 'Drag & drop files here'}
           </div>
           <div className="upload-dropzone-hint">
-            {selectedFiles.length < MAX_FILES
+            {totalCount < MAX_FILES
               ? `or click to browse · up to ${MAX_FILES} files · PDF, PPTX, XLSX`
               : 'Remove a file to add another'}
           </div>
@@ -224,23 +209,25 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
           onChange={handleFileChange}
         />
 
-        {/* File list */}
-        {selectedFiles.length > 0 && (
+        {/* File list — already-uploaded (from back-navigation) + newly selected */}
+        {(existingBatch.length > 0 || newFiles.length > 0) && (
           <div className="upload-file-list">
-            {selectedFiles.map((f, i) => (
-              <div key={i} className="upload-file-chip">
+            {existingBatch.map((f, i) => (
+              <div key={`existing-${i}`} className="upload-file-chip upload-file-chip--existing">
+                <i className="ti ti-circle-check upload-file-chip-icon" style={{ color: 'var(--green, #22c55e)' }} />
+                <span className="upload-file-chip-name">{f.name || f.filename}</span>
+                <span className="upload-file-chip-size upload-file-chip-tag">uploaded</span>
+                <button onClick={() => onRemoveExisting(i)} className="upload-file-chip-remove" title="Remove">
+                  <i className="ti ti-x" />
+                </button>
+              </div>
+            ))}
+            {newFiles.map((f, i) => (
+              <div key={`new-${i}`} className="upload-file-chip">
                 <i className="ti ti-file-description upload-file-chip-icon" />
-                <span className="upload-file-chip-name">
-                  {f.name}
-                </span>
-                <span className="upload-file-chip-size">
-                  {(f.size / 1024).toFixed(0)} KB
-                </span>
-                <button
-                  onClick={() => removeFile(i)}
-                  className="upload-file-chip-remove"
-                  title="Remove"
-                >
+                <span className="upload-file-chip-name">{f.name}</span>
+                <span className="upload-file-chip-size">{(f.size / 1024).toFixed(0)} KB</span>
+                <button onClick={() => removeNew(i)} className="upload-file-chip-remove" title="Remove">
                   <i className="ti ti-x" />
                 </button>
               </div>
@@ -248,95 +235,77 @@ function ScreenRequest({ onNext, onUploaded, clients }) {
           </div>
         )}
 
-        {/* Document type */}
-        <div className="field-group">
-          <label className="field-label">Document Type</label>
-          <div className="doctype-row">
-            {['ROAR', 'ELP'].map(type => (
-              <button
-                key={type}
-                onClick={() => type === 'ELP' ? setShowElpModal(true) : setDocType(type)}
-                className={`doctype-btn ${docType === type ? 'active' : ''}`}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-          <div className="doctype-hint">
-            {docType === 'ROAR'
-              ? 'Return on Anglepoint Relationship — PowerPoint (.pptx)'
-              : 'ELP deliverable — PowerPoint / slide deck'}
-          </div>
-        </div>
-
-        {/* Client / Publisher / Year — manually set for this upload */}
-        <div className="field-group">
-          <label className="field-label">Client</label>
-          <ClientSelect value={upClient} onChange={setUpClient} clients={clients} />
-        </div>
-        <div className="grid-2">
-          <div className="field-group">
-            <label className="field-label">Year</label>
-            <select value={upYear} onChange={e => setUpYear(e.target.value)}>
-              {YEARS.map(y => <option key={y}>{y}</option>)}
-            </select>
-          </div>
-          <div className="field-group">
-            <label className="field-label">Publisher</label>
-            <ClientSelect value={upPublisher} onChange={setUpPublisher} clients={PUBLISHERS} />
-          </div>
-        </div>
-
         {uploadError && (
           <div className="upload-error">
-            <i className="ti ti-alert-triangle" aria-hidden="true" />
-            {uploadError}
+            <i className="ti ti-alert-triangle" aria-hidden="true" /> {uploadError}
           </div>
         )}
 
         <div className="btn-row">
           <button
             className="btn primary is-gated"
-            disabled={!selectedFiles.length || uploading}
+            disabled={totalCount === 0 || uploading}
             onClick={handleUpload}
           >
             {uploading
               ? <><i className="ti ti-loader-2 spinning" aria-hidden="true" /> Uploading…</>
-              : <>Upload &amp; Use {selectedFiles.length > 1 ? `These ${selectedFiles.length} Files` : 'This File'} <i className="ti ti-arrow-right" aria-hidden="true" /></>
+              : <>Continue <i className="ti ti-arrow-right" aria-hidden="true" /></>
             }
           </button>
         </div>
       </div>
 
-      {showNoClient && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <i className="ti ti-alert-triangle modal-icon" aria-hidden="true" />
-            <div className="modal-title">No client selected</div>
-            <p className="modal-text">Choose a client before searching for files.</p>
-            <div className="modal-btn-row">
-              <button className="btn primary" onClick={() => setShowNoClient(false)}>
-                Back to search
-              </button>
-            </div>
-          </div>
+      {/* ── RIGHT: Document history for this client ── */}
+      <div className="card" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="card-title">
+          <i className="ti ti-history" aria-hidden="true" />
+          Past Documents
+          {upClient && <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 6 }}>— {upClient}</span>}
         </div>
-      )}
 
-      {showElpModal && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <i className="ti ti-clock modal-icon" aria-hidden="true" />
-            <div className="modal-title">This feature is coming soon!</div>
-            <p className="modal-text">ELP extraction is not yet available. Please use a ROAR document for now.</p>
-            <div className="modal-btn-row">
-              <button className="btn primary" onClick={() => setShowElpModal(false)}>
-                Got it
+        {historyLoading ? (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+            <i className="ti ti-loader-2 spinning" /> Loading…
+          </p>
+        ) : history.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+            {upClient
+              ? `No past documents found for "${upClient}". Upload a new file on the left.`
+              : 'Enter a client name to see past documents here.'}
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', maxHeight: 380 }}>
+            {history.map(r => (
+              <button
+                key={r.record_id}
+                onClick={() => onOpenRecord?.(r)}
+                style={{
+                  display: 'flex', flexDirection: 'column', gap: 3,
+                  textAlign: 'left', fontFamily: 'inherit', cursor: 'pointer',
+                  background: 'var(--surface-alt, rgba(0,0,0,0.03))',
+                  border: '1.5px solid var(--border)',
+                  borderRadius: 'var(--radius)',
+                  padding: '10px 14px',
+                  transition: 'border-color 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--blue)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ti ti-file-description" style={{ color: 'var(--blue)', fontSize: 15 }} />
+                  {r.source_file || 'Untitled document'}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', paddingLeft: 21 }}>
+                  {[r.publisher, r.year].filter(Boolean).join(' · ')}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--blue)', paddingLeft: 21, marginTop: 2 }}>
+                  View dashboard →
+                </div>
               </button>
-            </div>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
     </div>
   );
@@ -743,6 +712,153 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
   );
 }
 
+// ─── Slide Carousel ───────────────────────────────────────────────────────────
+// PPTX → embedded thumbnail (instant, zero conversion, zero extra disk).
+// PDF  → PDF.js full-page navigation at device pixel ratio (sharp vectors).
+function SlideCarousel({ storedName }) {
+  const BASE = 'http://localhost:8000/api';
+  const isPDF = storedName.toLowerCase().endsWith('.pdf');
+
+  // ── PPTX: simple thumbnail image ──────────────────────────────────────────
+  if (!isPDF) {
+    return <PptxThumbnail storedName={storedName} BASE={BASE} />;
+  }
+
+  // ── PDF: full PDF.js carousel ─────────────────────────────────────────────
+  return <PdfCarousel storedName={storedName} BASE={BASE} />;
+}
+
+function PptxThumbnail({ storedName, BASE }) {
+  const [status, setStatus] = useState('loading'); // loading | ok | error
+  const src = `${BASE}/uploads/${encodeURIComponent(storedName)}/thumbnail`;
+  return (
+    <div style={{ borderRadius: 10, overflow: 'hidden', border: '1.5px solid var(--border)', background: '#0f1f3a', marginBottom: 16 }}>
+      {status === 'loading' && (
+        <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <i className="ti ti-loader-2 spinning" style={{ fontSize: 26, color: 'var(--gold)' }} />
+        </div>
+      )}
+      {status === 'error' && (
+        <div style={{ height: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <i className="ti ti-eye-off" style={{ fontSize: 24, color: 'rgba(255,255,255,0.25)' }} />
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>No preview available</span>
+        </div>
+      )}
+      <img
+        src={src}
+        alt="Document preview"
+        onLoad={() => setStatus('ok')}
+        onError={() => setStatus('error')}
+        style={{ display: status === 'ok' ? 'block' : 'none', width: '100%', height: 'auto' }}
+      />
+    </div>
+  );
+}
+
+function PdfCarousel({ storedName, BASE }) {
+  const canvasRef       = useRef(null);
+  const renderTaskRef   = useRef(null);
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const [total, setTotal]   = useState(null);
+  const [index, setIndex]   = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]   = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist');
+        GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url
+        ).toString();
+        const pdfUrl = `${BASE}/uploads/${encodeURIComponent(storedName)}/preview.pdf`;
+        const pdf = await getDocument(pdfUrl).promise;
+        if (cancelled) return;
+        setPdfDoc(pdf);
+        setTotal(pdf.numPages);
+        setLoading(false);
+      } catch {
+        if (!cancelled) { setError(true); setLoading(false); }
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [storedName]);
+
+  useEffect(() => {
+    if (!pdfDoc || !canvasRef.current) return;
+    if (renderTaskRef.current) { renderTaskRef.current.cancel(); renderTaskRef.current = null; }
+    const render = async () => {
+      try {
+        const page     = await pdfDoc.getPage(index + 1);
+        const dpr      = window.devicePixelRatio || 1;
+        const viewport = page.getViewport({ scale: 1 });
+        const canvas   = canvasRef.current;
+        if (!canvas) return;
+        const scale = (canvas.parentElement?.clientWidth || 560) / viewport.width * dpr;
+        const vp    = page.getViewport({ scale });
+        canvas.width  = vp.width;
+        canvas.height = vp.height;
+        canvas.style.width  = `${vp.width / dpr}px`;
+        canvas.style.height = `${vp.height / dpr}px`;
+        const task = page.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
+        renderTaskRef.current = task;
+        await task.promise;
+        renderTaskRef.current = null;
+      } catch (e) {
+        if (e?.name !== 'RenderingCancelledException') console.warn(e);
+      }
+    };
+    render();
+  }, [pdfDoc, index]);
+
+  if (error) return null;
+
+  const navBtn = (onClick, disabled, icon) => (
+    <button onClick={onClick} disabled={disabled} style={{
+      border: 'none', background: 'none', fontSize: 20, padding: '2px 6px',
+      cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.3 : 1,
+      color: 'var(--text)',
+    }}><i className={`ti ${icon}`} /></button>
+  );
+
+  return (
+    <div style={{ borderRadius: 10, overflow: 'hidden', border: '1.5px solid var(--border)', background: '#0f1f3a', marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'relative', minHeight: 160 }}>
+        {loading && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <i className="ti ti-loader-2 spinning" style={{ fontSize: 26, color: 'var(--gold)' }} />
+          </div>
+        )}
+        <canvas ref={canvasRef} style={{ display: loading ? 'none' : 'block', width: '100%' }} />
+        {total && !loading && (
+          <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.6)', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: '#fff', fontWeight: 700 }}>
+            {index + 1} / {total}
+          </div>
+        )}
+      </div>
+      {total > 1 && !loading && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '6px 12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          {navBtn(() => setIndex(i => Math.max(0, i - 1)), index === 0, 'ti-chevron-left')}
+          <div style={{ display: 'flex', gap: 5 }}>
+            {Array.from({ length: Math.min(total, 10) }).map((_, i) => (
+              <button key={i} onClick={() => setIndex(i)} style={{
+                width: index === i ? 18 : 6, height: 6, borderRadius: 3,
+                border: 'none', padding: 0, cursor: 'pointer',
+                background: index === i ? 'var(--gold)' : 'rgba(255,255,255,0.25)',
+                transition: 'width 0.2s, background 0.2s',
+              }} />
+            ))}
+            {total > 10 && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>…</span>}
+          </div>
+          {navBtn(() => setIndex(i => Math.min(total - 1, i + 1)), index === total - 1, 'ti-chevron-right')}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Screen 2: SME Validate ───────────────────────────────────────────────────
 // A single batch checkpoint: one SME decision covers every file in the batch.
 // For a single-file batch this renders exactly like the original one-file view.
@@ -750,9 +866,30 @@ function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultNa
   const [decision, setDecision] = useState('approve');
   const [smeName, setSmeName]   = useState(defaultName);
   const [smeNotes, setSmeNotes] = useState('');
+  const [docChecks, setDocChecks] = useState({});
+  const [showBackConfirm, setShowBackConfirm] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
   const timestamp = useRef(new Date().toLocaleString());
   const batch = files.length ? files : (selectedFile ? [selectedFile] : []);
   const isMulti = batch.length > 1;
+
+  // Run document checks on mount for uploaded files
+  useEffect(() => {
+    batch.forEach(f => {
+      if (!f?.stored_name) return;
+      checkUpload(f.stored_name, { client: f.client || '', publisher: f.publisher || '', year: f.year || '', original_filename: f.name || '' })
+        .then(result => setDocChecks(prev => ({ ...prev, [f.stored_name]: result })))
+        .catch(() => {});
+    });
+  }, []);
+
+  // True when any checked file has at least one warning
+  const hasWarnings = batch.some(f => f?.stored_name && docChecks[f.stored_name] && !docChecks[f.stored_name].is_ok);
+
+  // If warnings appear after checks load, force the decision off 'approve'
+  useEffect(() => {
+    if (hasWarnings && decision === 'approve') setDecision('note');
+  }, [hasWarnings]);
 
   const handleConfirm = () => {
     if (decision === 'flag') { onBack(); return; }
@@ -765,18 +902,19 @@ function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultNa
       icon: 'ti-circle-check',
       title: 'Approve — correct file, proceed',
       sub: 'Decision + timestamp stored in audit log',
+      blockedWhenWarnings: true,
     },
     {
       id: 'flag',
       icon: 'ti-alert-triangle',
-      title: 'Flag — wrong file, return to selection',
+      title: 'Flag — wrong file, return to upload',
       sub: 'Flagged decision is still recorded',
     },
     {
       id: 'note',
       icon: 'ti-edit',
       title: 'Approve with notes',
-      sub: 'Notes attached to the audit record',
+      sub: 'Add a reason to override the warning',
     },
   ];
 
@@ -794,75 +932,122 @@ function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultNa
         </div>
       </div>
 
+      {/* ── Document validation banners ── */}
+      {batch.filter(f => f?.stored_name && docChecks[f.stored_name]).map(f => {
+        const check = docChecks[f.stored_name];
+        return (
+          <div key={f.stored_name} style={{
+            marginBottom: 12,
+            borderRadius: 10,
+            padding: '12px 16px',
+            display: 'flex',
+            gap: 12,
+            alignItems: 'flex-start',
+            background: check.is_ok ? 'var(--green-pale, #edfaf4)' : '#fff8ec',
+            border: `1.5px solid ${check.is_ok ? 'var(--green, #22c55e)' : '#f59e0b'}`,
+          }}>
+            <i className={`ti ${check.is_ok ? 'ti-circle-check' : 'ti-alert-triangle'}`}
+              style={{ fontSize: 20, color: check.is_ok ? 'var(--green, #22c55e)' : '#f59e0b', marginTop: 1 }} />
+            <div>
+              {isMulti && <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 2 }}>{f.name}</div>}
+              {check.is_ok ? (
+                <div style={{ fontWeight: 700, color: '#15803d', fontSize: 14 }}>
+                  Your document looks good — ready to continue.
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontWeight: 700, color: '#b45309', fontSize: 14, marginBottom: 4 }}>
+                    Are you sure this is the right document?
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#92400e' }}>
+                    {check.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* ── File tabs (multi-file) ── */}
+      {isMulti && (
+        <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 0, overflowX: 'auto' }}>
+          {batch.map((f, i) => {
+            const label = f?.name ? f.name.replace(/\.[^.]+$/, '').slice(0, 24) : `File ${i + 1}`;
+            const isActive = activeTab === i;
+            return (
+              <button key={i} onClick={() => setActiveTab(i)} style={{
+                padding: '7px 16px', border: 'none', borderBottom: isActive ? '2px solid var(--gold)' : '2px solid transparent',
+                marginBottom: -2, background: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                fontWeight: isActive ? 700 : 500, fontSize: 13,
+                color: isActive ? 'var(--gold)' : 'var(--text-muted)',
+              }}>
+                <i className="ti ti-file-description" style={{ marginRight: 5, fontSize: 13 }} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Horizontal file info strip ── */}
+      {(() => {
+        const f = isMulti ? batch[activeTab] : (selectedFile || batch[0]);
+        if (!f) return null;
+        const chips = [
+          { icon: 'ti-file-description', val: f.name },
+          { icon: 'ti-building', val: f.client },
+          { icon: 'ti-brand-windows', val: f.publisher },
+          { icon: 'ti-calendar', val: f.year },
+          { icon: 'ti-clock', val: timestamp.current },
+        ].filter(c => c.val);
+        return (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 0', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
+            {chips.map((c, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface-2)', borderRadius: 6, padding: '4px 10px' }}>
+                <i className={`ti ${c.icon}`} style={{ fontSize: 13 }} />
+                <span style={{ color: 'var(--text)', fontWeight: 500 }}>{c.val}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* ── Preview | Decision ── */}
       <div className="sme-two-col">
         <div className="sme-col-left">
-          {isMulti ? (
-            <div className="sme-info-box">
-              <div className="sme-info-row">
-                <span className="sme-info-key">Files</span>
-                <span className="sme-info-val">{batch.length} selected for this batch</span>
-              </div>
-              <div className="sme-batch-files">
-                {batch.map((f, i) => (
-                  <div className="sme-batch-file" key={i}>
-                    <i className="ti ti-file-description" aria-hidden="true" />
-                    <span className="sme-batch-file-name">{f?.name || `File ${i + 1}`}</span>
-                    <span className="sme-batch-file-meta">
-                      {[f?.client, f?.publisher, f?.year].filter(Boolean).join(' · ') || '—'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="sme-info-row">
-                <span className="sme-info-key">Timestamp</span>
-                <span className="sme-info-val">{timestamp.current}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="sme-info-box">
-              <div className="sme-info-row">
-                <span className="sme-info-key">File</span>
-                <span className="sme-info-val">{selectedFile?.name || '—'}</span>
-              </div>
-              <div className="sme-info-row">
-                <span className="sme-info-key">Version</span>
-                <span className="sme-info-val">{selectedFile?.version || '—'}</span>
-              </div>
-              <div className="sme-info-row">
-                <span className="sme-info-key">Client / Publisher / Year</span>
-                <span className="sme-info-val">
-                  {(selectedFile?.client || selectedFile?.publisher || selectedFile?.year)
-                    ? [selectedFile?.client, selectedFile?.publisher, selectedFile?.year].map(v => v || '—').join(' · ')
-                    : '— · — · —'}
-                </span>
-              </div>
-              <div className="sme-info-row">
-                <span className="sme-info-key">Timestamp</span>
-                <span className="sme-info-val">{timestamp.current}</span>
-              </div>
-            </div>
-          )}
+          {(() => {
+            const f = isMulti ? batch[activeTab] : batch[0];
+            return f?.stored_name ? <SlideCarousel key={f.stored_name} storedName={f.stored_name} /> : null;
+          })()}
         </div>
 
         <div className="sme-col-right">
           <div className="sme-decision-label">SME Decision — recorded to audit log</div>
 
-          {OPTIONS.map(opt => (
-            <button
-              key={opt.id}
-              className={`sme-option ${decision === opt.id ? 'selected' : ''}`}
-              onClick={() => setDecision(opt.id)}
-            >
-              <i
-                className={`ti ${opt.icon} sme-option-icon ${opt.id}`}
-                aria-hidden="true"
-              />
-              <div>
-                <div className="sme-option-title">{opt.title}</div>
-                <div className="sme-option-sub">{opt.sub}</div>
-              </div>
-            </button>
-          ))}
+          {OPTIONS.map(opt => {
+            const blocked = hasWarnings && opt.blockedWhenWarnings;
+            return (
+              <button
+                key={opt.id}
+                className={`sme-option ${decision === opt.id ? 'selected' : ''} ${blocked ? 'is-disabled' : ''}`}
+                onClick={() => !blocked && setDecision(opt.id)}
+                disabled={blocked}
+                title={blocked ? 'Cannot approve — document has unresolved warnings' : undefined}
+              >
+                <i
+                  className={`ti ${opt.icon} sme-option-icon ${opt.id}`}
+                  aria-hidden="true"
+                />
+                <div>
+                  <div className="sme-option-title">{opt.title}</div>
+                  <div className="sme-option-sub">
+                    {blocked ? 'Not available — resolve warnings or add a note' : opt.sub}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
 
           <div className="field-group sme-name-field">
             <label className="field-label sme-field-label" htmlFor="sme-name">
@@ -894,7 +1079,7 @@ function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultNa
           <div className="sme-btn-row">
             <button
               className="btn sme-back-btn"
-              onClick={onBack}
+              onClick={() => setShowBackConfirm(true)}
             >
               <i className="ti ti-arrow-left" aria-hidden="true" /> Back
             </button>
@@ -907,6 +1092,41 @@ function ScreenValidate({ selectedFile, files = [], onConfirm, onBack, defaultNa
           </div>
         </div>
       </div>
+
+      {/* ── Back confirmation modal ── */}
+      {showBackConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => setShowBackConfirm(false)}>
+          <div style={{
+            background: '#ffffff', borderRadius: 14, padding: '28px 32px', width: 380,
+            boxShadow: '0 8px 40px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', gap: 16,
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <i className="ti ti-arrow-back-up" style={{ color: 'var(--gold)', fontSize: 22 }} />
+              <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--navy)' }}>Go back to upload?</span>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              Going back will clear your uploaded {batch.length > 1 ? `${batch.length} files` : 'file'} and you'll need to start the upload over.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowBackConfirm(false)}
+                style={{ padding: '7px 18px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              >
+                Stay here
+              </button>
+              <button
+                onClick={onBack}
+                style={{ padding: '7px 18px', borderRadius: 8, border: 'none', background: 'var(--navy)', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              >
+                Yes, go back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2083,9 +2303,6 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
 // ScreenExtract review), then resolve the Script-vs-Claude comparison. Remounted
 // per file by the parent (keyed on the file index) so each file starts clean.
 function FileReview({ fileResult, fileIndex, total, isLast, onConfirm, onExclude, onBack }) {
-  const [phase, setPhase] = useState('fill');
-  const [filledFields, setFilledFields] = useState(null);
-
   if (!fileResult) {
     return (
       <div className="card">
@@ -2103,26 +2320,16 @@ function FileReview({ fileResult, fileIndex, total, isLast, onConfirm, onExclude
   }
 
   const batchInfo = { index: fileIndex, total, isLast, name: fileResult.fileMeta?.name };
-
-  if (phase === 'fill') {
-    return (
-      <ScreenExtract
-        selectedFile={fileResult.fileMeta}
-        extractedData={fileResult.extractedData}
-        batchInfo={batchInfo}
-        onNext={(fields) => { setFilledFields(fields); setPhase('compare'); }}
-      />
-    );
-  }
+  const fields = buildClaudeFields(fileResult.extractedData);
 
   return (
     <ScreenCompare
-      fields={filledFields}
+      fields={fields}
       scriptData={fileResult.scriptData}
       batchInfo={batchInfo}
       onExclude={total > 1 ? onExclude : null}
       onNext={onConfirm}
-      onBack={() => setPhase('fill')}
+      onBack={onBack}
     />
   );
 }
@@ -2510,7 +2717,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
 // ─── ExtractionView ───────────────────────────────────────────────────────────
 // Orchestrates the batch as a thin layer over the per-file screens. A single
 // file is simply a batch of length one, so the original flow is preserved.
-export default function ExtractionView({ onNav, clients, clientHandles, loggedInUser = '' }) {
+export default function ExtractionView({ onNav, clients, clientHandles, loggedInUser = '', initialClient = '', initialPublisher = '', onOpenRecord }) {
   const [step, setStep]                         = useState(0);
   const [files, setFiles]                       = useState([]);            // the batch
   const [currentFileIndex, setCurrentFileIndex] = useState(0);            // file under review at Compare
@@ -2520,6 +2727,11 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
   const [storeAggregate, setStoreAggregate]     = useState(true);
   const [filters, setFilters]                   = useState({});
   const [savedRecordId, setSavedRecordId]       = useState(null);
+
+  // Lifted request form state — persists when the user navigates back from SME Validate
+  const [reqYear, setReqYear]           = useState(YEARS[0]);
+  const [reqClient, setReqClient]       = useState(initialClient);
+  const [reqPublisher, setReqPublisher] = useState(initialPublisher);
 
   // Both the upload card and the Files scan hand back an array of files.
   const handleFilesSelected = (picked) => {
@@ -2604,6 +2816,9 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     setSavedRecordId(primaryRecordId);
     setAggregateFields(editedAggregateFields);
     setStep(6);
+
+    // Clean up raw uploaded files — data is now in the JSON record, files no longer needed
+    files.forEach(f => { if (f?.stored_name) deleteUpload(f.stored_name); });
   };
 
   // Reset the entire pipeline so a new extraction starts clean.
@@ -2616,6 +2831,9 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     setAggregateFields(null);
     setStoreAggregate(true);
     setFilters({});
+    setReqYear(YEARS[0]);
+    setReqClient('');
+    setReqPublisher('');
   };
 
   // Resolve the loaded folder handle for the chosen client, if we have one,
@@ -2638,9 +2856,16 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
   };
 
   const screens = [
-    <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFilesSelected} clients={clients} />,
+    <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFilesSelected} clients={clients}
+      year={reqYear} onYearChange={setReqYear}
+      client={reqClient}
+      publisher={reqPublisher}
+      existingBatch={files}
+      onRemoveExisting={(idx) => setFiles(prev => prev.filter((_, i) => i !== idx))}
+      onOpenRecord={onOpenRecord}
+    />,
     <ScreenFiles    key={1} filters={filters} clientDir={clientDir} onSelect={handleFilesSelected} onBack={() => setStep(0)} />,
-    <ScreenValidate key={2} selectedFile={files[0]} files={files} onConfirm={handleSMEConfirm} onBack={() => setStep(1)} defaultName={loggedInUser} />,
+    <ScreenValidate key={2} selectedFile={files[0]} files={files} onConfirm={handleSMEConfirm} onBack={() => setStep(0)} defaultName={loggedInUser} />,
     <BatchExtract   key={3} files={files} onComplete={handleBatchExtracted} />,
     <FileReview
       key={`4-${currentFileIndex}`}

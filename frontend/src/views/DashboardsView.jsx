@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
-import { SAVED_DASHBOARDS } from '../data';
 import { getRecords } from '../services/api';
 import {
   METRICS, labelFor, deriveOptions, sum, countWithMetric,
@@ -38,14 +37,10 @@ function loadSaved() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) return parsed.filter(d => !d.seed);
     }
   } catch { /* ignore corrupt storage */ }
-  // Seed (display-only) from the mock list when nothing is saved yet.
-  return SAVED_DASHBOARDS.map((d, i) => ({
-    id: `seed-${i}`, name: d.name, sub: d.sub, badge: d.badge,
-    badgeColor: d.badgeColor, seed: true,
-  }));
+  return [];
 }
 
 function persistSaved(list) {
@@ -617,14 +612,16 @@ function groupFieldFor(templateId, cfg) {
 }
 
 // ─── Dashboard builder ────────────────────────────────────────────────────────
-function DashboardBuilder({ templateId, options, records, initial, onClose, onSave }) {
+function DashboardBuilder({ templateId, options, records, initial, onClose, onSave, onExport, lockedClient, defaultClient }) {
   const seed = useMemo(
     () => initial || defaultsFor(templateId, options),
     [templateId, options, initial],
   );
 
+  // Config panel is hidden by default when re-opening a saved dashboard.
+  const [isEditing, setIsEditing]   = useState(!initial || Boolean(initial?.seed));
   const [name, setName]             = useState(seed.name || '');
-  const [client, setClient]         = useState(seed.client || (options.clients[0] || ''));
+  const [client, setClient]         = useState(lockedClient || (initial?.client) || defaultClient || seed.client || '');
   const [pubMode, setPubMode]       = useState(seed.pubMode || 'All publishers');
   const [yrMode, setYrMode]         = useState(seed.yrMode || 'All years');
   const [selPubs, setSelPubs]       = useState(seed.selPubs || [...options.publishers]);
@@ -730,17 +727,41 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn primary" onClick={handleSave} disabled={!canSave}>
-            {saved
-              ? <>Saved <i className="ti ti-check" aria-hidden="true" /></>
-              : <>Save Dashboard <i className="ti ti-device-floppy" aria-hidden="true" /></>}
+          <button
+            className="btn ghost"
+            onClick={() => onExport?.(buildConfig())}
+            title="Download as HTML"
+          >
+            <i className="ti ti-download" aria-hidden="true" /> Download HTML
           </button>
+          {!isEditing && (
+            <>
+              <button className="btn ghost" onClick={() => {
+                const copy = { ...buildConfig(), id: undefined, name: `Copy of ${name || client}` };
+                onSave?.(copy);
+                setName(copy.name);
+                setIsEditing(true);
+              }}>
+                <i className="ti ti-copy" aria-hidden="true" /> Duplicate
+              </button>
+              <button className="btn ghost" onClick={() => setIsEditing(true)}>
+                <i className="ti ti-pencil" aria-hidden="true" /> Edit
+              </button>
+            </>
+          )}
+          {isEditing && (
+            <button className="btn primary" onClick={handleSave} disabled={!canSave}>
+              {saved
+                ? <>Saved <i className="ti ti-check" aria-hidden="true" /></>
+                : <>Save Dashboard <i className="ti ti-device-floppy" aria-hidden="true" /></>}
+            </button>
+          )}
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        {/* ── Left: configuration ── */}
-        <div style={{ flex: '1 1 320px', minWidth: 280, maxWidth: 460 }}>
+        {/* ── Left: configuration (hidden until Edit is clicked) ── */}
+        {isEditing && <div style={{ flex: '1 1 320px', minWidth: 280, maxWidth: 460 }}>
           <div className="card">
             <div className="card-title"><i className="ti ti-adjustments" aria-hidden="true" /> Configure</div>
 
@@ -751,7 +772,20 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
 
             <div className="field-group">
               <label className="field-label">Client</label>
-              {options.clients.length === 0 ? (
+              {lockedClient ? (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)',
+                  background: 'var(--surface-alt, rgba(0,0,0,0.04))', opacity: 0.85,
+                }}>
+                  <span style={{ flex: 1, fontSize: 13.5, color: 'var(--text)', fontWeight: 500 }}>{lockedClient}</span>
+                  <i className="ti ti-lock" style={{ fontSize: 14, color: 'var(--text-muted)' }} aria-hidden="true" />
+                  <span style={{
+                    fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)',
+                    background: 'var(--border)', borderRadius: 4, padding: '2px 6px',
+                  }}>Linked to extraction client</span>
+                </div>
+              ) : options.clients.length === 0 ? (
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No clients in the data yet.</p>
               ) : (
                 <SearchableSelect
@@ -823,7 +857,7 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
               isAvailable={isElementAvailable}
             />
           </div>
-        </div>
+        </div>}
 
         {/* ── Right: live preview ── */}
         <div style={{ flex: '2 1 420px', minWidth: 300 }}>
@@ -921,11 +955,14 @@ function ScopeBanner({ count, onClear }) {
 }
 
 // ─── Dashboards view ──────────────────────────────────────────────────────────
-export default function DashboardsView({ seed = null, onSeedConsumed }) {
+export default function DashboardsView({ seed = null, onSeedConsumed, loginClient = '', loginPublisher = '', targetRecord = null, onTargetConsumed }) {
   const [allRecords, setAllRecords] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [savedList, setSavedList] = useState(loadSaved);
   const [building, setBuilding] = useState(null); // { templateId, initial }
+  const [lockedClient, setLockedClient] = useState(null);
+  const [showAllClients, setShowAllClients] = useState(false);
+  const [clientSearch, setClientSearch] = useState('');
   // When set, the view is scoped to a filtered subset handed over from the
   // Tracker rather than the full dataset. Null = work off every record.
   const [scopedRecords, setScopedRecords] = useState(null);
@@ -937,15 +974,73 @@ export default function DashboardsView({ seed = null, onSeedConsumed }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // The Tracker handed over a filtered subset: scope to it and jump straight
-  // into the custom builder. Consume the seed so a later normal visit resets.
+  // The Tracker (or history panel) handed over a filtered subset: scope to it
+  // and jump into the builder. When a single record is passed, pre-configure
+  // the builder from it and open in view mode (isEditing = false).
   useEffect(() => {
     if (seed && seed.length) {
       setScopedRecords(seed);
-      setBuilding({ templateId: 'custom', initial: null });
+      const r = seed[0];
+      const partial = seed.length === 1 ? {
+        client:    r.client    || '',
+        pubMode:   r.publisher ? 'Select specific' : 'All publishers',
+        selPubs:   r.publisher ? [r.publisher] : [],
+        yrMode:    r.year      ? 'Select specific' : 'All years',
+        selYears:  r.year      ? [String(r.year)]  : [],
+        name: [r.client, r.publisher, r.year].filter(Boolean).join(' — '),
+        selElements: [
+          { id: 'metric:realized_savings' },
+          { id: 'chart:journey' },
+          { id: 'chart:bar' },
+          { id: 'chart:trend' },
+        ],
+      } : null;
+      setBuilding({ templateId: 'custom', initial: partial });
       onSeedConsumed?.();
     }
   }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When a specific past-document record is clicked, find its saved dashboard
+  // (matched by client + publisher + year) and open it in view mode.
+  // If no saved dashboard exists yet, open the builder pre-configured for it.
+  useEffect(() => {
+    if (!targetRecord) return;
+    onTargetConsumed?.();
+    const r = targetRecord;
+    const rClient    = (r.client    || '').toLowerCase();
+    const rPublisher = (r.publisher || '').toLowerCase();
+    const rYear      = String(r.year || '');
+    const match = savedList.find(d => {
+      if (!d.templateId) return false;
+      if ((d.client || '').toLowerCase() !== rClient) return false;
+      const pubMatch = !rPublisher
+        || d.pubMode === 'All publishers'
+        || (d.selPubs || []).some(p => p.toLowerCase() === rPublisher);
+      const yrMatch  = !rYear
+        || d.yrMode  === 'All years'
+        || (d.selYears || []).map(String).includes(rYear);
+      return pubMatch && yrMatch;
+    });
+    if (match) {
+      setBuilding({ templateId: match.templateId, initial: match });
+    } else {
+      const partial = {
+        client:   r.client    || '',
+        pubMode:  r.publisher ? 'Select specific' : 'All publishers',
+        selPubs:  r.publisher ? [r.publisher] : [],
+        yrMode:   r.year      ? 'Select specific' : 'All years',
+        selYears: r.year      ? [String(r.year)]  : [],
+        name: [r.client, r.publisher, r.year].filter(Boolean).join(' — '),
+        selElements: [
+          { id: 'metric:realized_savings' },
+          { id: 'chart:journey' },
+          { id: 'chart:bar' },
+          { id: 'chart:trend' },
+        ],
+      };
+      setBuilding({ templateId: 'custom', initial: partial });
+    }
+  }, [targetRecord]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const records = scopedRecords ?? allRecords;
   const clearScope = () => { setScopedRecords(null); setBuilding(null); };
@@ -1292,6 +1387,19 @@ ${body}
           records={records}
           onClose={() => setBuilding(null)}
           onSave={handleSave}
+          onExport={async (config) => {
+            const logoUri = await fetchLogoDataUri();
+            const html = buildDashboardHtml(config, logoUri);
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const safeName = (config.name || 'dashboard').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 140) || 'dashboard';
+            a.href = url; a.download = `${safeName}.html`;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(url);
+          }}
+          lockedClient={lockedClient}
+          defaultClient={!lockedClient && loginClient ? loginClient : undefined}
         />
       </>
     );
@@ -1300,38 +1408,6 @@ ${body}
   return (
     <>
       {scopedRecords && <ScopeBanner count={scopedRecords.length} onClear={clearScope} />}
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--navy)' }}>Create a dashboard</div>
-        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.45 }}>
-          Start from a <strong>preset template</strong>, or build one from scratch with <strong>custom filters</strong>. Either way you'll configure the details and see a live preview before saving.
-        </div>
-      </div>
-
-      {/* ── Preset templates ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.7, color: 'var(--text-muted)' }}>Preset templates</span>
-        <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-      </div>
-      <div className="db-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 14 }}>
-        {TEMPLATES.filter(t => t.id !== 'custom').map(t => (
-          <button key={t.id} className="db-card" style={{ padding: 16 }} onClick={() => setBuilding({ templateId: t.id, initial: null })}>
-            <div className="db-card-head" style={{ marginBottom: 6 }}>
-              <i className={`ti ${t.icon}`} aria-hidden="true" />
-              <div className="db-card-title">{t.title}</div>
-            </div>
-            <div className="db-card-sub">{t.sub}</div>
-            <div className="db-tags" style={{ marginTop: 10 }}>
-              {t.tags.map(tag => <Badge key={tag} color={t.tagColor || 'navy'}>{tag}</Badge>)}
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {/* ── Or build your own ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.7, color: 'var(--text-muted)' }}>Or build your own</span>
-        <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-      </div>
       <button
         onClick={() => setBuilding({ templateId: 'custom', initial: null })}
         style={{
@@ -1356,13 +1432,68 @@ ${body}
         </span>
       </button>
 
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Saved Dashboards</div>
-      <div className="card" style={{ padding: 14 }}>
-        {loading ? (
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Loading records…</p>
-        ) : savedList.length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No saved dashboards yet. Pick a template above to build one.</p>
-        ) : savedList.map(d => {
+      {/* ── Saved dashboards header with client scope ── */}
+      {(() => {
+        const hasScope = Boolean(loginClient) && !showAllClients;
+        const searchQ = clientSearch.trim().toLowerCase();
+        const visibleList = hasScope
+          ? savedList.filter(d => !d.client || d.client.toLowerCase() === loginClient.toLowerCase())
+          : searchQ
+            ? savedList.filter(d => (d.name + ' ' + (d.client || '') + ' ' + (d.sub || '')).toLowerCase().includes(searchQ))
+            : savedList;
+        const hiddenCount = savedList.length - visibleList.length;
+
+        return (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Saved Dashboards</div>
+              {loginClient && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                  {!showAllClients ? (
+                    <>
+                      <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                        Showing: <strong style={{ color: 'var(--navy)' }}>{loginClient}</strong>
+                        {hiddenCount > 0 && <> · {hiddenCount} hidden</>}
+                      </span>
+                      <button
+                        className="btn ghost small"
+                        onClick={() => setShowAllClients(true)}
+                        style={{ fontSize: 11.5 }}
+                      >
+                        Show all clients
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={clientSearch}
+                        onChange={e => setClientSearch(e.target.value)}
+                        placeholder="Search dashboards…"
+                        style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: 180 }}
+                      />
+                      <button
+                        className="btn ghost small"
+                        onClick={() => { setShowAllClients(false); setClientSearch(''); }}
+                        style={{ fontSize: 11.5, color: 'var(--blue)' }}
+                      >
+                        <i className="ti ti-arrow-back-up" /> Back to {loginClient}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="card" style={{ padding: 14 }}>
+              {loading ? (
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Loading records…</p>
+              ) : visibleList.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+                  {loginClient && !showAllClients
+                    ? <>No saved dashboards for <strong>{loginClient}</strong> yet. Build one above.</>
+                    : 'No saved dashboards yet. Build one above to get started.'}
+                </p>
+              ) : visibleList.map(d => {
           const reopenable = !d.seed && d.templateId;
           return (
             <div
@@ -1408,8 +1539,11 @@ ${body}
               </div>
             </div>
           );
-        })}
-      </div>
+              })}
+            </div>
+          </>
+        );
+      })()}
     </>
   );
 }
