@@ -80,6 +80,140 @@
     "saved_at": "2026-06-25T15:32:32.274733"
   },
   {
+    "record_id": "r_2cc46a833b73",
+    "year": 2026,
+    "client": "",
+    "publisher": "",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 222000.0,
+    "id_cost_avoidance": 222000.0,
+    "acc_cost_avoidance": 222000.0,
+    "id_cost_optimization": 507000.0,
+    "acc_cost_optimization": 282000.0,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 95,
+    "source_file": "2025 December_Encova Insurance_IBM_ROAR_v1.pptx",
+    "sme": "christina",
+    "stored_name": "48db7c9de534b4225cc1cf1492ae3edf.pptx",
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": []
+      },
+      "id_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 89.2,
+        "alternates": []
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": []
+      },
+      "id_cost_optimization": {
+        "source_slide": 12,
+        "confidence": 92.5,
+        "alternates": []
+      },
+      "acc_cost_optimization": {
+        "source_slide": 13,
+        "confidence": 95.0,
+        "alternates": [
+          {
+            "value": "$507,000",
+            "confidence": 62.5
+          }
+        ]
+      }
+    },
+    "executive_summary": {
+      "overview": "This SAM engagement delivered significant financial returns through comprehensive license management and optimization initiatives. The relationship generated over $700K in total identified opportunities with strong execution rates across cost avoidance and optimization categories.",
+      "key_accomplishments": [
+        "Achieved 100% accomplishment rate on cost avoidance initiatives, realizing full $222K identified opportunity",
+        "Delivered $282K in accomplished cost optimization from $507K identified opportunity (56% execution rate)",
+        "Identified and addressed $222K in compliance risk exposure"
+      ],
+      "key_metrics": [
+        {
+          "label": "Total Identified Risk",
+          "value": "$222K",
+          "context": "Compliance exposure identified and flagged for remediation"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$222K",
+          "context": "100% execution rate on avoidance initiatives"
+        },
+        {
+          "label": "Cost Optimization Accomplished",
+          "value": "$282K",
+          "context": "56% execution rate against $507K identified opportunity"
+        },
+        {
+          "label": "Total Value Delivered",
+          "value": "$504K",
+          "context": "Combined accomplished cost avoidance and optimization"
+        }
+      ],
+      "recommendations": [
+        "Prioritize closure of remaining $225K cost optimization opportunity to maximize engagement ROI",
+        "Implement remediation plan for $222K identified compliance risk to avoid potential audit exposure",
+        "Establish governance framework to sustain accomplished savings and prevent value erosion"
+      ],
+      "primary_risks": [
+        "$222K in identified compliance risk requiring active remediation to avoid audit penalties",
+        "$225K in unrealized cost optimization opportunity at risk of expiration without action"
+      ],
+      "market_risks": [],
+      "additional_insights": [
+        "Cost avoidance initiatives demonstrated superior execution velocity compared to optimization projects",
+        "Total identified value of $951K across all categories indicates robust SAM program maturity"
+      ],
+      "next_steps": [
+        "Develop action plan to capture remaining $225K cost optimization opportunity",
+        "Schedule risk remediation review to address $222K compliance exposure",
+        "Conduct quarterly business review to assess sustained value realization"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "$222K"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$222K"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Cost Avoidance Accomplished",
+            "value": 222000
+          },
+          {
+            "name": "Cost Optimization Accomplished",
+            "value": 282000
+          },
+          {
+            "name": "Identified Risk",
+            "value": 222000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 53,
+          "remaining": 47
+        }
+      }
+    },
+    "saved_at": "2026-07-20T20:15:52.690008"
+  },
+  {
     "record_id": "r_b3c6f4845738",
     "year": 2026,
     "client": "KeyBank",
