@@ -1238,6 +1238,8 @@ textarea { resize: vertical; }
 .compare-final-input{flex:1}
 .compare-done-btn{padding:4px 10px;font-size:12px;font-weight:700;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer;transition:background .15s;flex-shrink:0}
 .compare-done-btn:disabled{background:var(--green-pale);cursor:not-allowed}
+.compare-approve-btn{padding:3px 8px;font-size:11px;font-weight:700;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0}
+.compare-approved-badge{font-size:11px;font-weight:600;color:var(--green-text);display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0}
 .compare-footer{padding:16px 20px;border-top:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center}
 .compare-footer-actions{display:flex;align-items:center;gap:12px}
 .compare-resolve-hint{font-size:12px;color:var(--red-text)}

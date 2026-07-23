@@ -317,5 +317,38 @@
     "old_value": null,
     "new_value": null,
     "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "20abc980897145129f927e8e48f2e3e2",
+    "record_id": "r_2cc46a833b73",
+    "timestamp": "2026-07-21T14:18:15.864959",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "7f10fd95e77340ab9be40a15c2042740",
+    "record_id": "r_2cc46a833b73",
+    "timestamp": "2026-07-23T16:40:13.353828",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "dfeaeac979014aa48a1c2422e3ba6b52",
+    "record_id": "r_e11878082db1",
+    "timestamp": "2026-07-23T16:42:29.808599",
+    "user": "christina",
+    "action": "edit",
+    "field": "identified_risk",
+    "old_value": 108000,
+    "new_value": 108000000,
+    "note": "additional information from client 07/21"
   }
 ]

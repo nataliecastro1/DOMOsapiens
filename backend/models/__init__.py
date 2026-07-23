@@ -20,6 +20,7 @@ class ROIRecord(BaseModel):
     """One extracted ROAR document mapped to the 15 Domo export columns."""
     record_id:               Optional[str]   = None   # stable join key across all sheets/logs
     year:                    int
+    month:                   Optional[str]   = None
     client:                  str
     publisher:               str
     date_delivered:          Optional[str]   = None

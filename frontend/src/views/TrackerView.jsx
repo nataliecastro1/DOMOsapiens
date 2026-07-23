@@ -69,7 +69,15 @@ function loadColPrefs(allKeys) {
       const p = JSON.parse(raw);
       // Reconcile saved prefs with the current column set (add new, drop gone).
       const order = (p.order || []).filter(k => allKeys.includes(k));
-      for (const k of allKeys) if (!order.includes(k)) order.push(k);
+      // Insert new keys at their catalog position, not just appended at the end.
+      for (let i = 0; i < allKeys.length; i++) {
+        const k = allKeys[i];
+        if (!order.includes(k)) {
+          const nextIdx = order.findIndex(ok => allKeys.indexOf(ok) > i);
+          if (nextIdx === -1) order.push(k);
+          else order.splice(nextIdx, 0, k);
+        }
+      }
       const hidden = (p.hidden || []).filter(k => allKeys.includes(k));
       return { order, hidden };
     }
@@ -846,7 +854,7 @@ function TabSourceFiles() {
       <div className="table-wrap">
         <table className="data-table">
           <thead>
-            <tr><th>Filename</th><th>Client</th><th>Publisher</th><th>Year</th><th>Used on</th><th>SME</th></tr>
+            <tr><th>Filename</th><th>Client</th><th>Publisher</th><th>Year</th><th>Month</th><th>Used on</th><th>SME</th></tr>
           </thead>
           <tbody>
             {records.length === 0 ? (
@@ -861,6 +869,7 @@ function TabSourceFiles() {
                 <td>{r.client}</td>
                 <td>{r.publisher}</td>
                 <td>{r.year}</td>
+                <td>{r.month || '—'}</td>
                 <td style={{ color: 'var(--text-faint)' }}>{r.saved_at ? new Date(r.saved_at).toLocaleDateString() : '—'}</td>
                 <td>{r.sme || '—'}</td>
               </tr>
@@ -895,7 +904,7 @@ function TabFieldProvenance() {
         if (r[k] == null && !fm[k]) continue;
         const meta = fm[k] || {};
         out.push({
-          record_id: r.record_id, client: r.client, publisher: r.publisher, year: r.year,
+          record_id: r.record_id, client: r.client, publisher: r.publisher, year: r.year, month: r.month,
           metric: label, value: r[k],
           source_slide: meta.source_slide, confidence: meta.confidence,
           alternates: (meta.alternates || []).map(a => `${a.value} (${a.confidence}%)`).join(', '),
@@ -917,7 +926,7 @@ function TabFieldProvenance() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Record</th><th>Client</th><th>Publisher</th><th>Year</th>
+                <th>Record</th><th>Client</th><th>Publisher</th><th>Year</th><th>Month</th>
                 <th>Metric</th><th>Value</th><th>Source slide</th><th>Confidence</th><th>Alternates</th>
               </tr>
             </thead>
@@ -930,6 +939,7 @@ function TabFieldProvenance() {
                   <td>{row.client}</td>
                   <td>{row.publisher}</td>
                   <td>{row.year}</td>
+                  <td>{row.month || '—'}</td>
                   <td>{row.metric}</td>
                   <td>{fmtAmount(row.value)}</td>
                   <td style={{ textAlign: 'center' }}>{row.source_slide ?? '—'}</td>

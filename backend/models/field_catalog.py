@@ -59,6 +59,11 @@ FIELD_CATALOG: list[FieldDef] = [
         notes="Reporting year the ROAR covers.",
     ),
     FieldDef(
+        key="month", label="Month", type="text",
+        notes="Reporting month the ROAR covers (full name, e.g. January). None if absent from the cover slide.",
+        editable=True,
+    ),
+    FieldDef(
         key="date_delivered", label="Date Delivered", type="date",
         notes="Date the ROAR was delivered to the client. Hidden in the Tracker today "
               "because it is inconsistently captured upstream.",

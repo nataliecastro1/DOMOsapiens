@@ -2061,18 +2061,21 @@ function CompareRow({ field, onResolve }) {
   const bestVal     = field.sme ?? field.claude;
   const scriptMatch = !isSkipped && field.script !== '—' && field.script === bestVal;
 
-  const [editVal,   setEditVal]   = useState(toRaw(bestVal));
-  const [confirmed, setConfirmed] = useState(true);
-  const [expanded,  setExpanded]  = useState(false);
-
-  useEffect(() => {
-    onResolve(field.label, confirmed ? toFormatted(editVal) : null);
-  }, [confirmed, editVal]);
+  const [editVal,     setEditVal]     = useState(toRaw(bestVal));
+  const [confirmed,   setConfirmed]   = useState(true);
+  const [expanded,    setExpanded]    = useState(false);
+  const [smeApproved, setSmeApproved] = useState(false);
 
   const scriptConfMed  = field.scriptConfidence != null && field.scriptConfidence >= 70 && field.scriptConfidence < 90;
   const claudeConfMed  = field.claudeConfidence != null && field.claudeConfidence >= 70 && field.claudeConfidence < 90;
   const interMismatch  = !isSkipped && field.script !== '—' && field.claude != null && field.script !== field.claude;
-  const rowState = isSkipped ? 'skipped' : (field.scriptUncertain || interMismatch || scriptConfMed || claudeConfMed) ? 'uncertain' : confirmed ? 'match' : 'mismatch';
+  const isUncertain    = !isSkipped && (field.scriptUncertain || interMismatch || scriptConfMed || claudeConfMed);
+
+  useEffect(() => {
+    onResolve(field.label, confirmed && (!isUncertain || smeApproved) ? toFormatted(editVal) : null);
+  }, [confirmed, editVal, smeApproved]);
+
+  const rowState = isSkipped ? 'skipped' : isUncertain && !smeApproved ? 'uncertain' : confirmed ? 'match' : 'mismatch';
   const hasSource = field.scriptRaw || field.claudeSource;
 
   return (
@@ -2150,6 +2153,20 @@ function CompareRow({ field, onResolve }) {
             >
               <i className="ti ti-pencil" aria-hidden="true" />
             </button>
+            {isUncertain && !smeApproved && (
+              <button
+                onClick={() => setSmeApproved(true)}
+                title="Mark as reviewed by SME"
+                className="compare-approve-btn"
+              >
+                <i className="ti ti-check" aria-hidden="true" /> Approve
+              </button>
+            )}
+            {smeApproved && (
+              <span className="compare-approved-badge">
+                <i className="ti ti-circle-check" aria-hidden="true" /> Reviewed
+              </span>
+            )}
           </div>
         ) : (
           <div className="compare-final-editing">
@@ -2404,7 +2421,7 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
         <div className="compare-footer-actions">
           {!allDone && (
             <span className="compare-resolve-hint">
-              Resolve all red fields to continue
+              Confirm red fields · Approve yellow rows to continue
             </span>
           )}
           <button
