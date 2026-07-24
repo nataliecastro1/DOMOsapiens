@@ -612,7 +612,7 @@ function groupFieldFor(templateId, cfg) {
 }
 
 // ─── Dashboard builder ────────────────────────────────────────────────────────
-function DashboardBuilder({ templateId, options, records, initial, onClose, onSave, onExport, lockedClient, defaultClient }) {
+export function DashboardBuilder({ templateId, options, records, initial, onClose, onSave, onExport, lockedClient, defaultClient, embedded = false }) {
   const seed = useMemo(
     () => initial || defaultsFor(templateId, options),
     [templateId, options, initial],
@@ -717,7 +717,7 @@ function DashboardBuilder({ templateId, options, records, initial, onClose, onSa
   return (
     <div>
       {/* Header: back · title · save */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+      <div style={{ display: embedded ? 'none' : 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button className="btn ghost small" onClick={onClose}><i className="ti ti-arrow-left" aria-hidden="true" /> All dashboards</button>
           <div>
@@ -954,12 +954,206 @@ function ScopeBanner({ count, onClear }) {
   );
 }
 
+// ─── Value at a Glance banner ────────────────────────────────────────────────
+function ValueAtAGlance({ records = [] }) {
+  const allYears = [...new Set(records.map(r => r.year).filter(Boolean))].sort();
+  const minYear = allYears[0] ?? null;
+  const maxYear = allYears[allYears.length - 1] ?? null;
+
+  const [fromYear, setFromYear] = useState(minYear);
+  const [toYear, setToYear] = useState(maxYear);
+
+  // Update year bounds if records change
+  useEffect(() => {
+    const ys = [...new Set(records.map(r => r.year).filter(Boolean))].sort();
+    setFromYear(ys[0] ?? null);
+    setToYear(ys[ys.length - 1] ?? null);
+  }, [records]);
+
+  // Derive filtered records by year
+  const yearFiltered = records.filter(r => {
+    const y = r.year;
+    if (!y) return true;
+    if (fromYear && y < fromYear) return false;
+    if (toYear && y > toYear) return false;
+    return true;
+  });
+
+  const allPublishers = [...new Set(yearFiltered.map(r => r.publisher).filter(Boolean))].sort();
+  const [selectedPubs, setSelectedPubs] = useState(null); // null = all
+
+  const activePubs = selectedPubs ?? allPublishers;
+
+  const togglePub = (pub) => {
+    if (!selectedPubs) {
+      // was all selected → deselect this one
+      setSelectedPubs(allPublishers.filter(p => p !== pub));
+    } else if (selectedPubs.includes(pub)) {
+      const next = selectedPubs.filter(p => p !== pub);
+      setSelectedPubs(next.length === allPublishers.length ? null : next);
+    } else {
+      const next = [...selectedPubs, pub];
+      setSelectedPubs(next.length === allPublishers.length ? null : next);
+    }
+  };
+
+  const finalRecords = yearFiltered.filter(r => {
+    if (!r.publisher) return activePubs.length === 0;
+    return activePubs.includes(r.publisher);
+  });
+
+  // Aggregate by publisher
+  const METRICS = [
+    { key: 'identified_risk',     label: 'Identified Risk',            color: '#e74c3c' },
+    { key: 'id_cost_avoidance',   label: 'Cost Avoidance Identified',  color: '#f4c300' },
+    { key: 'acc_cost_avoidance',  label: 'Avoidance Accomplished',     color: '#e67e22' },
+    { key: '_remaining_risk',     label: 'Remaining Risk',             color: '#2980b9' },
+    { key: 'id_cost_savings',     label: 'Potential Cost Savings',     color: '#16a085' },
+    { key: 'realized_savings',    label: 'Realized Cost Savings',      color: '#27ae60' },
+  ];
+
+  const sumMetric = (rows, key) => {
+    if (key === '_remaining_risk') {
+      const id = rows.reduce((s, r) => s + (Number(r.identified_risk) || 0), 0);
+      const acc = rows.reduce((s, r) => s + (Number(r.acc_cost_avoidance) || 0), 0);
+      return Math.max(0, id - acc);
+    }
+    if (key === 'id_cost_savings') {
+      const a = rows.reduce((s, r) => s + (Number(r.id_cost_optimization) || 0), 0);
+      const b = rows.reduce((s, r) => s + (Number(r.id_cost_savings) || 0), 0);
+      return a || b;
+    }
+    return rows.reduce((s, r) => s + (Number(r[key]) || 0), 0);
+  };
+
+  const fmtVal = (v) => {
+    if (!v) return '—';
+    if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+    if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+    if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
+    return `$${v.toFixed(0)}`;
+  };
+
+  // KPI totals
+  const kpis = METRICS.map(m => ({ ...m, value: sumMetric(finalRecords, m.key) }));
+
+  // Publisher rows
+  const pubRows = allPublishers
+    .filter(p => activePubs.includes(p))
+    .map(pub => {
+      const rows = finalRecords.filter(r => r.publisher === pub);
+      return { pub, values: METRICS.map(m => sumMetric(rows, m.key)) };
+    });
+
+  const totalRow = { pub: 'Total', values: METRICS.map(m => sumMetric(finalRecords, m.key)) };
+
+  if (allYears.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: 28, borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.10)' }}>
+      {/* Header bar */}
+      <div style={{ background: '#001941', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <span style={{ color: '#fff', fontWeight: 700, fontSize: 15, flex: '0 0 auto' }}>Value at a Glance</span>
+
+        {/* Year range selects */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+          <span style={{ color: '#aab4c4' }}>From</span>
+          <select
+            value={fromYear ?? ''}
+            onChange={e => setFromYear(e.target.value || null)}
+            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}
+          >
+            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <span style={{ color: '#aab4c4' }}>To</span>
+          <select
+            value={toYear ?? ''}
+            onChange={e => setToYear(e.target.value || null)}
+            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}
+          >
+            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+
+        {/* Publisher toggles */}
+        <div style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {allPublishers.map(pub => {
+            const on = activePubs.includes(pub);
+            return (
+              <button
+                key={pub}
+                onClick={() => togglePub(pub)}
+                style={{
+                  padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                  fontFamily: 'inherit', cursor: 'pointer',
+                  background: on ? '#fff' : 'transparent',
+                  color: on ? '#001941' : '#aab4c4',
+                  border: `1px solid ${on ? '#fff' : '#2a4a7e'}`,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {pub}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* KPI boxes */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', background: '#f5f7fa' }}>
+        {kpis.map(kpi => (
+          <div key={kpi.key} style={{
+            background: '#fff', borderTop: `4px solid ${kpi.color}`,
+            padding: '16px 14px', textAlign: 'center',
+            borderRight: '1px solid #eaecf0',
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#001941', lineHeight: 1.1 }}>{fmtVal(kpi.value)}</div>
+            <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 6, lineHeight: 1.3 }}>{kpi.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Publisher table */}
+      {pubRows.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', background: '#001941', fontSize: 13 }}>
+          <thead>
+            <tr>
+              <th style={{ padding: '10px 16px', textAlign: 'left', color: '#fff', fontWeight: 700, borderBottom: '1px solid #0a2a5e', background: '#0a1f4e' }}>Publisher</th>
+              {METRICS.map(m => (
+                <th key={m.key} style={{ padding: '10px 12px', textAlign: 'right', color: m.color, fontWeight: 700, borderBottom: '1px solid #0a2a5e', background: '#0a1f4e', fontSize: 12 }}>{m.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {pubRows.map(({ pub, values }, ri) => (
+              <tr key={pub} style={{ background: ri % 2 === 0 ? '#001941' : '#00204e' }}>
+                <td style={{ padding: '9px 16px', color: '#fff', fontWeight: 600 }}>{pub}</td>
+                {values.map((v, ci) => (
+                  <td key={ci} style={{ padding: '9px 12px', textAlign: 'right', color: METRICS[ci].color, fontWeight: 500 }}>{fmtVal(v)}</td>
+                ))}
+              </tr>
+            ))}
+            {/* Totals row */}
+            <tr style={{ background: '#001030', borderTop: '2px solid #0a2a5e' }}>
+              <td style={{ padding: '10px 16px', color: '#fff', fontWeight: 800 }}>Total</td>
+              {totalRow.values.map((v, ci) => (
+                <td key={ci} style={{ padding: '10px 12px', textAlign: 'right', color: METRICS[ci].color, fontWeight: 800 }}>{fmtVal(v)}</td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 // ─── Dashboards view ──────────────────────────────────────────────────────────
 export default function DashboardsView({ seed = null, onSeedConsumed, loginClient = '', loginPublisher = '', targetRecord = null, onTargetConsumed }) {
   const [allRecords, setAllRecords] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [savedList, setSavedList] = useState(loadSaved);
   const [building, setBuilding] = useState(null); // { templateId, initial }
+  const [viewingAuto, setViewingAuto] = useState(null); // auto-saved dashboard from ScreenDone
   const [lockedClient, setLockedClient] = useState(null);
   const [showAllClients, setShowAllClients] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
@@ -1376,6 +1570,95 @@ ${body}
     URL.revokeObjectURL(url);
   };
 
+  if (viewingAuto) {
+    const d = viewingAuto;
+    const T = { navy:'#001941', yellow:'#ffad00', blue:'#005f86', green:'#00875a', teal:'#007b5f', slate:'#4a5568', midGray:'#8a9ab0', navy5:'rgba(0,25,65,.05)', navy10:'rgba(0,25,65,.10)' };
+    const parseDollar = (v) => parseFloat(String(v || '').replace(/[$,]/g, '')) || 0;
+    const fmtM = (n) => { if (!n) return '—'; if (n >= 1_000_000) return `$${(n/1_000_000).toFixed(1)}M`; if (n >= 1_000) return `$${(n/1_000).toFixed(0)}K`; return `$${n.toLocaleString()}`; };
+    const fields = d.fields || [];
+    const get = (lbl) => parseDollar(fields.find(f => f.label === lbl)?.value);
+    const metrics = [
+      { label:'Identified Cost Avoidance',    val: get('Identified Cost Avoidance'),    color: T.teal  },
+      { label:'Accomplished Cost Avoidance',  val: get('Accomplished Cost Avoidance'),  color: T.teal  },
+      { label:'Identified Cost Optimization', val: get('Identified Cost Optimization'), color: T.blue  },
+      { label:'Accomplished Cost Optimization',val:get('Accomplished Cost Optimization'),color:T.blue  },
+      { label:'Identified Cost Savings',      val: get('Identified Cost Savings'),      color: T.green },
+      { label:'Realized Cost Savings',        val: get('Realized Cost Savings'),        color: T.green },
+      { label:'Identified Risk',              val: get('Identified Risk'),              color:'#c0392b'},
+    ].filter(m => m.val > 0);
+    const totalId = metrics.filter(m => m.label.startsWith('Identified')).reduce((s,m)=>s+m.val,0);
+
+    return (
+      <div style={{ fontFamily:"'Figtree','Inter',sans-serif", maxWidth: 900, margin: '0 auto' }}>
+        {/* toolbar */}
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+          <button className="btn ghost small" onClick={() => setViewingAuto(null)}>
+            <i className="ti ti-arrow-left" /> All dashboards
+          </button>
+          <div style={{ fontWeight:700, fontSize:15, color:T.navy, flex:1 }}>{d.name}</div>
+          <div style={{ fontSize:12, color:T.midGray }}>Saved {new Date(d.savedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+        </div>
+        {/* hero */}
+        <div style={{ background:T.navy, borderRadius:16, marginBottom:20, overflow:'hidden' }}>
+          <div style={{ height:6, background:T.yellow }} />
+          <div style={{ padding:'26px 30px', display:'grid', gridTemplateColumns:'1fr auto', gap:20, alignItems:'center' }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase', color:T.yellow, marginBottom:6 }}>ROAR Executive Dashboard</div>
+              <div style={{ fontSize:'clamp(1.2rem,2vw,1.7rem)', fontWeight:800, color:'#fff', lineHeight:1.2 }}>{[d.client, d.publisher, d.year].filter(Boolean).join(' — ')}</div>
+            </div>
+            <div style={{ textAlign:'right' }}>
+              <div style={{ fontSize:'clamp(1.8rem,3vw,2.4rem)', fontWeight:800, color:T.yellow, letterSpacing:'-0.03em', lineHeight:1 }}>{fmtM(totalId)}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,.6)', marginTop:4 }}>Total Identified Value</div>
+            </div>
+          </div>
+        </div>
+        {/* KPI grid */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:12, marginBottom:20 }}>
+          {metrics.map(m => (
+            <div key={m.label} style={{ background:'#fff', border:`1px solid ${T.navy10}`, borderRadius:10, padding:'14px 16px', boxShadow:'0 4px 14px rgba(0,25,65,.05)' }}>
+              <div style={{ fontSize:'clamp(1rem,1.8vw,1.4rem)', fontWeight:800, color:m.color, letterSpacing:'-0.02em', lineHeight:1 }}>{fmtM(m.val)}</div>
+              <div style={{ marginTop:6, fontSize:10, fontWeight:700, letterSpacing:'0.05em', textTransform:'uppercase', color:T.slate }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+        {/* summary */}
+        {d.summary?.overview && (
+          <div style={{ background:'#fff', border:`1px solid ${T.navy10}`, borderRadius:16, padding:'22px 26px', boxShadow:'0 6px 22px rgba(0,25,65,.06)', marginBottom:20 }}>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase', color:T.blue, marginBottom:10 }}>Executive Summary</div>
+            <p style={{ fontSize:14, color:T.slate, lineHeight:1.7, margin:0 }}>{d.summary.overview}</p>
+            {d.summary.key_accomplishments?.length > 0 && (
+              <ul style={{ marginTop:14, paddingLeft:18, color:T.slate, fontSize:13, lineHeight:1.7 }}>
+                {d.summary.key_accomplishments.slice(0,4).map((a,i) => <li key={i}>{a}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
+        {/* ledger */}
+        {metrics.length > 0 && (
+          <div style={{ background:'#fff', border:`1px solid ${T.navy10}`, borderRadius:16, overflow:'hidden', boxShadow:'0 6px 22px rgba(0,25,65,.06)' }}>
+            <div style={{ padding:'16px 24px', borderBottom:`1px solid ${T.navy10}`, background:T.navy5 }}>
+              <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase', color:T.blue }}>Value Delivered Ledger</div>
+            </div>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <tbody>
+                {metrics.map(m => (
+                  <tr key={m.label} style={{ borderTop:`1px solid ${T.navy10}` }}>
+                    <td style={{ padding:'11px 20px', fontWeight:600, color:T.navy, fontSize:13 }}>{m.label}</td>
+                    <td style={{ padding:'11px 20px', textAlign:'right', fontWeight:800, fontSize:14, color:m.color }}>{fmtM(m.val)}</td>
+                  </tr>
+                ))}
+                <tr style={{ background:T.navy5, borderTop:`2px solid ${T.navy10}` }}>
+                  <td style={{ padding:'11px 20px', fontWeight:800, color:T.navy, fontSize:13 }}>Total Identified</td>
+                  <td style={{ padding:'11px 20px', textAlign:'right', fontWeight:800, fontSize:15, color:T.navy }}>{fmtM(totalId)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (building) {
     return (
       <>
@@ -1408,6 +1691,7 @@ ${body}
   return (
     <>
       {scopedRecords && <ScopeBanner count={scopedRecords.length} onClear={clearScope} />}
+      <ValueAtAGlance records={records} />
       <button
         onClick={() => setBuilding({ templateId: 'custom', initial: null })}
         style={{
@@ -1495,13 +1779,19 @@ ${body}
                 </p>
               ) : visibleList.map(d => {
           const reopenable = !d.seed && d.templateId;
+          const isAuto = d.type === 'auto';
+          const clickable = reopenable || isAuto;
+          const handleOpen = () => {
+            if (isAuto) setViewingAuto(d);
+            else if (reopenable) setBuilding({ templateId: d.templateId, initial: d });
+          };
           return (
             <div
               className="list-row"
               key={d.id}
-              onClick={reopenable ? () => setBuilding({ templateId: d.templateId, initial: d }) : undefined}
-              style={{ cursor: reopenable ? 'pointer' : 'default' }}
-              title={reopenable ? 'Open dashboard' : undefined}
+              onClick={clickable ? handleOpen : undefined}
+              style={{ cursor: clickable ? 'pointer' : 'default' }}
+              title={clickable ? 'Open dashboard' : undefined}
             >
               <div>
                 <div style={{ fontWeight: 500 }}>{d.name}</div>
@@ -1509,6 +1799,56 @@ ${body}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Badge color={d.badgeColor}>{d.badge}</Badge>
+                {isAuto && (
+                  <>
+                    <button
+                      className="btn ghost small"
+                      onClick={(e) => { e.stopPropagation(); handleOpen(); }}
+                      aria-label="View dashboard"
+                      title="View"
+                    >
+                      <i className="ti ti-eye" aria-hidden="true" />
+                    </button>
+                    <button
+                      className="btn ghost small"
+                      title="Duplicate"
+                      aria-label="Duplicate dashboard"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const copy = {
+                          ...d,
+                          id: `auto-copy-${Date.now()}`,
+                          name: d.name + ' (Copy)',
+                          savedAt: new Date().toISOString(),
+                        };
+                        setSavedList(prev => {
+                          const next = [copy, ...prev];
+                          persistSaved(next.filter(x => !x.seed));
+                          return next;
+                        });
+                      }}
+                    >
+                      <i className="ti ti-copy" aria-hidden="true" />
+                    </button>
+                    <button
+                      className="btn ghost small"
+                      title="Rename"
+                      aria-label="Rename dashboard"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const newName = window.prompt('Rename dashboard:', d.name);
+                        if (!newName || !newName.trim()) return;
+                        setSavedList(prev => {
+                          const next = prev.map(x => x.id === d.id ? { ...x, name: newName.trim() } : x);
+                          persistSaved(next.filter(x => !x.seed));
+                          return next;
+                        });
+                      }}
+                    >
+                      <i className="ti ti-pencil" aria-hidden="true" />
+                    </button>
+                  </>
+                )}
                 {reopenable && (
                   <button
                     className="btn ghost small"

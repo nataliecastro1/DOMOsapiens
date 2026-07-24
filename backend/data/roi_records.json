@@ -447,119 +447,6 @@
     "saved_at": "2026-06-29T20:45:47.804597"
   },
   {
-    "record_id": "r_6a50050ff780",
-    "year": 2026,
-    "client": "OneMain Financial Holdings, LLC",
-    "publisher": "IBM",
-    "date_delivered": null,
-    "currency": "USD",
-    "identified_risk": 900000.0,
-    "id_cost_avoidance": 100000000.0,
-    "acc_cost_avoidance": 1200000.0,
-    "id_cost_optimization": 330000.0,
-    "acc_cost_optimization": null,
-    "realized_savings": null,
-    "contract_spend": null,
-    "pricing_available": null,
-    "notes": null,
-    "elevate_deliverable": null,
-    "confidence": 75,
-    "source_file": "OneMain - ROAR.pptx",
-    "sme": "christina",
-    "stored_name": "e7c5bbc49c4cc7fa1d9f6b2d89201dbf.pptx",
-    "field_meta": {
-      "id_cost_optimization": {
-        "source_slide": 10,
-        "confidence": 92.5,
-        "alternates": []
-      }
-    },
-    "executive_summary": {
-      "overview": "OneMain Financial Holdings, LLC engaged Anglepoint for IBM software asset management in 2026, identifying significant compliance risk exposure and substantial cost avoidance opportunities within their IBM licensing portfolio.",
-      "key_accomplishments": [
-        "Achieved $1.2M in accomplished cost avoidance through IBM license optimization",
-        "Identified $100.0M in potential cost avoidance opportunities across IBM estate",
-        "Uncovered $330K in cost optimization opportunities for IBM licensing"
-      ],
-      "key_metrics": [
-        {
-          "label": "Identified Risk Exposure",
-          "value": "$900K",
-          "context": "IBM compliance risk requiring remediation"
-        },
-        {
-          "label": "Accomplished Cost Avoidance",
-          "value": "$1.2M",
-          "context": "Realized savings from IBM license optimization initiatives"
-        },
-        {
-          "label": "Identified Cost Avoidance",
-          "value": "$100.0M",
-          "context": "Total potential savings opportunity identified in IBM portfolio"
-        },
-        {
-          "label": "Identified Cost Optimization",
-          "value": "$330K",
-          "context": "Additional optimization opportunities within IBM licensing"
-        }
-      ],
-      "recommendations": [
-        "Pursue remaining $100.0M identified cost avoidance opportunities through structured IBM license negotiation and optimization",
-        "Address $900K identified compliance risk through license true-up or deployment remediation",
-        "Execute on $330K cost optimization opportunities to reduce ongoing IBM spend"
-      ],
-      "primary_risks": [
-        "$900K identified compliance risk exposure within IBM software portfolio requiring immediate attention"
-      ],
-      "market_risks": [
-        "IBM licensing complexity and audit activity continues to present compliance challenges for enterprise customers"
-      ],
-      "additional_insights": [
-        "Significant gap between identified ($100.0M) and accomplished ($1.2M) cost avoidance indicates substantial unrealized value remaining"
-      ],
-      "next_steps": [
-        "Develop action plan to capture remaining identified cost avoidance opportunities",
-        "Implement remediation strategy for $900K compliance risk exposure",
-        "Prioritize and execute $330K cost optimization initiatives"
-      ],
-      "highlights": [
-        {
-          "label": "Total Identified Risk",
-          "value": "$900K"
-        },
-        {
-          "label": "Cost Avoidance Accomplished",
-          "value": "$1.2M"
-        }
-      ],
-      "charts": {
-        "roi_breakdown": [
-          {
-            "name": "Accomplished Cost Avoidance",
-            "value": 1200000
-          },
-          {
-            "name": "Identified Cost Avoidance",
-            "value": 100000000
-          },
-          {
-            "name": "Identified Cost Optimization",
-            "value": 330000
-          },
-          {
-            "name": "Identified Risk",
-            "value": 900000
-          }
-        ],
-        "accomplishment_rate": {
-          "accomplished": 1,
-          "remaining": 99
-        }
-      }
-    },
-    "saved_at": "2026-07-20T18:02:29.864157"
-  },
-  {
     "record_id": "r_d27aafaeb1ed",
     "year": 2025,
     "client": "UPS",
@@ -1157,5 +1044,211 @@
       }
     },
     "saved_at": "2026-07-16T22:10:42.626669"
+  },
+  {
+    "record_id": "r_8ef7d0a8bade",
+    "year": 2026,
+    "client": "Encova",
+    "publisher": "IBM",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 222000.0,
+    "id_cost_avoidance": 222000.0,
+    "acc_cost_avoidance": 222000.0,
+    "id_cost_optimization": 507000.0,
+    "acc_cost_optimization": 282000.0,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 95,
+    "source_file": "2025 December_Encova Insurance_IBM_ROAR_v1 (1).pptx",
+    "sme": "christina",
+    "stored_name": "0586c7d2bf5b24216a1b0d6f63348d2a.pptx",
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": []
+      },
+      "id_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 89.2,
+        "alternates": []
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": []
+      },
+      "id_cost_optimization": {
+        "source_slide": 12,
+        "confidence": 92.5,
+        "alternates": []
+      },
+      "acc_cost_optimization": {
+        "source_slide": 13,
+        "confidence": 95.0,
+        "alternates": [
+          {
+            "value": "$507,000",
+            "confidence": 62.5
+          }
+        ]
+      }
+    },
+    "executive_summary": {
+      "overview": "Anglepoint provided SAM advisory services to Encova focused on IBM software asset management for 2026. The engagement identified significant compliance risks and cost optimization opportunities across Encova's IBM licensing portfolio.",
+      "key_accomplishments": [
+        "Accomplished $222K in cost avoidance through proactive IBM license management",
+        "Realized $282K in cost optimization from identified $507K optimization opportunity (56% completion rate)",
+        "Identified and addressed $222K in IBM licensing compliance risk exposure"
+      ],
+      "key_metrics": [
+        {
+          "label": "Total Accomplished Savings",
+          "value": "$504K",
+          "context": "Combined cost avoidance ($222K) and cost optimization ($282K) realized"
+        },
+        {
+          "label": "Cost Avoidance Rate",
+          "value": "100%",
+          "context": "Full achievement of identified cost avoidance opportunities"
+        },
+        {
+          "label": "Cost Optimization Rate",
+          "value": "56%",
+          "context": "$282K accomplished of $507K identified optimization potential"
+        }
+      ],
+      "recommendations": [
+        "Pursue remaining $225K in identified cost optimization opportunities within IBM portfolio",
+        "Implement ongoing IBM license position monitoring to prevent recurrence of $222K compliance risk",
+        "Establish quarterly IBM software asset reviews to maintain compliance posture"
+      ],
+      "primary_risks": [
+        "IBM compliance risk exposure of $222K identified during engagement assessment",
+        "Remaining $225K in unrealized cost optimization represents ongoing financial exposure"
+      ],
+      "market_risks": [
+        "IBM audit activity continues to increase, elevating compliance verification requirements",
+        "IBM licensing model changes and cloud transitions may impact future cost structures"
+      ],
+      "additional_insights": [
+        "Strong execution on cost avoidance initiatives demonstrates mature SAM processes",
+        "Cost optimization accomplishment rate of 56% indicates opportunity for accelerated realization"
+      ],
+      "next_steps": [
+        "Execute action plan to capture remaining $225K in cost optimization opportunities",
+        "Schedule IBM license true-up review to validate current compliance position",
+        "Assess IBM renewal timeline and negotiate optimization into upcoming contracts"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "$222K"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$222K"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Cost Avoidance Accomplished",
+            "value": 222000
+          },
+          {
+            "name": "Cost Optimization Accomplished",
+            "value": 282000
+          },
+          {
+            "name": "Cost Optimization Remaining",
+            "value": 225000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 69,
+          "remaining": 31
+        }
+      }
+    },
+    "saved_at": "2026-07-24T20:27:35.820306"
+  },
+  {
+    "record_id": "r_f30d4ff9406b",
+    "year": 2026,
+    "client": "OneMain Financial Holdings, LLC",
+    "publisher": "IBM",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": null,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 330000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 95,
+    "source_file": "OneMain - ROAR.pptx",
+    "sme": "christina",
+    "stored_name": "e7c5bbc49c4cc7fa1d9f6b2d89201dbf.pptx",
+    "field_meta": {
+      "id_cost_optimization": {
+        "source_slide": 10,
+        "confidence": 92.5,
+        "alternates": []
+      }
+    },
+    "executive_summary": {
+      "overview": "OneMain Financial Holdings, LLC engaged Anglepoint for IBM Software Asset Management advisory services in 2026. The engagement focused on identifying cost optimization opportunities within their IBM licensing portfolio.",
+      "key_accomplishments": [],
+      "key_metrics": [
+        {
+          "label": "Identified Cost Optimization",
+          "value": "$330K",
+          "context": "Potential cost optimization opportunities identified within IBM licensing"
+        }
+      ],
+      "recommendations": [
+        "Pursue implementation of identified $330K cost optimization opportunities within IBM portfolio",
+        "Develop action plan to convert identified optimization into accomplished savings"
+      ],
+      "primary_risks": [],
+      "market_risks": [
+        "IBM licensing complexity may impact timeline for realizing identified optimization opportunities"
+      ],
+      "additional_insights": [
+        "Cost optimization focus indicates potential for license rationalization or contract restructuring within IBM portfolio"
+      ],
+      "next_steps": [
+        "Execute on identified cost optimization initiatives to convert $330K potential into realized savings",
+        "Establish tracking mechanisms to measure optimization progress"
+      ],
+      "highlights": [
+        {
+          "label": "Identified Cost Optimization",
+          "value": "$330K"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Cost Optimization",
+            "value": 330000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 0,
+          "remaining": 100
+        }
+      }
+    },
+    "saved_at": "2026-07-24T19:13:18.162056"
   }
 ]

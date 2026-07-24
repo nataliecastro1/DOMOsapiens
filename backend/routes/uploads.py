@@ -146,6 +146,21 @@ def check_upload(stored_name: str, client: str = '', publisher: str = '', year: 
     }
 
 
+@router.get("/uploads/{stored_name}/slide-meta")
+def slide_meta(stored_name: str):
+    """Extract year (and raw text snippet) from the first slide/page of an uploaded file."""
+    safe = os.path.basename(stored_name)
+    path = os.path.join(UPLOAD_DIR, safe)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    text = _first_slide_text(path)
+    # Prefer years in the 2000s/2010s/2020s range; take the first one found
+    years = re.findall(r'\b(20\d{2})\b', text)
+    year = years[0] if years else None
+    return {'year': year, 'text_snippet': text[:300]}
+
+
 @router.get("/uploads/{stored_name}/thumbnail")
 def serve_thumbnail(stored_name: str):
     """Return the cover thumbnail for a document.
@@ -180,16 +195,112 @@ def serve_thumbnail(stored_name: str):
     raise HTTPException(status_code=415, detail="Preview not supported for this file type")
 
 
-@router.get("/uploads/{stored_name}/preview.pdf")
-def serve_preview_pdf(stored_name: str):
-    """Serve a PDF for in-browser rendering via PDF.js (PDFs only)."""
+def _get_pdf_path(file_path: str) -> str:
+    """Return path to a renderable PDF for any supported file. Converts PPTX on demand."""
+    ext = Path(file_path).suffix.lower()
+    if ext == '.pdf':
+        return file_path
+    if ext in ('.pptx', '.ppt'):
+        return _pptx_to_pdf(file_path)
+    raise ValueError(f"Unsupported file type: {ext}")
+
+
+def _render_slide_png(file_path: str, page_index: int, scale: float = 2.0) -> bytes:
+    """Render a single page/slide as PNG bytes using PyMuPDF."""
+    import fitz
+    pdf_path = _get_pdf_path(file_path)
+    doc = fitz.open(pdf_path)
+    try:
+        if page_index < 0 or page_index >= doc.page_count:
+            raise IndexError(f"Page {page_index} out of range (0–{doc.page_count - 1})")
+        page = doc[page_index]
+        pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale))
+        return pix.tobytes('png')
+    finally:
+        doc.close()
+
+
+def _get_slide_count(file_path: str) -> int:
+    """Return total number of slides/pages in a file."""
+    import fitz
+    pdf_path = _get_pdf_path(file_path)
+    doc = fitz.open(pdf_path)
+    count = doc.page_count
+    doc.close()
+    return count
+
+
+def _pptx_to_pdf(pptx_path: str) -> str:
+    """Convert a PPTX to PDF via LibreOffice and cache it alongside the source file.
+    Returns the path to the resulting PDF. Raises on failure."""
+    pdf_path = pptx_path + '.preview.pdf'
+    if os.path.exists(pdf_path):
+        return pdf_path
+
+    import subprocess, shutil, tempfile
+
+    # LibreOffice writes <basename>.pdf into the output dir; use a temp dir then move
+    with tempfile.TemporaryDirectory() as tmp:
+        result = subprocess.run(
+            ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', tmp, pptx_path],
+            capture_output=True, text=True, timeout=120,
+        )
+        stem = Path(pptx_path).stem
+        generated = os.path.join(tmp, stem + '.pdf')
+        if not os.path.exists(generated):
+            raise RuntimeError(f"LibreOffice conversion failed: {result.stderr.strip()}")
+        shutil.move(generated, pdf_path)
+
+    return pdf_path
+
+
+@router.get("/uploads/{stored_name}/slides")
+def get_slide_count(stored_name: str):
+    """Return the total number of slides/pages for a document."""
     safe = os.path.basename(stored_name)
     path = os.path.join(UPLOAD_DIR, safe)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
-    if Path(path).suffix.lower() != '.pdf':
-        raise HTTPException(status_code=415, detail="PDF only")
-    return FileResponse(path, media_type='application/pdf')
+    try:
+        count = _get_slide_count(path)
+        return {"count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/uploads/{stored_name}/slides/{index}.png")
+def get_slide_image(stored_name: str, index: int):
+    """Render and return a single slide as a PNG image."""
+    safe = os.path.basename(stored_name)
+    path = os.path.join(UPLOAD_DIR, safe)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        png_bytes = _render_slide_png(path, index, scale=2.0)
+        return Response(png_bytes, media_type='image/png')
+    except IndexError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/uploads/{stored_name}/preview.pdf")
+def serve_preview_pdf(stored_name: str):
+    """Serve a PDF for in-browser rendering via PDF.js. Converts PPTX to PDF on demand."""
+    safe = os.path.basename(stored_name)
+    path = os.path.join(UPLOAD_DIR, safe)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    ext = Path(path).suffix.lower()
+    if ext == '.pdf':
+        return FileResponse(path, media_type='application/pdf')
+    if ext in ('.pptx', '.ppt'):
+        try:
+            pdf_path = _pptx_to_pdf(path)
+            return FileResponse(pdf_path, media_type='application/pdf')
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Could not convert to PDF: {e}")
+    raise HTTPException(status_code=415, detail="Preview not supported for this file type")
 
 
 @router.get("/uploads/{stored_name}")
