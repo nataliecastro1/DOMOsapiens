@@ -194,6 +194,35 @@ export async function deleteUpload(storedName) {
 }
 
 /**
+ * Bulk-import ROI records from an XLSX or CSV file.
+ * Rows are mapped by column header — no PPTX required.
+ * Returns { batch_id, imported: N, skipped: N, sheets: [...], errors: [...] }.
+ */
+export async function bulkImport(file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/bulk-import`, { method: 'POST', body: form });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail || `Bulk import failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Delete all records from a bulk import batch (undo).
+ * Returns { deleted: N, batch_id }.
+ */
+export async function undoBulkImport(batchId) {
+  const res = await fetch(`${BASE}/bulk-import/${encodeURIComponent(batchId)}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail || `Undo failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
  * Run the deterministic ROAR script extractor on an uploaded .pptx.
  * `file` is a browser File object. Returns the full extractor result
  * (client, publisher, month, year, currency, roi_fields{…}, warnings).

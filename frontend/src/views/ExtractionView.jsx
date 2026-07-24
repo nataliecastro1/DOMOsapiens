@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
-import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, deleteUpload } from '../services/api';
+import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, deleteUpload, bulkImport, undoBulkImport } from '../services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -69,6 +69,276 @@ function JourneyBar({ currentStep, onStep }) {
           </React.Fragment>
         );
       })}
+    </div>
+  );
+}
+
+// ─── Bulk Import Zone ─────────────────────────────────────────────────────────
+function BulkImportZone() {
+  const [dragOver, setDragOver]   = useState(false);
+  const [status, setStatus]       = useState(null); // null | 'loading' | 'undoing' | { batch_id, imported, ... } | { error }
+  const fileInputRef               = useRef(null);
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'csv'].includes(ext)) {
+      setStatus({ error: 'Only .xlsx and .csv files are accepted.' });
+      return;
+    }
+    setStatus('loading');
+    try {
+      const result = await bulkImport(file);
+      setStatus(result);
+    } catch (err) {
+      setStatus({ error: err.message });
+    }
+  };
+
+  const handleUndo = async () => {
+    if (!status?.batch_id) return;
+    setStatus('undoing');
+    try {
+      await undoBulkImport(status.batch_id);
+      setStatus(null);
+    } catch (err) {
+      setStatus({ error: err.message });
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFile(e.dataTransfer.files[0]);
+  };
+
+  const [flaggedOpen, setFlaggedOpen] = useState(false);
+
+  const downloadErrorRows = (flagged) => {
+    const COLS = [
+      { header: 'Year',                           key: 'year' },
+      { header: 'Client',                         key: 'client' },
+      { header: 'Publisher',                      key: 'publisher' },
+      { header: 'Currency',                       key: 'currency' },
+      { header: 'Date Delivered',                 key: 'date_delivered' },
+      { header: 'Identified Risk',                key: 'identified_risk' },
+      { header: 'Identified Cost Avoidance',      key: 'id_cost_avoidance' },
+      { header: 'Accomplished Cost Avoidance',    key: 'acc_cost_avoidance' },
+      { header: 'Identified Cost Optimization',   key: 'id_cost_optimization' },
+      { header: 'Accomplished Cost Optimization', key: 'acc_cost_optimization' },
+      { header: 'Realized Cost Savings',          key: 'realized_savings' },
+      { header: 'Annual Publisher Contract',      key: 'contract_spend' },
+      { header: 'Notes',                          key: 'notes' },
+    ];
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const headerRow = [...COLS.map(c => esc(c.header)), esc('Error Reason'), esc('Sheet'), esc('Row #')];
+    const dataRows = flagged.map(f => [
+      ...COLS.map(c => esc(f.data?.[c.key] ?? '')),
+      esc(f.reason), esc(f.location), esc(f.row),
+    ]);
+    const csv = [headerRow, ...dataRows].map(r => r.join(',')).join('\n');
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
+      download: 'import_errors.csv',
+    });
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const isLoading  = status === 'loading';
+  const isUndoing  = status === 'undoing';
+  const isBusy     = isLoading || isUndoing;
+  const isResult   = status && !isBusy && !status.error;
+  const isError    = status?.error;
+
+  return (
+    <div className="card" style={{ marginTop: 0 }}>
+      <div className="card-title">
+        <i className="ti ti-table-import" aria-hidden="true" />
+        Bulk Data Import
+        <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>
+          Upload an Excel or CSV file with multiple ROI records — no PPTX required
+        </span>
+      </div>
+
+      <div
+        className={`upload-dropzone${dragOver ? ' is-dragover' : ''}`}
+        style={{ cursor: isBusy ? 'default' : 'pointer' }}
+        onClick={() => !isBusy && fileInputRef.current.click()}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        {isLoading ? (
+          <>
+            <i className="ti ti-loader-2 spinning upload-dropzone-icon" aria-hidden="true" />
+            <div className="upload-dropzone-title">Importing…</div>
+          </>
+        ) : isUndoing ? (
+          <>
+            <i className="ti ti-loader-2 spinning upload-dropzone-icon" aria-hidden="true" />
+            <div className="upload-dropzone-title">Undoing import…</div>
+          </>
+        ) : (
+          <>
+            <i className="ti ti-file-spreadsheet upload-dropzone-icon" aria-hidden="true" />
+            <div className="upload-dropzone-title">Drag & drop an Excel or CSV file</div>
+            <div className="upload-dropzone-hint">or click to browse · .xlsx or .csv</div>
+          </>
+        )}
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.csv"
+        className="upload-file-input"
+        onChange={e => { handleFile(e.target.files[0]); e.target.value = ''; }}
+      />
+
+      {isResult && (
+        <div style={{
+          marginTop: 10, padding: '10px 14px', borderRadius: 'var(--radius)',
+          background: status.imported > 0 ? 'var(--green-bg, #f0fdf4)' : 'var(--surface-alt)',
+          border: `1.5px solid ${status.imported > 0 ? 'var(--green, #22c55e)' : 'var(--border)'}`,
+          fontSize: 13,
+        }}>
+
+          {/* ── Header row: counts + undo ── */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontWeight: 600, color: status.imported > 0 ? 'var(--green, #16a34a)' : 'var(--text-muted)' }}>
+              <i className={`ti ${status.imported > 0 ? 'ti-circle-check' : 'ti-info-circle'}`} style={{ marginRight: 5 }} />
+              {status.imported} record{status.imported !== 1 ? 's' : ''} imported
+              {status.flagged?.length > 0 && (
+                <span style={{ marginLeft: 10, fontWeight: 400, fontSize: 12, color: 'var(--orange, #ea580c)' }}>
+                  · {status.flagged.length} need review
+                </span>
+              )}
+            </div>
+            {status.batch_id && (
+              <button
+                onClick={handleUndo}
+                style={{
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  background: 'none', border: '1.5px solid var(--border)',
+                  borderRadius: 'var(--radius)', padding: '3px 10px',
+                  color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4,
+                  transition: 'border-color 0.15s, color 0.15s',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--red, #ef4444)'; e.currentTarget.style.color = 'var(--red, #ef4444)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                title="Remove all records from this import"
+              >
+                <i className="ti ti-arrow-back-up" /> Undo import
+              </button>
+            )}
+          </div>
+
+          {/* ── Per-sheet breakdown ── */}
+          {status.sheets?.length > 0 && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {status.sheets.map((s, i) => (
+                <div key={i} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
+                  <i className="ti ti-table" style={{ fontSize: 11 }} />
+                  <span style={{ fontWeight: 600, color: 'var(--text)' }}>{s.name}</span>
+                  <span>— {s.imported} imported{s.flagged > 0 ? `, ${s.flagged} flagged` : ''}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Flagged rows (error log) ── */}
+          {status.flagged?.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <button
+                  onClick={() => setFlaggedOpen(o => !o)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                    fontSize: 12, fontWeight: 600, color: 'var(--orange, #ea580c)',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}
+                >
+                  <i className={`ti ${flaggedOpen ? 'ti-chevron-down' : 'ti-chevron-right'}`} />
+                  {status.flagged.length} row{status.flagged.length !== 1 ? 's' : ''} need review
+                </button>
+                <button
+                  onClick={() => downloadErrorRows(status.flagged)}
+                  style={{
+                    fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    background: 'none', border: '1.5px solid var(--orange-border, #fed7aa)',
+                    borderRadius: 'var(--radius)', padding: '2px 9px',
+                    color: 'var(--orange, #c2410c)', display: 'flex', alignItems: 'center', gap: 4,
+                  }}
+                  title="Download these rows as CSV, fix them, and re-upload"
+                >
+                  <i className="ti ti-download" /> Download error rows
+                </button>
+              </div>
+
+              {flaggedOpen && (
+                <div style={{
+                  marginTop: 6, display: 'flex', flexDirection: 'column', gap: 5,
+                  maxHeight: 280, overflowY: 'auto',
+                }}>
+                  {status.flagged.map((f, i) => {
+                    const keyFields = ['year', 'client', 'publisher'];
+                    const extraFields = ['currency', 'date_delivered', 'identified_risk', 'id_cost_avoidance',
+                      'acc_cost_avoidance', 'id_cost_optimization', 'acc_cost_optimization',
+                      'realized_savings', 'contract_spend'];
+                    return (
+                      <div key={i} style={{
+                        background: 'var(--orange-bg, #fff7ed)',
+                        border: '1px solid var(--orange-border, #fed7aa)',
+                        borderRadius: 'var(--radius)', padding: '7px 10px', fontSize: 12,
+                      }}>
+                        <div style={{ fontWeight: 600, color: 'var(--orange, #c2410c)', marginBottom: 4 }}>
+                          <i className="ti ti-alert-triangle" style={{ marginRight: 4 }} />
+                          {f.location} · row {f.row} — {f.reason}
+                        </div>
+                        {/* Key identifiers */}
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', color: 'var(--text)', marginBottom: 3 }}>
+                          {keyFields.map(k => f.data?.[k]
+                            ? <span key={k} style={{ fontWeight: 600 }}>{f.data[k]}</span>
+                            : <span key={k} style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>({k} missing)</span>
+                          )}
+                        </div>
+                        {/* Non-empty numeric/extra fields */}
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', color: 'var(--text-muted)' }}>
+                          {extraFields.map(k => f.data?.[k]
+                            ? <span key={k}><span style={{ fontWeight: 500 }}>{k.replace(/_/g, ' ')}:</span> {f.data[k]}</span>
+                            : null
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontStyle: 'italic' }}>
+                    Download the error rows CSV, fix the highlighted issues, then re-upload the fixed file.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Unexpected parse errors ── */}
+          {status.errors?.length > 0 && (
+            <div style={{ marginTop: 6, color: 'var(--orange, #ea580c)', fontSize: 12 }}>
+              {status.errors.map((e, i) => <div key={i}>{e}</div>)}
+            </div>
+          )}
+          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+            Records are now visible in the ROI Tracker.
+          </div>
+        </div>
+      )}
+
+      {isError && (
+        <div className="upload-error" style={{ marginTop: 10 }}>
+          <i className="ti ti-alert-triangle" aria-hidden="true" /> {status.error}
+        </div>
+      )}
     </div>
   );
 }
@@ -154,6 +424,7 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
   };
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
     <div style={{ display: 'flex', gap: 16, alignItems: 'stretch' }}>
 
       {/* ── LEFT: Upload Raw File ── */}
@@ -312,6 +583,8 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
       </div>
 
     </div>
+    <BulkImportZone />
+  </div>
   );
 }
 

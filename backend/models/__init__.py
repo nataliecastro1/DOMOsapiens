@@ -42,6 +42,8 @@ class ROIRecord(BaseModel):
     # Per-metric provenance, keyed by model field name (e.g. "identified_risk").
     field_meta:              Optional[dict[str, FieldMeta]] = None
     executive_summary:       Optional[dict]  = None
+    # Set by bulk import to group records from the same upload for undo support.
+    batch_id:                Optional[str]   = None
 
 
 class RecordUpdate(BaseModel):

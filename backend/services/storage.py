@@ -149,6 +149,17 @@ def get_all_records() -> list[dict]:
     return _load()
 
 
+def delete_by_batch_id(batch_id: str) -> int:
+    """Delete all records tagged with batch_id. Returns the count removed."""
+    with _lock:
+        records = _load()
+        kept = [r for r in records if r.get("batch_id") != batch_id]
+        deleted = len(records) - len(kept)
+        if deleted:
+            _save(kept)
+        return deleted
+
+
 def export_csv() -> str:
     """Return all records as a CSV string with the 15 Domo columns."""
     records = _load()
