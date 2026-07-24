@@ -132,6 +132,11 @@ export async function checkUpload(storedName, { client = '', publisher = '', yea
   return get(`/uploads/${encodeURIComponent(storedName)}/check?${params}`);
 }
 
+/** Extract year and text snippet from the first slide/page of an uploaded file. */
+export async function getSlideMeta(storedName) {
+  return get(`/uploads/${encodeURIComponent(storedName)}/slide-meta`);
+}
+
 /** Delete a record permanently. reason must be 'duplicate' or 'error'. */
 export async function deleteRecord(recordId, reason) {
   const res = await fetch(`${BASE}/records/${recordId}?reason=${encodeURIComponent(reason)}`, {

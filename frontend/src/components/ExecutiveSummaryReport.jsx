@@ -260,6 +260,96 @@ const EXAMPLES_BY_CAT = {
   additional_insights: ['Risk reduction of 35% vs prior year', '20 licenses currently in progress'],
 };
 
+// ─── Floating right-side AI chat panel ───────────────────────────────────────
+function ChatSidePanel({ onSubmit, loading, error, toast, onDismissToast }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="no-print" style={{ position: 'fixed', right: 0, top: '50%', transform: 'translateY(-50%)', zIndex: 900 }}>
+      {/* Tab */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          position: 'absolute', right: open ? 340 : 0, top: '50%', transform: 'translateY(-50%)',
+          background: BLUE, color: '#fff', border: 'none', borderRadius: '8px 0 0 8px',
+          padding: '14px 6px', cursor: 'pointer', writingMode: 'vertical-rl',
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', gap: 6,
+          boxShadow: '-3px 0 12px rgba(0,25,65,.18)',
+          transition: 'right 0.28s ease',
+        }}
+        title={open ? 'Close AI assistant' : 'Open AI assistant'}
+      >
+        <i className={`ti ${open ? 'ti-x' : 'ti-message-plus'}`} style={{ fontSize: 15, writingMode: 'horizontal-tb' }} />
+        {open ? 'Close' : 'AI Add'}
+      </button>
+
+      {/* Panel */}
+      <div style={{
+        width: 340, background: '#fff',
+        borderLeft: `3px solid ${BLUE}`,
+        boxShadow: '-6px 0 28px rgba(0,25,65,.14)',
+        height: '80vh', overflowY: 'auto',
+        padding: '20px 18px',
+        transform: open ? 'translateX(0)' : 'translateX(100%)',
+        transition: 'transform 0.28s ease',
+        display: 'flex', flexDirection: 'column', gap: 14,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 9, background: BLUE, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16,
+          }}>
+            <i className="ti ti-message-plus" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>Add to Report</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>AI integrates it into the right section</div>
+          </div>
+        </div>
+
+        <AdditionalInfoBox onSubmit={onSubmit} loading={loading} />
+
+        {error && (
+          <div style={{
+            background: '#fdf0ef', border: `1.5px solid ${RED}55`, borderRadius: 8,
+            padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: RED,
+          }}>
+            <i className="ti ti-alert-circle" style={{ fontSize: 16 }} />
+            {error}
+          </div>
+        )}
+
+        {toast && (
+          <div style={{
+            background: '#1a7a45', borderRadius: 10, padding: '12px 16px', color: '#fff',
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            boxShadow: '0 4px 20px rgba(45,158,92,0.35)',
+          }}>
+            <i className="ti ti-circle-check" style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 5 }}>Added to report</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {toast.map(({ label, count }) => (
+                  <span key={label} style={{
+                    background: 'rgba(255,255,255,0.2)', borderRadius: 16,
+                    padding: '2px 9px', fontSize: 11, fontWeight: 600,
+                  }}>
+                    {count} → {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button onClick={onDismissToast}
+              style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16, flexShrink: 0 }}>
+              <i className="ti ti-x" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Additional info chatbox ──────────────────────────────────────────────────
 function AdditionalInfoBox({ onSubmit, loading }) {
   const [text, setText] = useState('');
@@ -523,57 +613,14 @@ export default function ExecutiveSummaryReport({
   return (
     <div>
 
-      {/* ── Additional info chatbox — excluded from PDF ref ─────────────────── */}
-      <div className="no-print">
-        <AdditionalInfoBox onSubmit={handleAugment} loading={augmenting} />
-
-        {augmentError && (
-          <div style={{
-            background: '#fdf0ef', border: `1.5px solid ${RED}55`, borderRadius: 10,
-            padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: RED,
-          }}>
-            <i className="ti ti-alert-circle" style={{ fontSize: 18 }} />
-            {augmentError}
-          </div>
-        )}
-
-        {/* Toast — slides in after successful augment */}
-        {toast && (
-          <div style={{
-            background: '#1a7a45', borderRadius: 12, padding: '14px 20px',
-            marginBottom: 16, color: '#fff',
-            display: 'flex', alignItems: 'flex-start', gap: 12,
-            boxShadow: '0 4px 20px rgba(45,158,92,0.35)',
-            animation: 'slideDown 0.3s ease',
-          }}>
-            <i className="ti ti-circle-check" style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }} />
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
-                Information successfully added to the report
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {toast.map(({ label, count }) => (
-                  <span key={label} style={{
-                    background: 'rgba(255,255,255,0.2)', borderRadius: 20,
-                    padding: '2px 10px', fontSize: 12, fontWeight: 600,
-                  }}>
-                    {count} item{count > 1 ? 's' : ''} → {label}
-                  </span>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, marginTop: 8, color: 'rgba(255,255,255,0.7)' }}>
-                Scroll down to see highlighted additions in the report ↓
-              </div>
-            </div>
-            <button
-              onClick={() => { setToast(null); setNewKeys(new Set()); }}
-              style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 18, flexShrink: 0 }}
-            >
-              <i className="ti ti-x" />
-            </button>
-          </div>
-        )}
-      </div>
+      {/* ── Floating right-side AI chat panel ─────────────────────────────────── */}
+      <ChatSidePanel
+        onSubmit={handleAugment}
+        loading={augmenting}
+        error={augmentError}
+        toast={toast}
+        onDismissToast={() => { setToast(null); setNewKeys(new Set()); }}
+      />
 
       {/* ── PDF-captured report starts here ─────────────────────────────────── */}
       <div ref={innerRef} style={{ background: '#ffffff', borderRadius: 14, padding: '4px 0' }}>
