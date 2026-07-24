@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from routes import (
     auth,
+    bulk_import,
     client_scopes,
     clients,
     documents,
@@ -23,6 +24,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(bulk_import.router)
 app.include_router(client_scopes.router)
 app.include_router(extraction.router)
 app.include_router(records.router)

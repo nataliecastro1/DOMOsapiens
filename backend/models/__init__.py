@@ -20,6 +20,7 @@ class ROIRecord(BaseModel):
     """One extracted ROAR document mapped to the 15 Domo export columns."""
     record_id:               Optional[str]   = None   # stable join key across all sheets/logs
     year:                    int
+    month:                   Optional[str]   = None
     client:                  str
     publisher:               str
     date_delivered:          Optional[str]   = None
@@ -41,6 +42,8 @@ class ROIRecord(BaseModel):
     # Per-metric provenance, keyed by model field name (e.g. "identified_risk").
     field_meta:              Optional[dict[str, FieldMeta]] = None
     executive_summary:       Optional[dict]  = None
+    # Set by bulk import to group records from the same upload for undo support.
+    batch_id:                Optional[str]   = None
 
 
 class RecordUpdate(BaseModel):
