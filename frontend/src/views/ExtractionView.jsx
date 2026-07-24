@@ -824,7 +824,7 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
       </>,
       document.body
     )}
-    </>
+    </div>
   );
 }
 
