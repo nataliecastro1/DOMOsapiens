@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
+import AutoDashViewer from '../components/AutoDashViewer';
 import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, deleteUpload, getSlideMeta } from '../services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -711,8 +712,8 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
             position: 'fixed', zIndex: 1001,
             top: '50%', left: '50%',
             transform: 'translate(-50%, -50%)',
-            width: 'min(720px, 92vw)',
-            maxHeight: '88vh',
+            width: 'min(900px, 96vw)',
+            maxHeight: '92vh',
             background: 'var(--surface)',
             borderRadius: 20,
             border: '1.5px solid var(--border)',
@@ -744,27 +745,9 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
           </div>
 
           {/* Dashboard content — scrollable */}
-          <div style={{ flex: 1, overflow: 'auto', padding: '0 8px' }}>
+          <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
             {savedDash?.type === 'auto' ? (
-              <div style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ background: 'var(--surface)', borderRadius: 12, padding: '20px 24px', border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>Auto-saved dashboard</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--navy)', marginBottom: 8 }}>{savedDash.name || `${savedDash.client} — ${savedDash.publisher} ${savedDash.year}`}</div>
-                  {savedDash.savedAt && (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Saved {new Date(savedDash.savedAt).toLocaleDateString()}</div>
-                  )}
-                  {(() => {
-                    const total = Object.values(savedDash.fields || {}).reduce((s, v) => s + (Number(v) || 0), 0);
-                    return total > 0 ? (
-                      <div style={{ marginTop: 14, fontSize: 22, fontWeight: 800, color: 'var(--navy)' }}>
-                        ${total >= 1e6 ? `${(total/1e6).toFixed(1)}M` : total >= 1e3 ? `${(total/1e3).toFixed(0)}K` : total.toFixed(0)}
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>total identified value</span>
-                      </div>
-                    ) : null;
-                  })()}
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>Open the full dashboard for complete details.</div>
-              </div>
+              <AutoDashViewer d={savedDash} viewOnly />
             ) : savedDash ? (
               <DashboardBuilder
                 templateId={savedDash.templateId}
@@ -3376,7 +3359,7 @@ function DollarTooltip({ active, payload, label }) {
 }
 
 // ─── ScreenDone: auto-generated dashboard draft ──────────────────────────────
-function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onDashboards }) {
+function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onDashboards, loggedInUser = '' }) {
   const [summary, setSummary]               = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError]     = useState(null);
@@ -3384,6 +3367,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   const [dashSaved, setDashSaved]           = useState(false);
   const [dashSaveError, setDashSaveError]   = useState(null);
   const [hiddenSections, setHiddenSections] = useState({});
+  const [editedFields, setEditedFields]     = useState(null); // overrides finalFields after edits
   const reportRef = useRef(null);
 
   const parseDollar = (v) => parseFloat(String(v || '').replace(/[$,]/g, '')) || 0;
@@ -3394,7 +3378,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
     return `$${n.toLocaleString()}`;
   };
 
-  const fields        = finalFields || [];
+  const fields        = activeFields || [];
   const get           = (label) => parseDollar(fields.find(f => f.label === label)?.value);
   const idRisk        = get('Identified Risk');
   const idAvoidance   = get('Identified Cost Avoidance');
@@ -3445,6 +3429,21 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
 
   const toggleSection = (key) => setHiddenSections(prev => ({ ...prev, [key]: !prev[key] }));
 
+  // Helpers to persist inline edits back into state
+  const updateSummaryList = (field, idx, text) => setSummary(prev => {
+    const list = [...(prev[field] || [])];
+    list[idx] = text;
+    return { ...prev, [field]: list };
+  });
+  const updateSummaryText = (field, text) => setSummary(prev => ({ ...prev, [field]: text }));
+  const updateField = (idx, key, text) => setEditedFields(prev => {
+    const arr = [...(prev || finalFields)];
+    arr[idx] = { ...arr[idx], [key]: text };
+    return arr;
+  });
+
+  const activeFields = editedFields || finalFields;
+
   const buildDash = () => {
     const dashId = `auto-${selectedFile?.record_id || selectedFile?.stored_name || Date.now()}`;
     return {
@@ -3452,8 +3451,9 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
       type: 'auto',
       name: [client, publisher, year].filter(Boolean).join(' — ') + ' Dashboard',
       client, publisher, year,
-      fields: finalFields,
+      fields: activeFields,
       summary,
+      createdBy: loggedInUser,
       savedAt: new Date().toISOString(),
       sub: [publisher, year].filter(Boolean).join(' · '),
     };
@@ -3526,15 +3526,14 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   };
 
   const SectionToggle = ({ skey }) => (
-    editMode ? (
-      <button onClick={() => toggleSection(skey)} style={{
-        background: 'none', border: `1px solid ${T.navy10}`, borderRadius: 6,
-        padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: T.slate,
-        fontFamily: 'inherit', fontWeight: 700,
-      }}>
-        {hiddenSections[skey] ? 'Show' : 'Hide'}
-      </button>
-    ) : null
+    <button onClick={() => toggleSection(skey)} style={{
+      background: 'none', border: `1px solid ${T.navy10}`, borderRadius: 6,
+      padding: '3px 10px', fontSize: 11, cursor: 'pointer',
+      color: hiddenSections[skey] ? T.blue : T.slate,
+      fontFamily: 'inherit', fontWeight: 700,
+    }}>
+      {hiddenSections[skey] ? 'Show' : 'Hide'}
+    </button>
   );
 
   // Shows a compact collapsed bar for sections hidden outside of edit mode
@@ -3557,10 +3556,11 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
     </div>
   ) : null;
 
-  const Editable = ({ tag: Tag = 'span', value, style, className }) => (
+  const Editable = ({ tag: Tag = 'span', value, onSave, style, className }) => (
     <Tag
       contentEditable={editMode}
       suppressContentEditableWarning
+      onBlur={editMode && onSave ? (e) => onSave(e.currentTarget.textContent) : undefined}
       style={{ ...style, outline: editMode ? `2px dashed ${T.yellow}` : 'none', borderRadius: 4 }}
       className={className}
     >
@@ -3717,15 +3717,6 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
                     <i className="ti ti-loader-2 spinning" /> Generating with Claude AI…
                   </span>
                 )}
-                {summary && !summaryLoading && (
-                  <button className="btn ghost small no-print" onClick={() => {
-                    setSummaryLoading(true); setSummary(null);
-                    generateExecutiveSummary({ client, publisher, year: parseInt(year) || null, identified_risk: idRisk || null, id_cost_avoidance: idAvoidance || null, acc_cost_avoidance: accAvoidance || null, id_cost_optimization: idOptim || null, acc_cost_optimization: accOptim || null, realized_savings: idSavings || null, contract_spend: realSavings || null })
-                      .then(d => setSummary(d)).catch(() => setSummaryError('Failed.')).finally(() => setSummaryLoading(false));
-                  }}>
-                    <i className="ti ti-refresh" /> Regenerate
-                  </button>
-                )}
                 <SectionToggle skey="summary" />
               </div>
             </div>
@@ -3755,6 +3746,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
               key: 'opt', title: 'Cost Optimization', kicker: 'Efficiency Gains',
               color: T.blue, accent: '--c-opt',
               lead: summary?.key_accomplishments?.[0] || `${publisher || 'Publisher'} optimization opportunities identified through ROAR analysis.`,
+              leadField: ['key_accomplishments', 0],
               tiles: [
                 { val: fmtM(idOptim),   lbl: 'Identified',   meta: 'Total opportunity', cls: 'opt' },
                 { val: fmtM(accOptim),  lbl: 'Accomplished',  meta: 'Realized to date',  cls: 'opt' },
@@ -3762,24 +3754,28 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
               ],
               slideField: fields.find(f => f.label === 'Identified Cost Optimization'),
               callout: summary?.recommendations?.[0] || null,
+              calloutField: ['recommendations', 0],
               show: idOptim > 0 || accOptim > 0,
             },
             {
               key: 'avoid', title: 'Cost Avoidance', kicker: 'Risk Prevention',
               color: T.teal, accent: '--c-save',
               lead: summary?.key_accomplishments?.[1] || `Cost avoidance opportunities captured through proactive ITAM engagement.`,
+              leadField: ['key_accomplishments', 1],
               tiles: [
                 { val: fmtM(idAvoidance),  lbl: 'Identified',   meta: 'Potential avoided cost', cls: 'save' },
                 { val: fmtM(accAvoidance), lbl: 'Accomplished',  meta: 'Confirmed avoidance',    cls: 'save' },
               ],
               slideField: fields.find(f => f.label === 'Identified Cost Avoidance'),
               callout: summary?.recommendations?.[1] || null,
+              calloutField: ['recommendations', 1],
               show: idAvoidance > 0 || accAvoidance > 0,
             },
             {
               key: 'risk', title: 'Savings & Risk Exposure', kicker: 'Financial Risk',
               color: '#c0392b', accent: '--c-risk',
               lead: summary?.primary_risks?.[0] || `Risk exposure and savings opportunities requiring attention.`,
+              leadField: ['primary_risks', 0],
               tiles: [
                 ...(idSavings   ? [{ val: fmtM(idSavings),  lbl: 'Identified Savings', meta: 'Gross savings target', cls: 'save' }] : []),
                 ...(realSavings ? [{ val: fmtM(realSavings), lbl: 'Realized Savings',   meta: 'Confirmed to date',   cls: 'save' }] : []),
@@ -3787,6 +3783,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
               ],
               slideField: fields.find(f => f.label === 'Identified Risk'),
               callout: summary?.recommendations?.[2] || null,
+              calloutField: ['recommendations', 2],
               show: idSavings > 0 || realSavings > 0 || idRisk > 0,
             },
           ].filter(c => c.show);
@@ -3844,7 +3841,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
                         {cat.title}
                       </div>
                       <div style={{ fontSize: '.9rem', color: T.slate, lineHeight: 1.5, marginBottom: 14 }}>
-                        <Editable value={cat.lead} />
+                        <Editable value={cat.lead} onSave={t => updateSummaryList(cat.leadField[0], cat.leadField[1], t)} />
                       </div>
 
                       {/* tiles */}
@@ -3879,7 +3876,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
                           borderRadius: '0 6px 6px 0', padding: '10px 14px', marginBottom: 12,
                           fontSize: '.84rem', color: T.navy, lineHeight: 1.5,
                         }}>
-                          <Editable value={cat.callout} />
+                          <Editable value={cat.callout} onSave={t => updateSummaryList(cat.calloutField[0], cat.calloutField[1], t)} />
                         </div>
                       )}
 
@@ -3912,7 +3909,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
                         <i className="ti ti-trophy" style={{ marginRight: 4 }} /> Top Win
                       </div>
                       <div style={{ fontSize: '.88rem', color: T.navy, lineHeight: 1.5 }}>
-                        <Editable value={summary.key_accomplishments?.[0] || '—'} />
+                        <Editable value={summary.key_accomplishments?.[0] || '—'} onSave={t => updateSummaryList('key_accomplishments', 0, t)} />
                       </div>
                     </div>
                     <div style={{ borderLeft: `1px solid ${T.navy10}`, paddingLeft: 16 }}>
@@ -3920,7 +3917,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
                         <i className="ti ti-arrow-right" style={{ marginRight: 4 }} /> Next Action
                       </div>
                       <div style={{ fontSize: '.88rem', color: T.navy, lineHeight: 1.5 }}>
-                        <Editable value={summary.next_steps?.[0] || summary.recommendations?.[0] || '—'} />
+                        <Editable value={summary.next_steps?.[0] || summary.recommendations?.[0] || '—'} onSave={t => summary.next_steps?.[0] !== undefined ? updateSummaryList('next_steps', 0, t) : updateSummaryList('recommendations', 0, t)} />
                       </div>
                     </div>
                   </div>
@@ -4309,7 +4306,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
       smeName={smeName}
     />,
     null,
-    <ScreenDone     key={6} finalFields={aggregateFields} selectedFile={doneMeta} onNewExtraction={handleReset} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} />,
+    <ScreenDone     key={6} finalFields={aggregateFields} selectedFile={doneMeta} onNewExtraction={handleReset} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} loggedInUser={loggedInUser} />,
   ];
 
   return (
