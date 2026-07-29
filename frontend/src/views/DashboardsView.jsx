@@ -959,198 +959,6 @@ function ScopeBanner({ count, onClear }) {
 
 // ─── Value at a Glance banner ────────────────────────────────────────────────
 const ValueAtAGlance = ValueAtAGlanceComponent;
-function _ValueAtAGlance_stub({ records = [] }) {
-  const allYears = [...new Set(records.map(r => r.year).filter(Boolean))].sort();
-  const minYear = allYears[0] ?? null;
-  const maxYear = allYears[allYears.length - 1] ?? null;
-
-  const [fromYear, setFromYear] = useState(minYear);
-  const [toYear, setToYear] = useState(maxYear);
-
-  // Update year bounds if records change
-  useEffect(() => {
-    const ys = [...new Set(records.map(r => r.year).filter(Boolean))].sort();
-    setFromYear(ys[0] ?? null);
-    setToYear(ys[ys.length - 1] ?? null);
-  }, [records]);
-
-  // Derive filtered records by year
-  const yearFiltered = records.filter(r => {
-    const y = r.year;
-    if (!y) return true;
-    if (fromYear && y < fromYear) return false;
-    if (toYear && y > toYear) return false;
-    return true;
-  });
-
-  const allPublishers = [...new Set(yearFiltered.map(r => r.publisher).filter(Boolean))].sort();
-  const [selectedPubs, setSelectedPubs] = useState(null); // null = all
-
-  const activePubs = selectedPubs ?? allPublishers;
-
-  const togglePub = (pub) => {
-    if (!selectedPubs) {
-      // was all selected → deselect this one
-      setSelectedPubs(allPublishers.filter(p => p !== pub));
-    } else if (selectedPubs.includes(pub)) {
-      const next = selectedPubs.filter(p => p !== pub);
-      setSelectedPubs(next.length === allPublishers.length ? null : next);
-    } else {
-      const next = [...selectedPubs, pub];
-      setSelectedPubs(next.length === allPublishers.length ? null : next);
-    }
-  };
-
-  const finalRecords = yearFiltered.filter(r => {
-    if (!r.publisher) return activePubs.length === 0;
-    return activePubs.includes(r.publisher);
-  });
-
-  // Aggregate by publisher
-  const METRICS = [
-    { key: 'identified_risk',     label: 'Identified Risk',            color: '#e74c3c' },
-    { key: 'id_cost_avoidance',   label: 'Cost Avoidance Identified',  color: '#f4c300' },
-    { key: 'acc_cost_avoidance',  label: 'Avoidance Accomplished',     color: '#e67e22' },
-    { key: '_remaining_risk',     label: 'Remaining Risk',             color: '#2980b9' },
-    { key: 'id_cost_savings',     label: 'Potential Cost Savings',     color: '#16a085' },
-    { key: 'realized_savings',    label: 'Realized Cost Savings',      color: '#27ae60' },
-  ];
-
-  const sumMetric = (rows, key) => {
-    if (key === '_remaining_risk') {
-      const id = rows.reduce((s, r) => s + (Number(r.identified_risk) || 0), 0);
-      const acc = rows.reduce((s, r) => s + (Number(r.acc_cost_avoidance) || 0), 0);
-      return Math.max(0, id - acc);
-    }
-    if (key === 'id_cost_savings') {
-      const a = rows.reduce((s, r) => s + (Number(r.id_cost_optimization) || 0), 0);
-      const b = rows.reduce((s, r) => s + (Number(r.id_cost_savings) || 0), 0);
-      return a || b;
-    }
-    return rows.reduce((s, r) => s + (Number(r[key]) || 0), 0);
-  };
-
-  const fmtVal = (v) => {
-    if (!v) return '—';
-    if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
-    if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
-    if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
-    return `$${v.toFixed(0)}`;
-  };
-
-  // KPI totals
-  const kpis = METRICS.map(m => ({ ...m, value: sumMetric(finalRecords, m.key) }));
-
-  // Publisher rows
-  const pubRows = allPublishers
-    .filter(p => activePubs.includes(p))
-    .map(pub => {
-      const rows = finalRecords.filter(r => r.publisher === pub);
-      return { pub, values: METRICS.map(m => sumMetric(rows, m.key)) };
-    });
-
-  const totalRow = { pub: 'Total', values: METRICS.map(m => sumMetric(finalRecords, m.key)) };
-
-  if (allYears.length === 0) return null;
-
-  return (
-    <div style={{ marginBottom: 28, borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.10)' }}>
-      {/* Header bar */}
-      <div style={{ background: '#001941', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <span style={{ color: '#fff', fontWeight: 700, fontSize: 15, flex: '0 0 auto' }}>Value at a Glance</span>
-
-        {/* Year range selects */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-          <span style={{ color: '#aab4c4' }}>From</span>
-          <select
-            value={fromYear ?? ''}
-            onChange={e => setFromYear(e.target.value || null)}
-            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}
-          >
-            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <span style={{ color: '#aab4c4' }}>To</span>
-          <select
-            value={toYear ?? ''}
-            onChange={e => setToYear(e.target.value || null)}
-            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}
-          >
-            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-
-        {/* Publisher toggles */}
-        <div style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {allPublishers.map(pub => {
-            const on = activePubs.includes(pub);
-            return (
-              <button
-                key={pub}
-                onClick={() => togglePub(pub)}
-                style={{
-                  padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                  fontFamily: 'inherit', cursor: 'pointer',
-                  background: on ? '#fff' : 'transparent',
-                  color: on ? '#001941' : '#aab4c4',
-                  border: `1px solid ${on ? '#fff' : '#2a4a7e'}`,
-                  transition: 'all 0.15s',
-                }}
-              >
-                {pub}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* KPI boxes */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', background: '#f5f7fa' }}>
-        {kpis.map(kpi => (
-          <div key={kpi.key} style={{
-            background: '#fff', borderTop: `4px solid ${kpi.color}`,
-            padding: '16px 14px', textAlign: 'center',
-            borderRight: '1px solid #eaecf0',
-          }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#001941', lineHeight: 1.1 }}>{fmtVal(kpi.value)}</div>
-            <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 6, lineHeight: 1.3 }}>{kpi.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Publisher table */}
-      {pubRows.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', background: '#001941', fontSize: 13 }}>
-          <thead>
-            <tr>
-              <th style={{ padding: '10px 16px', textAlign: 'left', color: '#fff', fontWeight: 700, borderBottom: '1px solid #0a2a5e', background: '#0a1f4e' }}>Publisher</th>
-              {METRICS.map(m => (
-                <th key={m.key} style={{ padding: '10px 12px', textAlign: 'right', color: m.color, fontWeight: 700, borderBottom: '1px solid #0a2a5e', background: '#0a1f4e', fontSize: 12 }}>{m.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pubRows.map(({ pub, values }, ri) => (
-              <tr key={pub} style={{ background: ri % 2 === 0 ? '#001941' : '#00204e' }}>
-                <td style={{ padding: '9px 16px', color: '#fff', fontWeight: 600 }}>{pub}</td>
-                {values.map((v, ci) => (
-                  <td key={ci} style={{ padding: '9px 12px', textAlign: 'right', color: METRICS[ci].color, fontWeight: 500 }}>{fmtVal(v)}</td>
-                ))}
-              </tr>
-            ))}
-            {/* Totals row */}
-            <tr style={{ background: '#001030', borderTop: '2px solid #0a2a5e' }}>
-              <td style={{ padding: '10px 16px', color: '#fff', fontWeight: 800 }}>Total</td>
-              {totalRow.values.map((v, ci) => (
-                <td key={ci} style={{ padding: '10px 12px', textAlign: 'right', color: METRICS[ci].color, fontWeight: 800 }}>{fmtVal(v)}</td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-}
-
 // ─── Custom Dashboard Builder ─────────────────────────────────────────────────
 const CUSTOM_FIELD_LABELS = [
   'Identified Risk',
@@ -1162,11 +970,25 @@ const CUSTOM_FIELD_LABELS = [
   'Realized Cost Savings',
 ];
 
+const FLAT_FIELD_MAP = {
+  'Identified Risk':               r => Number(r.identified_risk) || 0,
+  'Identified Cost Avoidance':     r => Number(r.id_cost_avoidance) || 0,
+  'Accomplished Cost Avoidance':   r => Number(r.acc_cost_avoidance) || 0,
+  'Identified Cost Optimization':  r => Number(r.id_cost_optimization) || 0,
+  'Accomplished Cost Optimization':r => Number(r.acc_cost_optimization) || 0,
+  'Identified Cost Savings':       r => Number(r.id_cost_savings) || 0,
+  'Realized Cost Savings':         r => Number(r.realized_savings) || 0,
+};
+
 function aggregateFields(records, filterArgs) {
   const matched = matchFilters(records, filterArgs);
   const totals = {};
   CUSTOM_FIELD_LABELS.forEach(lbl => { totals[lbl] = 0; });
   matched.forEach(r => {
+    CUSTOM_FIELD_LABELS.forEach(lbl => {
+      if (FLAT_FIELD_MAP[lbl]) totals[lbl] += FLAT_FIELD_MAP[lbl](r);
+    });
+    // Also handle extraction-generated records that store data in finalFields
     (r.finalFields || []).forEach(({ label, value }) => {
       if (label in totals) {
         totals[label] += parseFloat(String(value || '').replace(/[$,]/g, '')) || 0;
@@ -1178,6 +1000,15 @@ function aggregateFields(records, filterArgs) {
     .map(lbl => ({ label: lbl, value: totals[lbl] }));
 }
 
+const SECTION_DEFS = [
+  { key: 'vag',       label: 'Value at a Glance',    icon: 'ti-eye' },
+  { key: 'kpis',      label: 'KPI Tiles',             icon: 'ti-layout-grid' },
+  { key: 'summary',   label: '01 — Executive Summary',icon: 'ti-file-text' },
+  { key: 'breakdown', label: '02 — Value Analysis',   icon: 'ti-chart-bar' },
+  { key: 'journey',   label: '03 — ROI Journey',      icon: 'ti-trending-up' },
+  { key: 'ledger',    label: '04 — Value Ledger',     icon: 'ti-table' },
+];
+
 function CustomDashBuilder({ records, allRecords = [], options, loginClient, onClose, onSave, loggedInUser = '' }) {
   const clientList = options.clients || [];
   const [client, setClient]       = useState(loginClient || clientList[0] || '');
@@ -1186,7 +1017,13 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
   const [yrMode, setYrMode]       = useState('All years');
   const [selYears, setSelYears]   = useState([]);
   const [name, setName]           = useState('');
-  const [includeVAG, setIncludeVAG] = useState(false);
+  const [sumOv,  setSumOv]        = useState('');
+  const [sumAcc, setSumAcc]       = useState('');
+  const [sumRec, setSumRec]       = useState('');
+  // Which sections are hidden (keyed by SECTION_DEFS key)
+  const [hiddenSecs, setHiddenSecs] = useState({});
+  const toggleSec = (k) => setHiddenSecs(p => ({ ...p, [k]: !p[k] }));
+  const toLines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
 
   const filterArgs = useMemo(() => ({
     client: client || null,
@@ -1194,34 +1031,73 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
     years:      yrMode  === 'Select specific' ? selYears : null,
   }), [client, pubMode, selPubs, yrMode, selYears]);
 
-  const previewFields = useMemo(() => aggregateFields(records, filterArgs), [records, filterArgs]);
+  // Always aggregate from allRecords so a scoped view (from Tracker) doesn't limit the custom builder
+  const previewFields = useMemo(() => aggregateFields(allRecords, filterArgs), [allRecords, filterArgs]);
+
+  const autoName = [
+    client,
+    pubMode === 'All publishers' ? 'All Publishers' : selPubs.join(', '),
+    yrMode  === 'All years'      ? 'All Years'       : selYears.join(', '),
+  ].filter(Boolean).join(' — ');
+
+  // Auto-generate summary + charts from current fields + user text
+  const builtSummary = useMemo(() => {
+    const hasText = sumOv || sumAcc || sumRec;
+    const barData = previewFields.filter(f => f.value > 0).map(f => ({ name: f.label.replace('Identified ', 'Id. ').replace('Accomplished ', 'Acc. ').replace('Cost ', '').replace(' Savings', ' Sav.'), value: f.value }));
+    const getVal = lbl => previewFields.find(f => f.label === lbl)?.value || 0;
+    const totalId  = getVal('Identified Cost Avoidance') + getVal('Identified Cost Optimization') + getVal('Identified Cost Savings') || getVal('Identified Risk');
+    const totalAcc = getVal('Accomplished Cost Avoidance') + getVal('Accomplished Cost Optimization');
+    const charts = barData.length > 0 ? {
+      roi_breakdown: barData,
+      accomplishment_rate: totalId > 0 ? { accomplished: totalAcc, remaining: Math.max(0, totalId - totalAcc) } : {},
+    } : null;
+    if (!hasText && !charts) return null;
+    return {
+      overview: sumOv,
+      key_accomplishments: toLines(sumAcc),
+      recommendations: toLines(sumRec),
+      primary_risks: [],
+      next_steps: [],
+      charts,
+    };
+  }, [previewFields, sumOv, sumAcc, sumRec]);
 
   const previewDash = useMemo(() => ({
-    id: `custom-preview-${Date.now()}`,
+    id: `custom-preview`,
     type: 'custom',
-    name: name.trim() || [client, pubMode === 'All publishers' ? 'All Publishers' : selPubs.join(', '), yrMode === 'All years' ? 'All Years' : selYears.join(', ')].filter(Boolean).join(' — '),
+    name: name.trim() || autoName,
     client,
     publisher: pubMode === 'Select specific' && selPubs.length === 1 ? selPubs[0] : null,
     year: yrMode === 'Select specific' && selYears.length === 1 ? selYears[0] : null,
     fields: previewFields,
-    summary: null,
+    summary: builtSummary,
     savedAt: new Date().toISOString(),
-  }), [name, client, pubMode, selPubs, yrMode, selYears, previewFields]);
+    includeValueAtAGlance: !hiddenSecs.vag,
+    initialHidden: {
+      kpis:      hiddenSecs.kpis      || false,
+      summary:   hiddenSecs.summary   || false,
+      breakdown: hiddenSecs.breakdown || false,
+      journey:   hiddenSecs.journey   || false,
+      ledger:    hiddenSecs.ledger    || false,
+    },
+  }), [name, autoName, client, pubMode, selPubs, yrMode, selYears, previewFields, hiddenSecs, builtSummary]);
 
+  // Use allRecords for full publisher/year lists (not scoped)
   const pubList = useMemo(() => {
-    if (!client) return options.publishers || [];
-    const matched = records.filter(r => (r.client || '') === client);
+    const base = allRecords.length ? allRecords : records;
+    const matched = client ? base.filter(r => (r.client || '') === client) : base;
     return [...new Set(matched.map(r => r.publisher).filter(Boolean))].sort();
-  }, [records, client, options.publishers]);
+  }, [allRecords, records, client]);
 
   const yearList = useMemo(() => {
-    const base = records.filter(r => {
+    const base = allRecords.length ? allRecords : records;
+    const matched = base.filter(r => {
       if (client && (r.client || '') !== client) return false;
       if (pubMode === 'Select specific' && selPubs.length && !selPubs.includes(r.publisher)) return false;
       return true;
     });
-    return [...new Set(base.map(r => String(r.year || '')).filter(Boolean))].sort();
-  }, [records, client, pubMode, selPubs]);
+    return [...new Set(matched.map(r => String(r.year || '')).filter(Boolean))].sort();
+  }, [allRecords, records, client, pubMode, selPubs]);
 
   const togglePub  = (p) => setSelPubs(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
   const toggleYear = (y) => setSelYears(prev => prev.includes(y) ? prev.filter(x => x !== y) : [...prev, y]);
@@ -1233,17 +1109,21 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
     const dash = {
       id: `custom-${Date.now()}`,
       type: 'custom',
-      name: name.trim() || previewDash.name,
+      name: name.trim() || autoName,
       client,
       publisher: pubMode === 'Select specific' && selPubs.length === 1 ? selPubs[0] : null,
       year: yrMode === 'Select specific' && selYears.length === 1 ? selYears[0] : null,
-      pubMode,
-      selPubs,
-      yrMode,
-      selYears,
-      includeValueAtAGlance: includeVAG,
+      pubMode, selPubs, yrMode, selYears,
+      includeValueAtAGlance: !hiddenSecs.vag,
+      initialHidden: {
+        kpis:      hiddenSecs.kpis      || false,
+        summary:   hiddenSecs.summary   || false,
+        breakdown: hiddenSecs.breakdown || false,
+        journey:   hiddenSecs.journey   || false,
+        ledger:    hiddenSecs.ledger    || false,
+      },
       fields: previewFields,
-      summary: null,
+      summary: builtSummary,
       createdBy: loggedInUser,
       savedAt: new Date().toISOString(),
     };
@@ -1251,9 +1131,9 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
     onClose();
   };
 
-  const panelStyle = { flex: '0 0 320px', minWidth: 260, maxWidth: 380 };
+  const panelStyle   = { flex: '0 0 300px', minWidth: 250, maxWidth: 340 };
   const previewStyle = { flex: 1, minWidth: 0 };
-  const tagBtnStyle = (on) => ({
+  const tagBtnStyle  = (on) => ({
     padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: '1.5px solid',
     borderColor: on ? 'var(--blue)' : 'var(--border)',
     background: on ? 'var(--blue)' : 'transparent',
@@ -1303,12 +1183,57 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
 
             <div className="field-group">
               <label className="field-label">Dashboard name</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={previewDash.name} />
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={autoName || 'e.g. IBM 2024 Overview'} />
             </div>
 
-            <div className="field-group" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <input type="checkbox" id="includeVAG" checked={includeVAG} onChange={e => setIncludeVAG(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-              <label htmlFor="includeVAG" style={{ fontSize: 13, color: 'var(--navy)', cursor: 'pointer', userSelect: 'none' }}>Include Value at a Glance</label>
+            {/* ── Executive Summary text ── */}
+            <div className="field-group">
+              <label className="field-label" style={{ marginBottom: 8 }}>Executive Summary <span style={{ fontWeight:400, color:'var(--text-muted)', fontSize:11 }}>(optional)</span></label>
+              <textarea
+                value={sumOv} onChange={e => setSumOv(e.target.value)}
+                placeholder="Write an executive overview…"
+                rows={3} style={{ width:'100%', boxSizing:'border-box', resize:'vertical', fontSize:12, fontFamily:'inherit', padding:'7px 9px', borderRadius:6, border:'1.5px solid var(--border)', color:'var(--text)', lineHeight:1.5 }}
+              />
+              <textarea
+                value={sumAcc} onChange={e => setSumAcc(e.target.value)}
+                placeholder="Key accomplishments (one per line)…"
+                rows={2} style={{ width:'100%', boxSizing:'border-box', resize:'vertical', fontSize:12, fontFamily:'inherit', padding:'7px 9px', borderRadius:6, border:'1.5px solid var(--border)', color:'var(--text)', lineHeight:1.5, marginTop:6 }}
+              />
+              <textarea
+                value={sumRec} onChange={e => setSumRec(e.target.value)}
+                placeholder="Recommendations (one per line)…"
+                rows={2} style={{ width:'100%', boxSizing:'border-box', resize:'vertical', fontSize:12, fontFamily:'inherit', padding:'7px 9px', borderRadius:6, border:'1.5px solid var(--border)', color:'var(--text)', lineHeight:1.5, marginTop:6 }}
+              />
+            </div>
+
+            {/* ── Section visibility ── */}
+            <div className="field-group">
+              <label className="field-label" style={{ marginBottom: 8 }}>Sections</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {SECTION_DEFS.map(sec => {
+                  const visible = !hiddenSecs[sec.key];
+                  return (
+                    <button
+                      key={sec.key}
+                      type="button"
+                      onClick={() => toggleSec(sec.key)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 9,
+                        padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
+                        fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+                        border: `1.5px solid ${visible ? 'var(--blue)' : 'var(--border)'}`,
+                        background: visible ? 'rgba(0,95,134,.08)' : 'transparent',
+                        color: visible ? 'var(--blue)' : 'var(--text-muted)',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <i className={`ti ${sec.icon}`} style={{ fontSize: 14 }} />
+                      <span style={{ flex: 1 }}>{sec.label}</span>
+                      <i className={`ti ${visible ? 'ti-eye' : 'ti-eye-off'}`} style={{ fontSize: 13, opacity: 0.7 }} />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <button className="btn primary" style={{ width: '100%', marginTop: 8 }} disabled={!canBuild} onClick={handleBuild}>
@@ -1328,7 +1253,18 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
             </div>
           )}
           {previewFields.length > 0 && (
-            <AutoDashViewer d={previewDash} viewOnly={true} allRecords={allRecords} />
+            <AutoDashViewer
+              d={previewDash}
+              viewOnly={true}
+              allRecords={allRecords}
+              controlledHidden={{
+                kpis:      hiddenSecs.kpis      || false,
+                summary:   hiddenSecs.summary   || false,
+                breakdown: hiddenSecs.breakdown || false,
+                journey:   hiddenSecs.journey   || false,
+                ledger:    hiddenSecs.ledger    || false,
+              }}
+            />
           )}
         </div>
       </div>
@@ -1794,6 +1730,15 @@ ${body}
       onDelete={() => {
         setSavedList(prev => { const next = prev.filter(x => x.id !== viewingAuto.id); persistSaved(next.filter(x => !x.seed)); return next; });
         setViewingAuto(null);
+      }}
+      onSaveEdits={(editedSummary) => {
+        const updated = { ...viewingAuto, summary: editedSummary };
+        setSavedList(prev => {
+          const next = prev.map(x => x.id === viewingAuto.id ? updated : x);
+          persistSaved(next.filter(x => !x.seed));
+          return next;
+        });
+        setViewingAuto(updated);
       }}
     />;
   }

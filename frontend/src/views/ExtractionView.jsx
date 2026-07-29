@@ -3378,7 +3378,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
     return `$${n.toLocaleString()}`;
   };
 
-  const fields        = activeFields || [];
+  const fields        = editedFields || finalFields || [];
   const get           = (label) => parseDollar(fields.find(f => f.label === label)?.value);
   const idRisk        = get('Identified Risk');
   const idAvoidance   = get('Identified Cost Avoidance');

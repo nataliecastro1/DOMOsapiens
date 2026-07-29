@@ -191,10 +191,26 @@ function buildDashboardHTML(d) {
 </html>`;
 }
 
-export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', allRecords = [], onBack, onRename, onDuplicate, onDelete }) {
-  const [editMode, setEditMode] = useState(false);
-  const [hidden, setHidden]     = useState({});
+export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', allRecords = [], onBack, onRename, onDuplicate, onDelete, onSaveEdits, controlledHidden }) {
+  const [editMode, setEditMode]   = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameVal, setNameVal]     = useState(d.name || '');
+  const [hidden, setHidden]       = useState(d.initialHidden || {});
+  const [sumOv,   setSumOv]     = useState(d.summary?.overview || '');
+  const [sumAcc,  setSumAcc]    = useState((d.summary?.key_accomplishments || []).join('\n'));
+  const [sumRec,  setSumRec]    = useState((d.summary?.recommendations || []).join('\n'));
+  const [sumRisk, setSumRisk]   = useState((d.summary?.primary_risks || []).join('\n'));
+  const [sumNext, setSumNext]   = useState((d.summary?.next_steps || []).join('\n'));
+  const toLines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
+  const buildEditedSummary = () => ({
+    overview: sumOv,
+    key_accomplishments: toLines(sumAcc),
+    recommendations: toLines(sumRec),
+    primary_risks: toLines(sumRisk),
+    next_steps: toLines(sumNext),
+  });
   const toggleHide = (k) => setHidden(p => ({ ...p, [k]: !p[k] }));
+  const effectiveHidden = controlledHidden || hidden;
 
   const fields = d.fields || [];
   const get = (lbl) => parseDollar(fields.find(f => f.label === lbl)?.value);
@@ -207,12 +223,12 @@ export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', 
   const realSavings = get('Realized Cost Savings');
   const totalId     = idAvoidance + idOptim + idSavings || idRisk || 0;
   const totalAcc    = accAvoidance + accOptim || 0;
-  const summary     = d.summary;
+  const summary     = d.summary || (d.type === 'custom' ? {} : null);
   const client      = d.client || '';
   const publisher   = d.publisher || '';
   const today       = new Date(d.savedAt || Date.now()).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
 
-  const sectionStyle = (key) => ({ background:'#fff', borderRadius:T.radius, border:`1px solid ${T.navy10}`, boxShadow:'0 6px 22px rgba(0,25,65,.06)', marginBottom:20, overflow:'hidden', opacity: hidden[key] ? 0.4 : 1, transition:'opacity .2s' });
+  const sectionStyle = (key) => ({ background:'#fff', borderRadius:T.radius, border:`1px solid ${T.navy10}`, boxShadow:'0 6px 22px rgba(0,25,65,.06)', marginBottom:20, overflow:'hidden', opacity: effectiveHidden[key] ? 0.4 : 1, transition:'opacity .2s' });
   const sectionHead  = { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 28px', borderBottom:`1px solid ${T.navy10}`, background:T.navy5 };
   const SNum = ({ n }) => <span style={{ fontSize:'2rem', fontWeight:800, color:T.yellow, lineHeight:0.9 }}>{n}</span>;
 
@@ -225,11 +241,11 @@ export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', 
 
   const HideToggle = ({ skey }) => (!viewOnly && editMode) ? (
     <button onClick={() => toggleHide(skey)} style={{ background:'none', border:`1px solid ${T.navy10}`, borderRadius:6, padding:'3px 10px', fontSize:11, cursor:'pointer', color:T.slate, fontFamily:'inherit', fontWeight:700 }}>
-      {hidden[skey] ? 'Show' : 'Hide'}
+      {effectiveHidden[skey] ? 'Show' : 'Hide'}
     </button>
   ) : null;
 
-  const HiddenBar = ({ skey, label }) => hidden[skey] ? (
+  const HiddenBar = ({ skey, label }) => effectiveHidden[skey] ? (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:T.navy5, border:`1px dashed ${T.navy10}`, borderRadius:T.radiusSm, padding:'10px 18px', marginBottom:20 }}>
       <span style={{ fontSize:12, color:T.midGray, fontStyle:'italic' }}><i className="ti ti-eye-off" style={{ marginRight:6 }} />{label} (hidden)</span>
       <button onClick={() => toggleHide(skey)} style={{ background:'none', border:`1px solid ${T.navy10}`, borderRadius:6, padding:'3px 10px', fontSize:11, cursor:'pointer', color:T.blue, fontFamily:'inherit', fontWeight:700 }}>Show</button>
@@ -289,7 +305,22 @@ export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', 
             return (
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20, flexWrap:'wrap' }}>
                 <button className="btn ghost small" onClick={onBack}><i className="ti ti-arrow-left" /> All dashboards</button>
-                <div style={{ fontWeight:700, fontSize:15, color:T.navy, flex:1 }}>{d.name}</div>
+                {editingName ? (
+                  <input
+                    autoFocus
+                    value={nameVal}
+                    onChange={e => setNameVal(e.target.value)}
+                    onBlur={() => { setEditingName(false); if (nameVal.trim() && nameVal.trim() !== d.name) onRename?.(nameVal.trim()); else setNameVal(d.name); }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.target.blur(); } if (e.key === 'Escape') { setNameVal(d.name); setEditingName(false); } }}
+                    style={{ fontWeight:700, fontSize:15, color:T.navy, flex:1, border:`1px solid ${T.yellow}`, borderRadius:6, padding:'2px 8px', fontFamily:'inherit', outline:'none', minWidth:200 }}
+                  />
+                ) : (
+                  <div
+                    style={{ fontWeight:700, fontSize:15, color:T.navy, flex:1, cursor: isOwner ? 'text' : 'default' }}
+                    title={isOwner ? 'Click to rename' : undefined}
+                    onClick={() => { if (isOwner) { setNameVal(d.name); setEditingName(true); } }}
+                  >{d.name}</div>
+                )}
                 <div style={{ fontSize:12, color:T.midGray }}>Saved {today}</div>
                 {isOwner && (
                   <button className="btn ghost small" onClick={() => setEditMode(e => !e)}>
@@ -326,9 +357,12 @@ export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', 
       )}
 
       {/* ── Value at a Glance banner (optional) ── */}
-      {d.includeValueAtAGlance && allRecords.length > 0 && (
-        <ValueAtAGlance records={allRecords} />
-      )}
+      {d.includeValueAtAGlance && allRecords.length > 0 && (() => {
+        const vagRecords = d.client
+          ? allRecords.filter(r => (r.client || '') === d.client)
+          : allRecords;
+        return vagRecords.length > 0 ? <ValueAtAGlance records={vagRecords} /> : null;
+      })()}
 
       {/* ── Hero ── */}
       <div style={{ background:T.navy, borderRadius:T.radius, marginBottom:20, overflow:'hidden' }}>
@@ -349,18 +383,21 @@ export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', 
       </div>
 
       {/* ── KPI Tiles ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:14, marginBottom:20 }}>
-        {kpiRows.filter(k=>k.value>0).map(k => (
-          <div key={k.label} style={{ background:'#fff', border:`1px solid ${T.navy10}`, borderRadius:T.radiusSm, padding:'16px 18px', boxShadow:'0 4px 14px rgba(0,25,65,.05)' }}>
-            <div style={{ fontSize:'clamp(1.1rem,2vw,1.5rem)', fontWeight:800, color:k.color, letterSpacing:'-0.02em', lineHeight:1 }}>{fmtM(k.value)}</div>
-            <div style={{ marginTop:7, fontSize:11, fontWeight:700, letterSpacing:'0.05em', textTransform:'uppercase', color:T.slate }}>{k.label}</div>
-          </div>
-        ))}
-      </div>
+      <HiddenBar skey="kpis" label="KPI Tiles" />
+      {!effectiveHidden.kpis && (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:14, marginBottom:20 }}>
+          {kpiRows.filter(k=>k.value>0).map(k => (
+            <div key={k.label} style={{ background:'#fff', border:`1px solid ${T.navy10}`, borderRadius:T.radiusSm, padding:'16px 18px', boxShadow:'0 4px 14px rgba(0,25,65,.05)' }}>
+              <div style={{ fontSize:'clamp(1.1rem,2vw,1.5rem)', fontWeight:800, color:k.color, letterSpacing:'-0.02em', lineHeight:1 }}>{fmtM(k.value)}</div>
+              <div style={{ marginTop:7, fontSize:11, fontWeight:700, letterSpacing:'0.05em', textTransform:'uppercase', color:T.slate }}>{k.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Section 01: Executive Summary ── */}
       <HiddenBar skey="summary" label="01 — Executive Summary" />
-      {summary && !hidden.summary && (
+      {summary !== null && !effectiveHidden.summary && (
         <div style={sectionStyle('summary')}>
           <div style={sectionHead}>
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -373,38 +410,68 @@ export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', 
             <HideToggle skey="summary" />
           </div>
           <div style={{ padding:'24px 28px' }}>
-            {summary.overview && <E tag="p" value={summary.overview} style={{ fontSize:14, color:T.slate, lineHeight:1.75, marginTop:0 }} />}
-            {summary.key_accomplishments?.length > 0 && (
-              <div style={{ marginTop:16 }}>
-                <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:T.green, marginBottom:8 }}>Key Accomplishments</div>
-                <ul style={{ paddingLeft:18, color:T.slate, fontSize:13, lineHeight:1.7, margin:0 }}>
-                  {summary.key_accomplishments.map((a,i) => <li key={i}><E value={a} /></li>)}
-                </ul>
+            {/* Editable text areas when in edit mode */}
+            {editMode && !viewOnly ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+                {[
+                  { label:'Overview', color:T.slate,  val:sumOv,   set:setSumOv,   hint:'Write an executive overview paragraph...',       multi:false },
+                  { label:'Key Accomplishments', color:T.green, val:sumAcc, set:setSumAcc, hint:'One accomplishment per line...', multi:true },
+                  { label:'Recommendations',     color:T.yellow, val:sumRec, set:setSumRec, hint:'One recommendation per line...', multi:true },
+                  { label:'Primary Risks',       color:T.red,   val:sumRisk,set:setSumRisk,hint:'One risk per line...',           multi:true },
+                  { label:'Next Steps',          color:T.blue,  val:sumNext,set:setSumNext,hint:'One next step per line...',      multi:true },
+                ].map(({ label, color, val, set, hint, multi }) => (
+                  <div key={label}>
+                    <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color, marginBottom:6 }}>{label}</div>
+                    <textarea
+                      value={val} onChange={e => set(e.target.value)} placeholder={hint} rows={multi ? 3 : 4}
+                      style={{ width:'100%', boxSizing:'border-box', border:`1.5px solid ${T.yellow}`, borderRadius:6, padding:'8px 10px', fontSize:13, fontFamily:'inherit', color:T.slate, lineHeight:1.6, resize:'vertical', outline:'none' }}
+                    />
+                  </div>
+                ))}
+                <button onClick={() => { onSaveEdits?.(buildEditedSummary()); setEditMode(false); }}
+                  style={{ alignSelf:'flex-start', background:T.yellow, border:'none', borderRadius:8, padding:'8px 20px', fontWeight:700, fontSize:13, cursor:'pointer', color:T.navy, fontFamily:'inherit' }}>
+                  Save Changes
+                </button>
               </div>
-            )}
-            {summary.recommendations?.length > 0 && (
-              <div style={{ marginTop:16 }}>
-                <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:T.yellow, marginBottom:8 }}>Recommendations</div>
-                <ul style={{ paddingLeft:18, color:T.slate, fontSize:13, lineHeight:1.7, margin:0 }}>
-                  {summary.recommendations.map((r,i) => <li key={i}><E value={r} /></li>)}
-                </ul>
-              </div>
-            )}
-            {summary.primary_risks?.length > 0 && (
-              <div style={{ marginTop:16 }}>
-                <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:T.red, marginBottom:8 }}>Primary Risks</div>
-                <ul style={{ paddingLeft:18, color:T.slate, fontSize:13, lineHeight:1.7, margin:0 }}>
-                  {summary.primary_risks.map((r,i) => <li key={i}><E value={r} /></li>)}
-                </ul>
-              </div>
-            )}
-            {summary.next_steps?.length > 0 && (
-              <div style={{ marginTop:16 }}>
-                <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:T.blue, marginBottom:8 }}>Next Steps</div>
-                <ul style={{ paddingLeft:18, color:T.slate, fontSize:13, lineHeight:1.7, margin:0 }}>
-                  {summary.next_steps.map((s,i) => <li key={i}><E value={s} /></li>)}
-                </ul>
-              </div>
+            ) : (
+              <>
+                {(sumOv || summary.overview) && <E tag="p" value={sumOv || summary.overview} style={{ fontSize:14, color:T.slate, lineHeight:1.75, marginTop:0 }} />}
+                {(toLines(sumAcc).length > 0 || summary.key_accomplishments?.length > 0) && (
+                  <div style={{ marginTop:16 }}>
+                    <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:T.green, marginBottom:8 }}>Key Accomplishments</div>
+                    <ul style={{ paddingLeft:18, color:T.slate, fontSize:13, lineHeight:1.7, margin:0 }}>
+                      {(toLines(sumAcc).length > 0 ? toLines(sumAcc) : summary.key_accomplishments || []).map((a,i) => <li key={i}><E value={a} /></li>)}
+                    </ul>
+                  </div>
+                )}
+                {(toLines(sumRec).length > 0 || summary.recommendations?.length > 0) && (
+                  <div style={{ marginTop:16 }}>
+                    <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:T.yellow, marginBottom:8 }}>Recommendations</div>
+                    <ul style={{ paddingLeft:18, color:T.slate, fontSize:13, lineHeight:1.7, margin:0 }}>
+                      {(toLines(sumRec).length > 0 ? toLines(sumRec) : summary.recommendations || []).map((r,i) => <li key={i}><E value={r} /></li>)}
+                    </ul>
+                  </div>
+                )}
+                {(toLines(sumRisk).length > 0 || summary.primary_risks?.length > 0) && (
+                  <div style={{ marginTop:16 }}>
+                    <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:T.red, marginBottom:8 }}>Primary Risks</div>
+                    <ul style={{ paddingLeft:18, color:T.slate, fontSize:13, lineHeight:1.7, margin:0 }}>
+                      {(toLines(sumRisk).length > 0 ? toLines(sumRisk) : summary.primary_risks || []).map((r,i) => <li key={i}><E value={r} /></li>)}
+                    </ul>
+                  </div>
+                )}
+                {(toLines(sumNext).length > 0 || summary.next_steps?.length > 0) && (
+                  <div style={{ marginTop:16 }}>
+                    <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:T.blue, marginBottom:8 }}>Next Steps</div>
+                    <ul style={{ paddingLeft:18, color:T.slate, fontSize:13, lineHeight:1.7, margin:0 }}>
+                      {(toLines(sumNext).length > 0 ? toLines(sumNext) : summary.next_steps || []).map((s,i) => <li key={i}><E value={s} /></li>)}
+                    </ul>
+                  </div>
+                )}
+                {!sumOv && !sumAcc && !sumRec && !summary.overview && !summary.key_accomplishments?.length && (
+                  <p style={{ color:T.midGray, fontStyle:'italic', fontSize:13 }}>No summary written yet. Click <strong>Edit</strong> to add content.</p>
+                )}
+              </>
             )}
             {(barData.length > 0 || donutData.length > 1) && (
               <div style={{ display:'grid', gridTemplateColumns: barData.length > 0 && donutData.length > 1 ? '1fr 1fr' : '1fr', gap:20, marginTop:20 }}>
@@ -445,7 +512,7 @@ export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', 
 
       {/* ── Section 02: Value Analysis ── */}
       <HiddenBar skey="breakdown" label="02 — Value Analysis" />
-      {categories.length > 0 && !hidden.breakdown && (
+      {categories.length > 0 && !effectiveHidden.breakdown && (
         <div style={sectionStyle('breakdown')}>
           <div style={sectionHead}>
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -508,7 +575,7 @@ export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', 
 
       {/* ── Section 03: ROI Journey ── */}
       <HiddenBar skey="journey" label="03 — ROI Journey" />
-      {(totalId > 0 || totalAcc > 0) && !hidden.journey && (
+      {(totalId > 0 || totalAcc > 0) && !effectiveHidden.journey && (
         <div style={sectionStyle('journey')}>
           <div style={sectionHead}>
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -557,7 +624,7 @@ export default function AutoDashViewer({ d, viewOnly = false, currentUser = '', 
 
       {/* ── Section 04: Value Ledger ── */}
       <HiddenBar skey="ledger" label="04 — Value Ledger" />
-      {ledgerRows.length > 0 && !hidden.ledger && (
+      {ledgerRows.length > 0 && !effectiveHidden.ledger && (
         <div style={sectionStyle('ledger')}>
           <div style={sectionHead}>
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>

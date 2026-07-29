@@ -61,7 +61,7 @@ export function matchFilters(records, { client = null, publishers = null, years 
   return records.filter(r => {
     if (client && r.client !== client) return false;
     if (Array.isArray(publishers) && !publishers.includes(r.publisher)) return false;
-    if (Array.isArray(years) && !years.includes(r.year)) return false;
+    if (Array.isArray(years) && !years.map(String).includes(String(r.year))) return false;
     return true;
   });
 }
