@@ -9282,5 +9282,49 @@
     "old_value": null,
     "new_value": null,
     "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "6e9af8b18f4842fd98273b26b7193b8c",
+    "record_id": "r_fa78381692d1",
+    "timestamp": "2026-07-29T20:42:27.835465",
+    "user": "christina",
+    "action": "create",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Stored from extraction"
+  },
+  {
+    "event_id": "4864601e1e4640f79a668ccfaa885504",
+    "record_id": "r_fa78381692d1",
+    "timestamp": "2026-07-29T20:43:56.120711",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "cbd030bdd8b645e49267f8fc6e957c4a",
+    "record_id": "r_f30d4ff9406b",
+    "timestamp": "2026-07-29T22:02:10.692148",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "f484394c1c174f5da48fd17df4368152",
+    "record_id": "r_bf9c0ae65f74",
+    "timestamp": "2026-07-29T22:12:59.546341",
+    "user": "christina",
+    "action": "create",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Stored from extraction"
   }
 ]
