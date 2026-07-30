@@ -421,7 +421,7 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
     : [];
   const hasDuplicate = duplicateRecords.length > 0;
 
-  useEffect(() => { onDuplicateChange?.(hasDuplicate); }, [hasDuplicate]);
+  useEffect(() => { onDuplicateChange?.(hasDuplicate ? duplicateRecords[0] : null); }, [hasDuplicate, duplicateRecords[0]]);
 
   const addFiles = async (incoming) => {
     setUploadError(null);
@@ -2083,15 +2083,16 @@ function buildClaudeFields(extractedData) {
   const fieldVal  = (key) => { const v = extractedData[key]; return (v && typeof v === 'object') ? v.value  : v; };
   const fieldConf = (key) => { const v = extractedData[key]; return (v && typeof v === 'object') ? (v.confidence ?? null) : fallbackConf; };
   const fieldSrc  = (key) => { const v = extractedData[key]; return (v && typeof v === 'object') ? (v.source  ?? null) : null; };
+  const fieldSlide= (key) => { const v = extractedData[key]; return (v && typeof v === 'object') ? (v.source_slide ?? null) : null; };
   const entry     = (key) => fieldVal(key) != null ? 'extracted' : null;
   return [
-    { label: 'Identified Risk',                value: fmt(fieldVal('identified_risk')),         variant: 'green', confidence: fieldConf('identified_risk'),         source: fieldSrc('identified_risk'),         flag: null, entryMode: entry('identified_risk')         },
-    { label: 'Identified Cost Avoidance',      value: fmt(fieldVal('id_cost_avoidance')),       variant: 'green', confidence: fieldConf('id_cost_avoidance'),       source: fieldSrc('id_cost_avoidance'),       flag: null, entryMode: entry('id_cost_avoidance')       },
-    { label: 'Accomplished Cost Avoidance',    value: fmt(fieldVal('acc_cost_avoidance')),      variant: 'green', confidence: fieldConf('acc_cost_avoidance'),      source: fieldSrc('acc_cost_avoidance'),      flag: null, entryMode: entry('acc_cost_avoidance')      },
-    { label: 'Identified Cost Optimization',   value: fmt(fieldVal('id_cost_optimization')),    variant: 'blue',  confidence: fieldConf('id_cost_optimization'),    source: fieldSrc('id_cost_optimization'),    flag: null, entryMode: entry('id_cost_optimization')    },
-    { label: 'Accomplished Cost Optimization', value: fmt(fieldVal('acc_cost_optimization')),   variant: 'blue',  confidence: fieldConf('acc_cost_optimization'),   source: fieldSrc('acc_cost_optimization'),   flag: null, entryMode: entry('acc_cost_optimization')   },
-    { label: 'Identified Cost Savings',        value: fmt(fieldVal('identified_cost_savings')), variant: 'green', confidence: fieldConf('identified_cost_savings'), source: fieldSrc('identified_cost_savings'), flag: null, entryMode: entry('identified_cost_savings') },
-    { label: 'Realized Cost Savings',          value: fmt(fieldVal('realized_savings')),        variant: 'green', confidence: fieldConf('realized_savings'),        source: fieldSrc('realized_savings'),        flag: null, entryMode: entry('realized_savings')        },
+    { label: 'Identified Risk',                value: fmt(fieldVal('identified_risk')),         variant: 'green', confidence: fieldConf('identified_risk'),         source: fieldSrc('identified_risk'),         source_slide: fieldSlide('identified_risk'),         flag: null, entryMode: entry('identified_risk')         },
+    { label: 'Identified Cost Avoidance',      value: fmt(fieldVal('id_cost_avoidance')),       variant: 'green', confidence: fieldConf('id_cost_avoidance'),       source: fieldSrc('id_cost_avoidance'),       source_slide: fieldSlide('id_cost_avoidance'),       flag: null, entryMode: entry('id_cost_avoidance')       },
+    { label: 'Accomplished Cost Avoidance',    value: fmt(fieldVal('acc_cost_avoidance')),      variant: 'green', confidence: fieldConf('acc_cost_avoidance'),      source: fieldSrc('acc_cost_avoidance'),      source_slide: fieldSlide('acc_cost_avoidance'),      flag: null, entryMode: entry('acc_cost_avoidance')      },
+    { label: 'Identified Cost Optimization',   value: fmt(fieldVal('id_cost_optimization')),    variant: 'blue',  confidence: fieldConf('id_cost_optimization'),    source: fieldSrc('id_cost_optimization'),    source_slide: fieldSlide('id_cost_optimization'),    flag: null, entryMode: entry('id_cost_optimization')    },
+    { label: 'Accomplished Cost Optimization', value: fmt(fieldVal('acc_cost_optimization')),   variant: 'blue',  confidence: fieldConf('acc_cost_optimization'),   source: fieldSrc('acc_cost_optimization'),   source_slide: fieldSlide('acc_cost_optimization'),   flag: null, entryMode: entry('acc_cost_optimization')   },
+    { label: 'Identified Cost Savings',        value: fmt(fieldVal('identified_cost_savings')), variant: 'green', confidence: fieldConf('identified_cost_savings'), source: fieldSrc('identified_cost_savings'), source_slide: fieldSlide('identified_cost_savings'), flag: null, entryMode: entry('identified_cost_savings') },
+    { label: 'Realized Cost Savings',          value: fmt(fieldVal('realized_savings')),        variant: 'green', confidence: fieldConf('realized_savings'),        source: fieldSrc('realized_savings'),        source_slide: fieldSlide('realized_savings'),        flag: null, entryMode: entry('realized_savings')        },
   ];
 }
 
@@ -2687,6 +2688,14 @@ function CompareRow({ field, onResolve, onJumpToSlide }) {
   const bestVal     = field.sme ?? field.claude;
   const scriptMatch = !isSkipped && field.script !== '—' && field.script === bestVal;
 
+  // Duplicate-aware: only active when pastValue !== undefined (i.e. a duplicate record exists)
+  const pastValue   = field.pastValue; // undefined = no duplicate, null = dup exists but field missing
+  const dupMode     = pastValue !== undefined;
+  const newValue    = bestVal ?? field.script;
+  const isNewField  = dupMode && pastValue === null && newValue != null && newValue !== '—';
+  const isChanged   = dupMode && pastValue !== null && newValue != null && newValue !== '—' && toRaw(newValue) !== toRaw(pastValue);
+  const isPastOnly  = dupMode && pastValue !== null && (newValue == null || newValue === '—');
+
   const [editVal,     setEditVal]     = useState(toRaw(bestVal));
   const [confirmed,   setConfirmed]   = useState(true);
   const [expanded,    setExpanded]    = useState(false);
@@ -2710,6 +2719,16 @@ function CompareRow({ field, onResolve, onJumpToSlide }) {
       {/* Field name */}
       <span className="compare-cell-field">
         {field.label}
+        {isNewField && (
+          <span style={{ display:'inline-flex', alignItems:'center', gap:4, marginLeft:8, background:'#fef3c7', color:'#92400e', fontSize:10, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', padding:'2px 7px', borderRadius:20, border:'1px solid #fcd34d' }}>
+            <i className="ti ti-sparkles" style={{ fontSize:11 }} /> New information
+          </span>
+        )}
+        {isChanged && (
+          <span style={{ display:'inline-flex', alignItems:'center', gap:4, marginLeft:8, background:'#fef3c7', color:'#92400e', fontSize:10, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', padding:'2px 7px', borderRadius:20, border:'1px solid #fcd34d' }}>
+            <i className="ti ti-refresh" style={{ fontSize:11 }} /> Updated
+          </span>
+        )}
         {hasSource && (
           <button
             className={`compare-source-toggle ${expanded ? 'is-open' : ''}`}
@@ -2838,8 +2857,34 @@ function CompareRow({ field, onResolve, onJumpToSlide }) {
           {field.claudeSource && (
             <div className="compare-source-item">
               <span className="compare-source-tag claude">Claude AI</span>
+              {(() => {
+                const slideNum = field.claudeSlide ?? (() => {
+                  const m = String(field.claudeSource).match(/^Slide\s+(\d+)/i);
+                  return m ? parseInt(m[1], 10) : null;
+                })();
+                return slideNum && onJumpToSlide
+                  ? <button className="compare-source-slide compare-source-slide--btn" onClick={() => onJumpToSlide(slideNum - 1)}>
+                      <i className="ti ti-presentation" /> Slide {slideNum}
+                    </button>
+                  : slideNum
+                  ? <span className="compare-source-slide">Slide {slideNum}</span>
+                  : null;
+              })()}
               <span className="compare-source-text">"{field.claudeSource}"</span>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Past information row — shown when a duplicate record exists */}
+      {(pastValue || isPastOnly) && (
+        <div style={{ gridColumn:'1 / -1', display:'flex', alignItems:'center', gap:10, padding:'8px 14px', marginTop:4, background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, opacity:0.75 }}>
+          <span style={{ fontSize:11, fontWeight:700, letterSpacing:'0.07em', textTransform:'uppercase', color:'#94a3b8', flexShrink:0 }}>Past information</span>
+          <span style={{ fontSize:13, color:'#64748b', fontFamily:'monospace', fontWeight:600 }}>{pastValue}</span>
+          {(isChanged || isPastOnly) && (
+            <span style={{ fontSize:11, color:'#94a3b8', fontStyle:'italic' }}>
+              {isChanged ? 'Value updated in new document' : 'Not found in new document'}
+            </span>
           )}
         </div>
       )}
@@ -2847,7 +2892,7 @@ function CompareRow({ field, onResolve, onJumpToSlide }) {
   );
 }
 
-function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null, onNext, onBack, smeName = '', fileMeta = null }) {
+function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null, onNext, onBack, smeName = '', fileMeta = null, duplicateRecord = null }) {
   const [slideOpen, setSlideOpen] = useState(false);
   const slideStackRef = useRef(null);
   const isMulti = batchInfo?.total > 1;
@@ -2860,6 +2905,27 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
   const scriptFor = (label) => {
     if (hasRealScript) return scriptData[label] || null;   // {value, uncertain, alternates} | null
     return null;
+  };
+
+  // Map label → flat API key on the existing duplicate record
+  const PAST_FIELD_KEY = {
+    'Identified Risk':                'identified_risk',
+    'Identified Cost Avoidance':      'id_cost_avoidance',
+    'Accomplished Cost Avoidance':    'acc_cost_avoidance',
+    'Identified Cost Optimization':   'id_cost_optimization',
+    'Accomplished Cost Optimization': 'acc_cost_optimization',
+    'Identified Cost Savings':        'id_cost_savings',
+    'Realized Cost Savings':          'realized_savings',
+  };
+  const fmtPast = (n) => {
+    const num = Number(n);
+    if (!num) return null;
+    return `$${num.toLocaleString()}`;
+  };
+  const pastFor = (label) => {
+    if (!duplicateRecord) return undefined; // no duplicate context — don't show any tags
+    const key = PAST_FIELD_KEY[label];
+    return key ? fmtPast(duplicateRecord[key]) : null; // null = field not in past record
   };
 
   const sourceFields = fields && fields.length > 0 ? fields : [];
@@ -2876,8 +2942,10 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
       claude: f.entryMode === 'extracted' ? f.value : null,
       claudeConfidence: f.confidence ?? null,
       claudeSource:     f.source ?? null,
+      claudeSlide:      f.source_slide ?? null,
       sme:    f.entryMode === 'manual'    ? f.value : null,
       flag:   f.flag,
+      pastValue: pastFor(f.label),
     };
   });
 
@@ -3141,7 +3209,7 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
 // For the current file: first let the SME fill/skip any missing fields (the
 // ScreenExtract review), then resolve the Script-vs-Claude comparison. Remounted
 // per file by the parent (keyed on the file index) so each file starts clean.
-function FileReview({ fileResult, fileIndex, total, isLast, onConfirm, onExclude, onBack, allStatuses = [], files = [], smeName = '' }) {
+function FileReview({ fileResult, fileIndex, total, isLast, onConfirm, onExclude, onBack, allStatuses = [], files = [], smeName = '', duplicateRecord = null }) {
   const currentStatus = allStatuses[fileIndex] ?? 'pending';
 
   if (currentStatus !== 'done') {
@@ -3188,6 +3256,7 @@ function FileReview({ fileResult, fileIndex, total, isLast, onConfirm, onExclude
       onBack={onBack}
       smeName={smeName}
       fileMeta={fileResult.fileMeta}
+      duplicateRecord={duplicateRecord}
     />
   );
 }
@@ -3359,7 +3428,7 @@ function DollarTooltip({ active, payload, label }) {
 }
 
 // ─── ScreenDone: auto-generated dashboard draft ──────────────────────────────
-function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onDashboards, loggedInUser = '' }) {
+function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onDashboards, loggedInUser = '', onBack }) {
   const [summary, setSummary]               = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError]     = useState(null);
@@ -3577,6 +3646,11 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
         marginBottom: 20, gap: 10, flexWrap: 'wrap',
       }} className="no-print">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {onBack && (
+            <button className="btn ghost small" onClick={onBack}>
+              <i className="ti ti-arrow-left" /> Back to Review
+            </button>
+          )}
           <div style={{
             background: T.green, borderRadius: '50%', width: 32, height: 32,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -3660,11 +3734,17 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
         </div>
 
         {/* ── KPI Tiles ── */}
+        <HiddenBar skey="kpis" label="KPI Tiles" />
         {!hiddenSections.kpis && (
+          <div style={{ background:'#fff', borderRadius: T.radius, border:`1px solid ${T.navy10}`, boxShadow:'0 6px 22px rgba(0,25,65,.06)', marginBottom:20, overflow:'hidden' }}>
+            <div style={{ ...sectionHead }}>
+              <div style={{ fontSize:13, fontWeight:700, color: T.navy }}>KPI Tiles</div>
+              <SectionToggle skey="kpis" />
+            </div>
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-            gap: 14, marginBottom: 20,
+            gap: 14, padding: '16px 20px',
           }}>
             {[
               { label: 'Identified Risk',             value: idRisk,       color: '#c0392b' },
@@ -3692,6 +3772,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
                 </div>
               </div>
             ))}
+          </div>
           </div>
         )}
 
@@ -4119,7 +4200,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
   const [savedRecordId, setSavedRecordId]       = useState(null);
   const [fileStatuses, setFileStatuses]         = useState([]);           // 'pending' | 'running' | 'done' per file
   const extractionCancelRef = useRef(false);
-  const [isDuplicate, setIsDuplicate]           = useState(false);        // lifted from ScreenRequest
+  const [duplicateRecord, setDuplicateRecord]   = useState(null);         // lifted from ScreenRequest (full record or null)
 
   // Lifted request form state — persists when the user navigates back from SME Validate
   const [reqYear, setReqYear]           = useState('');
@@ -4287,15 +4368,16 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
       existingBatch={files}
       onRemoveExisting={(idx) => setFiles(prev => prev.filter((_, i) => i !== idx))}
       onOpenRecord={onOpenRecord}
-      onDuplicateChange={setIsDuplicate}
+      onDuplicateChange={setDuplicateRecord}
     />,
     <ScreenFiles    key={1} filters={filters} clientDir={clientDir} onSelect={handleFilesSelected} onBack={() => setStep(0)} />,
-    <ScreenValidate key={2} selectedFile={files[0]} files={files} onConfirm={handleSMEConfirm} onBack={() => setStep(0)} defaultName={loggedInUser} isDuplicate={isDuplicate} />,
+    <ScreenValidate key={2} selectedFile={files[0]} files={files} onConfirm={handleSMEConfirm} onBack={() => setStep(0)} defaultName={loggedInUser} isDuplicate={!!duplicateRecord} />,
     null,
     <FileReview
       key={`4-${currentFileIndex}`}
       fileResult={fileResults[currentFileIndex]}
       fileIndex={currentFileIndex}
+      duplicateRecord={duplicateRecord}
       total={files.length}
       isLast={currentFileIndex === files.length - 1}
       onConfirm={handleFileConfirm}
@@ -4306,7 +4388,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
       smeName={smeName}
     />,
     null,
-    <ScreenDone     key={6} finalFields={aggregateFields} selectedFile={doneMeta} onNewExtraction={handleReset} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} loggedInUser={loggedInUser} />,
+    <ScreenDone     key={6} finalFields={aggregateFields} selectedFile={doneMeta} onNewExtraction={handleReset} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} loggedInUser={loggedInUser} onBack={() => setStep(4)} />,
   ];
 
   return (

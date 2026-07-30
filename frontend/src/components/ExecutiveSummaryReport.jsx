@@ -866,6 +866,14 @@ export default function ExecutiveSummaryReport({
       </div>
 
       </div> {/* end PDF-captured ref */}
+
+      <ChatSidePanel
+        onSubmit={handleAugment}
+        loading={augmenting}
+        error={augmentError}
+        toast={toast}
+        onDismissToast={() => setToast(null)}
+      />
     </div>
   );
 }
