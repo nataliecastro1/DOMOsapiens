@@ -827,8 +827,8 @@
     "record_id": "r_bf9c0ae65f74",
     "year": 2025,
     "month": null,
-    "client": "Encova",
-    "publisher": "IBM",
+    "client": "",
+    "publisher": "",
     "date_delivered": null,
     "currency": "USD",
     "identified_risk": 222000.0,
@@ -878,50 +878,52 @@
       }
     },
     "executive_summary": {
-      "overview": "Encova engaged Anglepoint for IBM software asset management in 2025, focusing on license compliance and cost optimization. The engagement identified $222K in compliance risk exposure while successfully accomplishing $222K in cost avoidance and $282K in cost optimization.",
+      "overview": "This SAM engagement delivered comprehensive license optimization and risk mitigation services, achieving significant cost avoidance and optimization outcomes. The relationship has yielded over $500K in identified cost optimization opportunities with strong execution against avoidance targets.",
       "key_accomplishments": [
-        "Achieved $222K in IBM cost avoidance through proactive license management",
-        "Realized $282K in cost optimization from identified $507K opportunity (56% accomplishment rate)",
-        "Eliminated $222K in identified compliance risk exposure"
+        "Achieved 100% realization of $222K identified cost avoidance",
+        "Accomplished $282K in cost optimization from $507K identified opportunities (56% realization rate)",
+        "Fully mitigated $222K in identified compliance risk exposure"
       ],
       "key_metrics": [
         {
-          "label": "Total Identified Risk",
+          "label": "Identified Risk",
           "value": "$222K",
-          "context": "IBM compliance exposure identified and addressed"
+          "context": "Total compliance risk exposure identified during assessment"
         },
         {
-          "label": "Cost Avoidance Accomplished",
+          "label": "Cost Avoidance Achieved",
           "value": "$222K",
-          "context": "100% of identified cost avoidance realized"
+          "context": "100% of identified cost avoidance opportunities realized"
         },
         {
           "label": "Cost Optimization Accomplished",
           "value": "$282K",
-          "context": "56% of $507K optimization opportunity captured"
+          "context": "56% of $507K identified optimization opportunities executed"
+        },
+        {
+          "label": "Total Value Delivered",
+          "value": "$504K",
+          "context": "Combined accomplished cost avoidance and optimization"
         }
       ],
       "recommendations": [
-        "Pursue remaining $225K in identified cost optimization opportunities within IBM portfolio",
-        "Implement continuous IBM license position monitoring to maintain compliance posture",
-        "Establish renewal planning cadence to maximize future cost avoidance opportunities"
+        "Pursue remaining $225K in identified cost optimization opportunities to maximize engagement ROI",
+        "Continue proactive license management to maintain compliance position against $222K risk exposure",
+        "Establish regular cadence to track optimization pipeline and accelerate realization rates"
       ],
       "primary_risks": [
-        "IBM compliance exposure of $222K identified requiring ongoing management attention",
-        "Unrealized optimization potential of $225K represents continued cost reduction opportunity"
+        "$222K in identified compliance risk requiring ongoing monitoring and remediation tracking",
+        "$225K in unrealized cost optimization opportunities at risk of expiration if not actioned"
       ],
-      "market_risks": [
-        "IBM licensing complexity and audit activity continues to present compliance challenges",
-        "IBM subscription and cloud transitions may introduce new licensing considerations"
-      ],
+      "market_risks": [],
       "additional_insights": [
-        "Full accomplishment of cost avoidance targets demonstrates effective proactive license management",
-        "Optimization accomplishment rate of 56% indicates additional value capture potential"
+        "Strong cost avoidance execution demonstrates effective preventative license management",
+        "Cost optimization realization rate of 56% indicates opportunity for process improvement in execution"
       ],
       "next_steps": [
-        "Develop action plan to capture remaining $225K in cost optimization",
-        "Schedule quarterly IBM license position reviews",
-        "Align IBM contract renewal strategy with optimization findings"
+        "Review remaining $225K optimization backlog and prioritize high-impact opportunities",
+        "Validate risk mitigation status and confirm compliance posture",
+        "Develop action plan to increase cost optimization realization rate toward 80%+ target"
       ],
       "highlights": [
         {
@@ -936,21 +938,25 @@
       "charts": {
         "roi_breakdown": [
           {
-            "name": "Cost Avoidance",
+            "name": "Cost Avoidance Accomplished",
             "value": 222000
           },
           {
-            "name": "Cost Optimization",
+            "name": "Cost Optimization Accomplished",
             "value": 282000
+          },
+          {
+            "name": "Cost Optimization Remaining",
+            "value": 225000
           }
         ],
         "accomplishment_rate": {
-          "accomplished": 63,
-          "remaining": 37
+          "accomplished": 69,
+          "remaining": 31
         }
       }
     },
     "batch_id": null,
-    "saved_at": "2026-07-29T22:12:59.542707"
+    "saved_at": "2026-07-30T17:26:50.184220"
   }
 ]
