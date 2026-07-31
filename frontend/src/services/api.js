@@ -199,19 +199,166 @@ export async function deleteUpload(storedName) {
 }
 
 /**
- * Bulk-import ROI records from an XLSX or CSV file.
- * Rows are mapped by column header — no PPTX required.
- * Returns { batch_id, imported: N, skipped: N, sheets: [...], errors: [...] }.
+ * Export the Value at a Glance view as a self-contained HTML file.
+ * payload: { period, client, rows, total } — raw numeric values.
  */
-export async function bulkImport(file) {
-  const form = new FormData();
-  form.append('file', file);
-  const res = await fetch(`${BASE}/bulk-import`, { method: 'POST', body: form });
+export async function exportValueAtAGlanceHtml(payload) {
+  const res = await fetch(`${BASE}/export/value-at-a-glance.html`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
   if (!res.ok) {
     const detail = await res.json().catch(() => null);
-    throw new Error(detail?.detail || `Bulk import failed: ${res.status}`);
+    throw new Error(detail?.detail || `HTML export failed: ${res.status}`);
   }
-  return res.json();
+  const blob = await res.blob();
+  const slug = (payload.client || 'Value_at_a_Glance').replace(/\s+/g, '_');
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: `${slug}_Value_at_a_Glance.html`,
+  });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+/**
+ * Export the Value at a Glance view as a PowerPoint slide (.pptx).
+ * payload: { period, client, rows, total } — raw numeric values.
+ */
+export async function exportValueAtAGlancePptx(payload) {
+  const res = await fetch(`${BASE}/export/value-at-a-glance.pptx`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail || `PPTX export failed: ${res.status}`);
+  }
+  const blob = await res.blob();
+  const slug = (payload.client || 'Value_at_a_Glance').replace(/\s+/g, '_');
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: `${slug}_Value_at_a_Glance.pptx`,
+  });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+/**
+ * Export the Lifetime Value slide as a branded self-contained HTML file.
+ * Triggers a file download; payload must match LifetimeValueExportRequest.
+ */
+export async function exportLifetimeValueHtml(payload) {
+  const res = await fetch(`${BASE}/export/lifetime-value.html`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail || `HTML export failed: ${res.status}`);
+  }
+  const blob = await res.blob();
+  const filename = `${(payload.client || 'Lifetime_Value').replace(/\s+/g, '_')}_Lifetime_Value.html`;
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: filename,
+  });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+/**
+ * Export the Lifetime Value slide as a PowerPoint file (.pptx).
+ * Triggers a file download; payload must match LifetimeValueExportRequest.
+ */
+export async function exportLifetimeValuePptx(payload) {
+  const res = await fetch(`${BASE}/export/lifetime-value.pptx`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail || `PPTX export failed: ${res.status}`);
+  }
+  const blob = await res.blob();
+  const filename = `${(payload.client || 'Lifetime_Value').replace(/\s+/g, '_')}_Lifetime_Value.pptx`;
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: filename,
+  });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+/**
+ * Bulk-import ROI records from an XLSX or CSV file.
+ * The server streams SSE progress events; XHR reads them progressively.
+ *   onUploadProgress(ratio 0–1)  – fires while the file is being sent
+ *   onProcessEvent(event)        – fires for each SSE event during processing
+ *     event types: "start" | "sheet_start" | "progress" | "sheet_done" | "done" | "error"
+ * Resolves with the final { batch_id, imported, flagged, sheets, errors } payload.
+ */
+export function bulkImport(file, onUploadProgress, onProcessEvent) {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('file', file);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BASE}/bulk-import`);
+
+    if (onUploadProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) onUploadProgress(e.loaded / e.total);
+      });
+      xhr.upload.addEventListener('load', () => onUploadProgress(1));
+    }
+
+    // Parse SSE events from the portion of responseText not yet read
+    let cursor = 0;
+    function parseNewEvents() {
+      const newText = xhr.responseText.slice(cursor);
+      cursor = xhr.responseText.length;
+      for (const line of newText.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        try { onProcessEvent?.(JSON.parse(line.slice(6))); } catch { /* malformed chunk */ }
+      }
+    }
+
+    // readyState 3 = LOADING (response body arriving but not complete)
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 3 || xhr.readyState === 4) parseNewEvents();
+    };
+
+    xhr.onload = () => {
+      parseNewEvents(); // flush any remaining
+      // Scan full response for done/error events
+      let finalResult = null;
+      for (const line of xhr.responseText.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          if (ev.type === 'error') { reject(new Error(ev.detail || 'Bulk import failed')); return; }
+          if (ev.type === 'done')  { finalResult = ev; }
+        } catch {}
+      }
+      if (finalResult) {
+        resolve(finalResult);
+      } else {
+        let body; try { body = JSON.parse(xhr.responseText); } catch { body = null; }
+        reject(new Error(body?.detail || `Bulk import failed: ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Bulk import failed: network error'));
+    xhr.send(form);
+  });
 }
 
 /**

@@ -8,6 +8,7 @@ from routes import (
     clients,
     documents,
     executive_summary,
+    export,
     extraction,
     records,
     uploads,
@@ -25,6 +26,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(bulk_import.router)
+app.include_router(export.router)
 app.include_router(client_scopes.router)
 app.include_router(extraction.router)
 app.include_router(records.router)

@@ -42,6 +42,13 @@ class ROIRecord(BaseModel):
     # Per-metric provenance, keyed by model field name (e.g. "identified_risk").
     field_meta:              Optional[dict[str, FieldMeta]] = None
     executive_summary:       Optional[dict]  = None
+    # Date range during which this engagement's ROI values are considered active.
+    # Set by the SME during review; defaults to Jan 1 – Dec 31 of `year`.
+    applicable_from:         Optional[str]   = None
+    applicable_to:           Optional[str]   = None
+    # Per-field overrides for values whose active window differs from the record default.
+    # {"identified_risk": {"from": "2024-01-01", "to": "2024-06-30"}, ...}
+    field_dates:             Optional[dict]  = None
     # Set by bulk import to group records from the same upload for undo support.
     batch_id:                Optional[str]   = None
 

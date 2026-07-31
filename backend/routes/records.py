@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from config import TRACKER_API_KEY
 from models import ROIRecord, RecordUpdate
 from models.field_catalog import FIELD_CATALOG
-from services.storage import save_record, get_all_records, update_record, export_csv, export_xlsx, patch_executive_summary
+from services.storage import save_record, get_all_records, update_record, export_csv, export_xlsx, patch_executive_summary, clear_all_records
 from services.audit import get_events
 from services import api_keys
 import hmac
@@ -86,6 +86,13 @@ def update_executive_summary(body: SummaryPatch):
     if not updated:
         raise HTTPException(status_code=404, detail=f"Record not found for identifier: {identifier}")
     return {"status": "updated", "record_id": updated.get("record_id")}
+
+
+@router.delete("/records")
+def delete_all_records_endpoint():
+    """Permanently delete every record (full reset). Used before a clean re-import."""
+    deleted = clear_all_records()
+    return {"deleted": deleted}
 
 
 @router.delete("/records/{record_id}")

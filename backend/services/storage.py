@@ -90,11 +90,30 @@ def save_record(record: ROIRecord) -> dict:
                 return True
             return False
 
+        # Fields tracked for per-change audit events on re-extraction.
+        _AUDIT_FIELDS = [
+            "identified_risk", "id_cost_avoidance", "acc_cost_avoidance",
+            "id_cost_optimization", "acc_cost_optimization", "realized_savings",
+            "contract_spend", "applicable_from", "applicable_to", "field_dates",
+            "publisher", "client", "year",
+        ]
+
         for i, r in enumerate(records):
             if _matches(r):
                 entry["record_id"] = r.get("record_id") or _new_record_id()
                 if not entry.get("executive_summary") and r.get("executive_summary"):
                     entry["executive_summary"] = r["executive_summary"]
+                # Log per-field changes before overwriting the stored record.
+                for field in _AUDIT_FIELDS:
+                    old_val = r.get(field)
+                    new_val = entry.get(field)
+                    if old_val != new_val:
+                        audit.append_event(
+                            entry["record_id"], "edit",
+                            user=entry.get("sme"), field=field,
+                            old_value=old_val, new_value=new_val,
+                            note="SME review — updated on re-extraction",
+                        )
                 records[i] = entry
                 _save(records)
                 audit.append_event(entry["record_id"], "update", user=entry.get("sme"), note="Re-stored from extraction")
@@ -147,6 +166,16 @@ def patch_executive_summary(identifier: str, summary: dict) -> dict | None:
 
 def get_all_records() -> list[dict]:
     return _load()
+
+
+def clear_all_records() -> int:
+    """Delete every record. Returns the count removed."""
+    with _lock:
+        records = _load()
+        count = len(records)
+        if count:
+            _save([])
+        return count
 
 
 def delete_by_batch_id(batch_id: str) -> int:
@@ -212,7 +241,7 @@ def export_xlsx() -> bytes:
     ws_data.title = "All_ROI_Data"
     data_columns = (
         ["record_id"] + DOMO_COLUMNS
-        + ["confidence", "source_file", "sme", "stored_name", "saved_at"]
+        + ["applicable_from", "applicable_to", "confidence", "source_file", "sme", "stored_name", "saved_at"]
     )
     _style_header(ws_data, data_columns, header_fill, header_font)
     for row_idx, record in enumerate(records, start=2):

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
-import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, deleteUpload, getSlideMeta } from '../services/api';
+import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, deleteUpload, getSlideMeta, bulkImport, undoBulkImport } from '../services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -77,9 +77,11 @@ function JourneyBar({ currentStep }) {
 
 // ─── Bulk Import Zone ─────────────────────────────────────────────────────────
 function BulkImportZone() {
-  const [dragOver, setDragOver]   = useState(false);
-  const [status, setStatus]       = useState(null); // null | 'loading' | 'undoing' | { batch_id, imported, ... } | { error }
-  const fileInputRef               = useRef(null);
+  const [dragOver, setDragOver]         = useState(false);
+  const [status, setStatus]             = useState(null); // null | 'loading' | 'undoing' | { batch_id, imported, ... } | { error }
+  const [uploadPhase, setUploadPhase]   = useState(null); // null | { ratio: 0–1, filename } | 'processing'
+  const [processState, setProcessState] = useState(null); // latest SSE event from server during processing
+  const fileInputRef                     = useRef(null);
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -89,10 +91,25 @@ function BulkImportZone() {
       return;
     }
     setStatus('loading');
+    setUploadPhase({ ratio: 0, filename: file.name });
+    setProcessState(null);
     try {
-      const result = await bulkImport(file);
+      const result = await bulkImport(
+        file,
+        (ratio) => {
+          if (ratio >= 1) setUploadPhase('processing');
+          else setUploadPhase({ ratio, filename: file.name });
+        },
+        (event) => {
+          if (event.type !== 'done') setProcessState(event);
+        },
+      );
+      setUploadPhase(null);
+      setProcessState(null);
       setStatus(result);
     } catch (err) {
+      setUploadPhase(null);
+      setProcessState(null);
       setStatus({ error: err.message });
     }
   };
@@ -175,7 +192,64 @@ function BulkImportZone() {
         {isLoading ? (
           <>
             <i className="ti ti-loader-2 spinning upload-dropzone-icon" aria-hidden="true" />
-            <div className="upload-dropzone-title">Importing…</div>
+            {uploadPhase === 'processing' ? (() => {
+              const ev = processState;
+              const isProgress  = ev?.type === 'progress';
+              const isSheetDone = ev?.type === 'sheet_done';
+              const isSheetStart = ev?.type === 'sheet_start';
+              const sheetLabel  = ev?.sheet ?? ev?.name ?? '';
+              const multiSheet  = (ev?.total_sheets ?? 1) > 1;
+              const pct = isProgress && ev.total > 0 ? Math.round(ev.processed / ev.total * 100) : null;
+              return (
+                <>
+                  <div className="upload-dropzone-title">
+                    {isSheetDone  ? `Finished "${ev.name}"` :
+                     sheetLabel   ? `Processing "${sheetLabel}"` :
+                     'Processing rows…'}
+                  </div>
+                  {isProgress && (
+                    <>
+                      <div style={{ width: '60%', maxWidth: 260, margin: '8px auto 0', height: 6, borderRadius: 3, background: 'var(--border)' }}>
+                        <div style={{
+                          height: '100%', borderRadius: 3,
+                          background: 'var(--accent, #2563eb)',
+                          width: `${pct}%`,
+                          transition: 'width 0.15s ease',
+                        }} />
+                      </div>
+                      <div className="upload-dropzone-hint" style={{ marginTop: 4 }}>
+                        {ev.processed} / {ev.total} rows
+                        {multiSheet ? ` · Sheet ${ev.sheet_index} of ${ev.total_sheets}` : ''}
+                      </div>
+                    </>
+                  )}
+                  {(isSheetStart || (!isProgress && !isSheetDone && multiSheet)) && (
+                    <div className="upload-dropzone-hint">
+                      Sheet {ev?.sheet_index ?? '…'} of {ev?.total_sheets ?? '…'}
+                    </div>
+                  )}
+                </>
+              );
+            })() : uploadPhase ? (
+              <>
+                <div className="upload-dropzone-title">
+                  Uploading{uploadPhase.filename ? ` ${uploadPhase.filename}` : ''}…
+                </div>
+                <div style={{ width: '60%', maxWidth: 260, margin: '8px auto 0', height: 6, borderRadius: 3, background: 'var(--border)' }}>
+                  <div style={{
+                    height: '100%', borderRadius: 3,
+                    background: 'var(--accent, #2563eb)',
+                    width: `${Math.round((uploadPhase.ratio ?? 0) * 100)}%`,
+                    transition: 'width 0.2s ease',
+                  }} />
+                </div>
+                <div className="upload-dropzone-hint" style={{ marginTop: 4 }}>
+                  {Math.round((uploadPhase.ratio ?? 0) * 100)}%
+                </div>
+              </>
+            ) : (
+              <div className="upload-dropzone-title">Importing…</div>
+            )}
           </>
         ) : isUndoing ? (
           <>
@@ -824,6 +898,7 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
       </>,
       document.body
     )}
+    <BulkImportZone />
     </div>
   );
 }
@@ -964,7 +1039,7 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
     for (const f of chosen) {
       let raw;
       try { raw = f._handle ? await f._handle.getFile() : undefined; } catch { raw = undefined; }
-      batch.push({ ...f, version: f.modified, source: 'local', client: client || folderName, file: raw });
+      batch.push({ ...f, version: f.modified, source: 'local', client: client || folderName, year: f.year || year, publisher: f.publisher || publisher, file: raw });
     }
     setPreparing(false);
     onSelect(batch);
@@ -1838,6 +1913,13 @@ function deriveCommonMeta(results) {
   };
 }
 
+// Monetary fields that carry per-field applicability date ranges.
+const MONETARY_LABELS = new Set([
+  'Identified Risk', 'Identified Cost Avoidance', 'Accomplished Cost Avoidance',
+  'Identified Cost Optimization', 'Accomplished Cost Optimization',
+  'Realized Cost Savings', 'Annual Publisher Contract',
+]);
+
 // Build the flat ROI record the backend expects from a file's meta + fields.
 // Canonical UI label → backend model key. Used for BOTH value extraction and
 // per-field provenance, so the two always stay in sync.
@@ -1847,8 +1929,8 @@ const LABEL_TO_KEY = {
   'Accomplished Cost Avoidance':    'acc_cost_avoidance',
   'Identified Cost Optimization':   'id_cost_optimization',
   'Accomplished Cost Optimization': 'acc_cost_optimization',
-  'Identified Cost Savings':        'realized_savings',
-  'Realized Cost Savings':          'contract_spend',
+  'Realized Cost Savings':          'realized_savings',
+  'Annual Publisher Contract':      'contract_spend',
 };
 
 // Build per-field provenance (source slide + confidence + alternates) from the
@@ -1880,18 +1962,31 @@ function buildRecord(meta, fields, sme, scriptData = null) {
     client:                meta?.client    || meta?.upClient    || '',
     publisher:             meta?.publisher || meta?.upPublisher || '',
     year:                  parseInt(meta?.year || meta?.upYear || new Date().getFullYear()),
+    month:                 meta?.month          || null,
+    currency:              meta?.currency         || 'USD',
+    date_delivered:        meta?.date_delivered   || null,
+    applicable_from:       meta?.applicable_from  || null,
+    applicable_to:         meta?.applicable_to    || null,
     identified_risk:       getValue('Identified Risk'),
     id_cost_avoidance:     getValue('Identified Cost Avoidance'),
     acc_cost_avoidance:    getValue('Accomplished Cost Avoidance'),
     id_cost_optimization:  getValue('Identified Cost Optimization'),
     acc_cost_optimization: getValue('Accomplished Cost Optimization'),
-    realized_savings:      getValue('Identified Cost Savings'),
-    contract_spend:        getValue('Realized Cost Savings'),
+    realized_savings:      getValue('Realized Cost Savings'),
+    contract_spend:        getValue('Annual Publisher Contract'),
     confidence:            fields.find(x => x.confidence != null)?.confidence ?? null,
     source_file:           meta?.filename || meta?.name || meta?.file_path || '',
     stored_name:           meta?.stored_name || '',
     sme:                   sme || '',
     field_meta:            buildFieldMeta(scriptData),
+    field_dates: (() => {
+      if (!meta?.fieldDates) return null;
+      const entries = Object.entries(meta.fieldDates)
+        .filter(([, d]) => d?.from || d?.to)
+        .map(([label, d]) => [LABEL_TO_KEY[label], d])
+        .filter(([key]) => key);
+      return entries.length ? Object.fromEntries(entries) : null;
+    })(),
   };
 }
 
@@ -2107,8 +2202,8 @@ function buildClaudeFields(extractedData) {
     { label: 'Accomplished Cost Avoidance',    value: fmt(fieldVal('acc_cost_avoidance')),      variant: 'green', confidence: fieldConf('acc_cost_avoidance'),      source: fieldSrc('acc_cost_avoidance'),      flag: null, entryMode: entry('acc_cost_avoidance')      },
     { label: 'Identified Cost Optimization',   value: fmt(fieldVal('id_cost_optimization')),    variant: 'blue',  confidence: fieldConf('id_cost_optimization'),    source: fieldSrc('id_cost_optimization'),    flag: null, entryMode: entry('id_cost_optimization')    },
     { label: 'Accomplished Cost Optimization', value: fmt(fieldVal('acc_cost_optimization')),   variant: 'blue',  confidence: fieldConf('acc_cost_optimization'),   source: fieldSrc('acc_cost_optimization'),   flag: null, entryMode: entry('acc_cost_optimization')   },
-    { label: 'Identified Cost Savings',        value: fmt(fieldVal('identified_cost_savings')), variant: 'green', confidence: fieldConf('identified_cost_savings'), source: fieldSrc('identified_cost_savings'), flag: null, entryMode: entry('identified_cost_savings') },
-    { label: 'Realized Cost Savings',          value: fmt(fieldVal('realized_savings')),        variant: 'green', confidence: fieldConf('realized_savings'),        source: fieldSrc('realized_savings'),        flag: null, entryMode: entry('realized_savings')        },
+    { label: 'Identified Cost Savings',        value: fmt(fieldVal('realized_savings')),   variant: 'green', confidence: fieldConf('realized_savings'),   source: fieldSrc('realized_savings'),   flag: null, entryMode: entry('realized_savings')   },
+    { label: 'Realized Cost Savings',          value: fmt(fieldVal('contract_spend')),     variant: 'green', confidence: fieldConf('contract_spend'),     source: fieldSrc('contract_spend'),     flag: null, entryMode: entry('contract_spend')     },
   ];
 }
 
@@ -2530,10 +2625,19 @@ function BatchExtract({ files = [], onComplete }) {
 
         // Script extractor — only runs when a raw File is available (uploads and
         // folder-scanned files); skipped on the SharePoint-search path.
+        let scriptMeta = null;
         if (file?.file) {
           tasks.push(
             extractROAR(file.file)
-              .then(roar => { scriptData = buildScriptData(roar); })
+              .then(roar => {
+                scriptData = buildScriptData(roar);
+                scriptMeta = {
+                  month:     roar?.month     || null,
+                  year:      roar?.year      || null,
+                  currency:  roar?.currency  || null,
+                  publisher: roar?.publisher || null,
+                };
+              })
               .catch(() => {})
           );
         }
@@ -2550,7 +2654,7 @@ function BatchExtract({ files = [], onComplete }) {
         await Promise.all(tasks);
         if (cancelled) return;
 
-        results.push({ fileMeta: file, extractedData, scriptData });
+        results.push({ fileMeta: file, extractedData, scriptData, scriptMeta });
         setStatuses(prev => prev.map((s, idx) => idx === i ? 'done' : s));
         await new Promise(r => setTimeout(r, 150));
       }
@@ -2699,7 +2803,7 @@ function toFormatted(raw) {
   return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
-function CompareRow({ field, onResolve, onJumpToSlide }) {
+function CompareRow({ field, onResolve, onJumpToSlide, nudgeValue = null, onPendingChange = null }) {
   const isSkipped   = field.flag === 'SME skipped — data not available';
   const bestVal     = field.sme ?? field.claude;
   const scriptMatch = !isSkipped && field.script !== '—' && field.script === bestVal;
@@ -2709,10 +2813,33 @@ function CompareRow({ field, onResolve, onJumpToSlide }) {
   const [expanded,    setExpanded]    = useState(false);
   const [smeApproved, setSmeApproved] = useState(false);
 
+  const prevNudgeRef   = useRef(null);
+  const savedEditRef   = useRef('');   // snapshot of editVal when entering edit mode
+
+  useEffect(() => {
+    if (nudgeValue !== null && nudgeValue !== prevNudgeRef.current) {
+      prevNudgeRef.current = nudgeValue;
+      setEditVal(toRaw(nudgeValue));
+      setConfirmed(true);
+      setSmeApproved(false);
+    }
+  }, [nudgeValue]);
+
+  const enterEdit = () => { savedEditRef.current = editVal; setConfirmed(false); };
+  const cancelEdit = () => { setEditVal(savedEditRef.current); setConfirmed(true); };
+
+  // Report the current confirmed value to ScreenCompare even before the row is
+  // approved — so the aggregate check and dup check can react to pending edits.
+  useEffect(() => {
+    if (onPendingChange) {
+      onPendingChange(field.label, confirmed ? toFormatted(editVal) : null);
+    }
+  }, [confirmed, editVal]);
+
   const scriptConfMed  = field.scriptConfidence != null && field.scriptConfidence >= 70 && field.scriptConfidence < 90;
   const claudeConfMed  = field.claudeConfidence != null && field.claudeConfidence >= 70 && field.claudeConfidence < 90;
   const interMismatch  = !isSkipped && field.script !== '—' && field.claude != null && field.script !== field.claude;
-  const isUncertain    = !isSkipped && (field.scriptUncertain || interMismatch || scriptConfMed || claudeConfMed);
+  const isUncertain    = !isSkipped && (field.scriptUncertain || interMismatch || scriptConfMed || claudeConfMed || field.dupFlag);
 
   useEffect(() => {
     onResolve(field.label, confirmed && (!isUncertain || smeApproved) ? toFormatted(editVal) : null);
@@ -2785,11 +2912,18 @@ function CompareRow({ field, onResolve, onJumpToSlide }) {
           <span className="compare-na">—</span>
         ) : confirmed ? (
           <div className="compare-final-confirmed">
-            <span className="compare-final-value">
+            <span
+              className="compare-final-value compare-final-value--clickable"
+              onClick={enterEdit}
+              title="Click to edit"
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') enterEdit(); }}
+            >
               {toFormatted(editVal)}
             </span>
             <button
-              onClick={() => setConfirmed(false)}
+              onClick={enterEdit}
               title="Edit final value"
               className="compare-edit-btn"
               aria-label="Edit final value"
@@ -2827,10 +2961,16 @@ function CompareRow({ field, onResolve, onJumpToSlide }) {
             </div>
             <button
               className="compare-done-btn"
-              disabled={!editVal.toString().trim()}
-              onClick={() => { if (editVal.toString().trim()) setConfirmed(true); }}
+              onClick={() => setConfirmed(true)}
             >
               Done
+            </button>
+            <button
+              className="compare-cancel-btn"
+              onClick={cancelEdit}
+              title="Cancel edit"
+            >
+              Cancel
             </button>
           </div>
         )}
@@ -2860,14 +3000,82 @@ function CompareRow({ field, onResolve, onJumpToSlide }) {
           )}
         </div>
       )}
+
+      {/* Duplicate value notice — shown until SME approves */}
+      {field.dupFlag && !smeApproved && (
+        <div className="compare-dup-notice">
+          <i className="ti ti-alert-triangle" aria-hidden="true" />
+          This field has the same value as a related field. This is very unlikely — please verify both before approving.
+        </div>
+      )}
     </div>
   );
 }
 
-function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null, onNext, onBack, smeName = '', fileMeta = null }) {
+function ScreenCompare({ fields, scriptData, scriptMeta = null, batchInfo = null, onExclude = null, onNext, onBack, smeName = '', fileMeta = null }) {
   const [slideOpen, setSlideOpen] = useState(false);
   const slideStackRef = useRef(null);
   const isMulti = batchInfo?.total > 1;
+
+  // scriptMeta (from ROAR) takes priority — it reflects what's actually in the document.
+  // fileMeta is the fallback from the user-entered form values.
+  const _todayIso = () => new Date().toISOString().slice(0, 10);
+  const _initMeta = () => {
+    const yr = String(scriptMeta?.year || fileMeta?.year || fileMeta?.upYear || '');
+    return {
+      year:             yr,
+      publisher:        scriptMeta?.publisher || fileMeta?.publisher || fileMeta?.upPublisher || '',
+      month:            scriptMeta?.month     || '',
+      currency:         scriptMeta?.currency  || 'USD',
+      date_delivered:   _todayIso(),
+      applicable_from:  yr ? `${yr}-01-01` : '',
+      applicable_to:    yr ? `${yr}-12-31` : '',
+    };
+  };
+  const [metaDetails, setMetaDetails] = useState(_initMeta);
+
+  // Safety net: re-sync if scriptMeta arrived after first render (async extraction).
+  useEffect(() => {
+    setMetaDetails(prev => {
+      const next = _initMeta();
+      return {
+        year:             prev.year      || next.year,
+        publisher:        prev.publisher || next.publisher,
+        month:            prev.month     || next.month,
+        currency:         prev.currency  || next.currency,
+        date_delivered:   prev.date_delivered,
+        applicable_from:  prev.applicable_from || next.applicable_from,
+        applicable_to:    prev.applicable_to   || next.applicable_to,
+      };
+    });
+  }, []);
+  const [clientRecords, setClientRecords] = useState(null);
+  const [suggestedOverrides, setSuggestedOverrides] = useState({});
+  // pendingValues: confirmed-but-possibly-not-yet-approved edits from CompareRow.
+  // Used by the aggregate check and dup check so they react even when a yellow row
+  // hasn't been approved yet (resolved[label] stays null until approval).
+  const [pendingValues, setPendingValues] = useState({});
+
+  // Per-field date overrides — only populated when a field's window differs from the record default.
+  const [fieldDates, setFieldDates] = useState(() =>
+    Object.fromEntries([...MONETARY_LABELS].map(label => [label, { from: '', to: '' }]))
+  );
+  const setFieldDate = (label, key, val) =>
+    setFieldDates(prev => ({ ...prev, [label]: { ...prev[label], [key]: val } }));
+  const [overridesOpen, setOverridesOpen] = useState(false);
+
+  const handlePendingChange = (label, val) => {
+    setPendingValues(prev => ({ ...prev, [label]: val }));
+  };
+
+  useEffect(() => {
+    const client = fileMeta?.client || fileMeta?.upClient;
+    getRecords()
+      .then(recs => {
+        setClientRecords(client ? (recs || []).filter(r => r.client === client) : []);
+      })
+      .catch(() => setClientRecords([]));
+  }, []);
   // Build rows from live extracted fields + the script extractor's values.
   // script = deterministic .pptx extractor — real values only (null when no file was
   //          uploaded, e.g. the SharePoint search path, where the Script column shows —).
@@ -2898,14 +3106,46 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
     };
   });
 
+  // dupFlag phase 1: check initial extracted values (no state needed yet)
+  const _rowBest = (label) => {
+    const r = compareRows.find(x => x.label === label);
+    return r ? (r.sme ?? r.claude) : null;
+  };
+  const _accOptBest  = _rowBest('Accomplished Cost Optimization');
+  const _realSavBest = _rowBest('Realized Cost Savings');
+  const _hasDupFlag  = Boolean(
+    _accOptBest && _realSavBest &&
+    _accOptBest !== '—' && _realSavBest !== '—' &&
+    parseDollar(_accOptBest) > 0 && parseDollar(_realSavBest) > 0 &&
+    _accOptBest === _realSavBest
+  );
+
   const [resolved, setResolved] = useState({});
 
   const handleResolve = (label, val) => {
     setResolved(prev => ({ ...prev, [label]: val }));
   };
 
+  // dupFlag phase 2: also flag when the user's resolved/pending values become equal
+  // (now safe to reference resolved and pendingValues, both declared above)
+  const _resolvedAccOpt  = resolved['Accomplished Cost Optimization']  ?? pendingValues['Accomplished Cost Optimization'];
+  const _resolvedRealSav = resolved['Realized Cost Savings']           ?? pendingValues['Realized Cost Savings'];
+  const _resolvedDupActive = Boolean(
+    _resolvedAccOpt && _resolvedRealSav &&
+    parseDollar(_resolvedAccOpt) > 0 && parseDollar(_resolvedRealSav) > 0 &&
+    _resolvedAccOpt === _resolvedRealSav
+  );
+  const _anyDupFlag = _hasDupFlag || _resolvedDupActive;
+  const finalCompareRows = _anyDupFlag
+    ? compareRows.map(r =>
+        r.label === 'Accomplished Cost Optimization' || r.label === 'Realized Cost Savings'
+          ? { ...r, dupFlag: true }
+          : r
+      )
+    : compareRows;
+
   // Skipped rows don't need SME resolution — only non-skipped rows must be confirmed
-  const resolvableRows = compareRows.filter(f => f.flag !== 'SME skipped — data not available');
+  const resolvableRows = finalCompareRows.filter(f => f.flag !== 'SME skipped — data not available');
   const allDone = resolvableRows.every(f => resolved[f.label] !== null && resolved[f.label] !== undefined);
 
   // "Best available" value per row — prefer sme-computed, fall back to claude extracted
@@ -2925,7 +3165,7 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
   const isMedConf   = (r) => (r.scriptConfidence != null && r.scriptConfidence >= 70 && r.scriptConfidence < 90) || (r.claudeConfidence != null && r.claudeConfidence >= 70 && r.claudeConfidence < 90);
 
   // Yellow rows = any of the uncertain conditions (mirrors CompareRow rowState logic)
-  const isYellow    = (r) => isCompeting(r) || isLowConf(r) || isMedConf(r);
+  const isYellow    = (r) => isCompeting(r) || isLowConf(r) || isMedConf(r) || r.dupFlag;
   const reviewCount = resolvableRows.filter(isYellow).length;
   const matchCount  = resolvableRows.length - reviewCount;
   const lowestConf  = (r) => { const vs = [r.scriptConfidence, r.claudeConfidence].filter(v => v != null); return vs.length ? Math.round(Math.min(...vs)) : null; };
@@ -2934,6 +3174,7 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
     { key: 'competing', label: 'Competing values',   items: resolvableRows.filter(isCompeting).map(r => r.label) },
     { key: 'lowconf',   label: 'Low confidence',     items: resolvableRows.filter(r => !isCompeting(r) && isLowConf(r)).map(r => { const p = lowestConf(r); return p != null ? `${r.label} (${p}%)` : r.label; }) },
     { key: 'medconf',   label: 'Medium confidence',  items: resolvableRows.filter(r => !isCompeting(r) && !isLowConf(r) && isMedConf(r)).map(r => { const p = lowestConf(r); return p != null ? `${r.label} (${p}%)` : r.label; }) },
+    { key: 'dupflag',   label: 'Duplicate value — verify', items: resolvableRows.filter(r => r.dupFlag).map(r => r.label) },
   ].filter(g => g.items.length > 0);
 
   const handleNext = () => {
@@ -2944,8 +3185,66 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
       }
       return f;
     });
-    onNext(resolvedFields);
+    onNext(resolvedFields, { ...metaDetails, fieldDates });
   };
+
+  // Aggregate consistency check: accomplished ≤ identified across all client history + current
+  // Uses the user's resolved value when available, falls back to the initial extraction value.
+  const aggWarnings = useMemo(() => {
+    if (!clientRecords) return [];
+    const warnings = [];
+    const getNum = (label) => {
+      const r = finalCompareRows.find(x => x.label === label);
+      // resolved is set only when confirmed+approved; pendingValues when confirmed but not yet approved
+      const v = resolved[label] ?? pendingValues[label] ?? (r ? (r.sme ?? r.claude) : null);
+      const n = parseDollar(v);
+      return isNaN(n) ? 0 : n;
+    };
+    const sum = (field) => clientRecords.reduce((acc, r) => acc + (r[field] || 0), 0);
+
+    const histAccAvd = sum('acc_cost_avoidance');
+    const histIdAvd  = sum('id_cost_avoidance');
+    const currAccAvd = getNum('Accomplished Cost Avoidance');
+    const currIdAvd  = getNum('Identified Cost Avoidance');
+    if ((histAccAvd + currAccAvd) > (histIdAvd + currIdAvd) && (histAccAvd + currAccAvd) > 0) {
+      const gap = (histAccAvd + currAccAvd) - (histIdAvd + currIdAvd);
+      warnings.push({
+        label:     'Identified Cost Avoidance',
+        pair:      'cost avoidance',
+        gap,
+        suggested: currIdAvd + gap,
+      });
+    }
+
+    const histAccOpt = sum('acc_cost_optimization');
+    const histIdOpt  = sum('id_cost_optimization');
+    const currAccOpt = getNum('Accomplished Cost Optimization');
+    const currIdOpt  = getNum('Identified Cost Optimization');
+    if ((histAccOpt + currAccOpt) > (histIdOpt + currIdOpt) && (histAccOpt + currAccOpt) > 0) {
+      const gap = (histAccOpt + currAccOpt) - (histIdOpt + currIdOpt);
+      warnings.push({
+        label:     'Identified Cost Optimization',
+        pair:      'cost optimization',
+        gap,
+        suggested: currIdOpt + gap,
+      });
+    }
+
+    return warnings;
+  }, [clientRecords, finalCompareRows, resolved, pendingValues]);
+
+  // Reactive dup-value check: warns if the user edits resolved values into equality.
+  // Suppressed if the original extracted values were ALREADY equal (_hasDupFlag) —
+  // the row-level warning + approval flow covers that case.
+  const resolvedDupWarning = useMemo(() => {
+    if (_anyDupFlag) return false; // rows are already highlighted — no need for a separate banner
+    const v1 = resolved['Accomplished Cost Optimization'] ?? pendingValues['Accomplished Cost Optimization'];
+    const v2 = resolved['Realized Cost Savings']          ?? pendingValues['Realized Cost Savings'];
+    if (!v1 || !v2) return false;
+    const n1 = parseDollar(v1);
+    const n2 = parseDollar(v2);
+    return !isNaN(n1) && !isNaN(n2) && n1 > 0 && n2 > 0 && v1 === v2;
+  }, [resolved, pendingValues, _anyDupFlag]);
 
   const storedName = fileMeta?.stored_name || null;
 
@@ -3023,9 +3322,175 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
 
       {/* Rows */}
       <div>
-        {compareRows.map(f => (
-          <CompareRow key={f.label} field={f} onResolve={handleResolve} onJumpToSlide={storedName ? (idx) => { setSlideOpen(true); setTimeout(() => slideStackRef.current?.jumpTo(idx), 80); } : null} />
+        {finalCompareRows.map(f => (
+          <CompareRow
+            key={f.label}
+            field={f}
+            onResolve={handleResolve}
+            onPendingChange={handlePendingChange}
+            onJumpToSlide={storedName ? (idx) => { setSlideOpen(true); setTimeout(() => slideStackRef.current?.jumpTo(idx), 80); } : null}
+            nudgeValue={suggestedOverrides[f.label] ?? null}
+          />
         ))}
+      </div>
+
+      {/* Aggregate consistency warnings + reactive dup-value warning */}
+      {(aggWarnings.length > 0 || resolvedDupWarning) && (
+        <div className="compare-agg-warnings">
+          {resolvedDupWarning && (
+            <div className="compare-agg-warning">
+              <div className="compare-agg-warning-body">
+                <i className="ti ti-alert-triangle" aria-hidden="true" />
+                <span>
+                  <strong>Duplicate value detected:</strong> Accomplished Cost Optimization and Realized Cost Savings
+                  have been set to the same value. This is very unlikely — please verify both fields.
+                </span>
+              </div>
+            </div>
+          )}
+          {aggWarnings.map(w => (
+            <div key={w.label} className="compare-agg-warning">
+              <div className="compare-agg-warning-body">
+                <i className="ti ti-chart-bar" aria-hidden="true" />
+                <span>
+                  <strong>Aggregate check:</strong> Across all {fileMeta?.client || fileMeta?.upClient || 'this client'}'s records,
+                  accomplished {w.pair} would exceed identified {w.pair} by{' '}
+                  <strong>{formatDollar(w.gap)}</strong> after this extraction.
+                  Suggested minimum for <em>{w.label}</em>:{' '}
+                  <strong>{formatDollar(w.suggested)}</strong>.
+                </span>
+              </div>
+              <button
+                className="btn ghost compare-agg-apply-btn"
+                onClick={() => setSuggestedOverrides(prev => ({ ...prev, [w.label]: formatDollar(w.suggested) }))}
+              >
+                Apply suggested value
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Record Details — non-ROI metadata fields for review before save */}
+      <div className="compare-record-details">
+        <div className="compare-record-details-header">
+          <i className="ti ti-info-circle" aria-hidden="true" />
+          Record Details
+        </div>
+        <div className="compare-record-details-grid">
+          {[
+            { key: 'year',           label: 'Delivery Year',  type: 'number', placeholder: 'e.g. 2024' },
+            { key: 'month',          label: 'Delivery Month', type: 'text',   placeholder: 'e.g. January' },
+            { key: 'publisher',      label: 'Publisher',      type: 'text',   placeholder: 'e.g. Microsoft' },
+            { key: 'currency',       label: 'Currency',       type: 'text',   placeholder: 'USD' },
+            { key: 'date_delivered', label: 'Date Extracted', type: 'text',   placeholder: 'e.g. 2024-03-15' },
+          ].map(({ key, label, type, placeholder }) => (
+            <div key={key} className="compare-record-detail-item">
+              <label className="compare-record-detail-label">{label}</label>
+              <input
+                type={type}
+                className="compare-record-detail-input"
+                value={metaDetails[key]}
+                onChange={e => setMetaDetails(prev => ({ ...prev, [key]: e.target.value }))}
+                placeholder={placeholder}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Applicability date range */}
+        <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(0,95,134,0.06)', borderRadius: 6, border: '1px solid rgba(0,95,134,0.14)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <i className="ti ti-calendar-stats" style={{ fontSize: 13, color: '#005f86' }} aria-hidden="true" />
+            <span style={{ fontWeight: 600, fontSize: 12, color: '#005f86' }}>Value applicability period</span>
+          </div>
+          <p style={{ margin: '0 0 8px', fontSize: 11.5, color: '#475569', lineHeight: 1.5 }}>
+            The date range during which this engagement's ROI values are considered active.
+            This is used for time-based reporting — for example, to show only savings that were
+            in effect during a given quarter. Defaults to the full delivery year.
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <label style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>From</label>
+              <input
+                type="date"
+                className="compare-record-detail-input"
+                value={metaDetails.applicable_from || ''}
+                onChange={e => setMetaDetails(prev => ({ ...prev, applicable_from: e.target.value }))}
+                style={{ fontSize: 12, padding: '3px 7px' }}
+              />
+            </div>
+            <span style={{ color: '#94a3b8', fontSize: 13 }}>→</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <label style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>To</label>
+              <input
+                type="date"
+                className="compare-record-detail-input"
+                value={metaDetails.applicable_to || ''}
+                onChange={e => setMetaDetails(prev => ({ ...prev, applicable_to: e.target.value }))}
+                style={{ fontSize: 12, padding: '3px 7px' }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Per-field overrides — collapsed by default */}
+        <div style={{ marginTop: 8 }}>
+          <button
+            onClick={() => setOverridesOpen(o => !o)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, width: '100%',
+              background: 'none', border: 'none', padding: '6px 2px',
+              fontSize: 11.5, color: '#64748b', cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            <i className={`ti ti-chevron-${overridesOpen ? 'down' : 'right'}`} style={{ fontSize: 11 }} aria-hidden="true" />
+            <span style={{ fontWeight: 500 }}>Override dates for individual values</span>
+            <span style={{ marginLeft: 4, opacity: 0.65 }}>(optional — only if a specific value has a different window)</span>
+          </button>
+          {overridesOpen && (
+            <div style={{ marginTop: 4, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+              <p style={{ margin: '0 0 10px', fontSize: 11, color: '#64748b', lineHeight: 1.45 }}>
+                All values inherit the period above by default. Use these only when a specific
+                value was active for a meaningfully different window — for example, if identified
+                risk applied January through June but realized savings continued through December.
+              </p>
+              {[...MONETARY_LABELS].map(label => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11.5, color: '#334155', fontWeight: 500, minWidth: 210 }}>{label}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <label style={{ fontSize: 11, color: '#94a3b8' }}>From</label>
+                    <input
+                      type="date"
+                      value={fieldDates[label]?.from || ''}
+                      onChange={e => setFieldDate(label, 'from', e.target.value)}
+                      placeholder={metaDetails.applicable_from || ''}
+                      style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, border: '1px solid #cbd5e1', color: '#334155', background: '#fff', fontFamily: 'inherit' }}
+                    />
+                  </div>
+                  <span style={{ color: '#cbd5e1', fontSize: 12 }}>→</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <label style={{ fontSize: 11, color: '#94a3b8' }}>To</label>
+                    <input
+                      type="date"
+                      value={fieldDates[label]?.to || ''}
+                      onChange={e => setFieldDate(label, 'to', e.target.value)}
+                      placeholder={metaDetails.applicable_to || ''}
+                      style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, border: '1px solid #cbd5e1', color: '#334155', background: '#fff', fontFamily: 'inherit' }}
+                    />
+                  </div>
+                  {(fieldDates[label]?.from || fieldDates[label]?.to) && (
+                    <button
+                      onClick={() => { setFieldDate(label, 'from', ''); setFieldDate(label, 'to', ''); }}
+                      style={{ fontSize: 10, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}
+                      title="Clear override — revert to record default"
+                    >clear</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* What gets stored */}
@@ -3070,11 +3535,17 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
           <span className="compare-stored-label">ROI values</span>
           <div className="compare-stored-roi-chips">
             {resolvableRows.map(row => {
-              const val = resolved[row.label];
+              const confirmedVal = resolved[row.label];
+              const tentativeVal = pendingValues[row.label];
+              const displayVal   = confirmedVal ?? tentativeVal;
+              const hasValue     = displayVal && displayVal !== '—';
+              const isApproved   = confirmedVal != null && hasValue;
+              const needsApproval = !isApproved && hasValue;
+              const chipClass    = isApproved ? 'confirmed' : needsApproval ? 'needs-approval' : 'pending';
               return (
-                <span key={row.label} className={`compare-stored-chip ${val ? 'confirmed' : 'pending'}`}>
-                  <i className={`ti ${val ? 'ti-circle-check' : 'ti-circle-dashed'}`} aria-hidden="true" />
-                  {row.label}{val && <strong>{val}</strong>}
+                <span key={row.label} className={`compare-stored-chip ${chipClass}`}>
+                  <i className={`ti ${isApproved ? 'ti-circle-check' : 'ti-circle-dashed'}`} aria-hidden="true" />
+                  {row.label}{displayVal && displayVal !== '—' && <strong>{displayVal}</strong>}
                 </span>
               );
             })}
@@ -3097,7 +3568,7 @@ function ScreenCompare({ fields, scriptData, batchInfo = null, onExclude = null,
         <div className="compare-footer-actions">
           {!allDone && (
             <span className="compare-resolve-hint">
-              Confirm red fields · Approve yellow rows to continue
+              Approve yellow rows to continue
             </span>
           )}
           <button
@@ -3199,6 +3670,7 @@ function FileReview({ fileResult, fileIndex, total, isLast, onConfirm, onExclude
     <ScreenCompare
       fields={fields}
       scriptData={fileResult.scriptData}
+      scriptMeta={fileResult.scriptMeta}
       batchInfo={batchInfo}
       onExclude={total > 1 ? onExclude : null}
       onNext={onConfirm}
@@ -4144,10 +4616,19 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
         let scriptData = null;
         const tasks = [];
 
+        let scriptMeta = null;
         if (file?.file) {
           tasks.push(
             extractROAR(file.file)
-              .then(roar => { scriptData = buildScriptData(roar); })
+              .then(roar => {
+                scriptData = buildScriptData(roar);
+                scriptMeta = {
+                  month:     roar?.month     || null,
+                  year:      roar?.year      || null,
+                  currency:  roar?.currency  || null,
+                  publisher: roar?.publisher || null,
+                };
+              })
               .catch(() => {})
           );
         }
@@ -4164,8 +4645,9 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
 
         const ed = extractedData;
         const sd = scriptData;
+        const sm = scriptMeta;
         setFileResults(prev => prev.map((r, idx) =>
-          idx === i ? { ...r, extractedData: ed, scriptData: sd } : r
+          idx === i ? { ...r, extractedData: ed, scriptData: sd, scriptMeta: sm } : r
         ));
         setFileStatuses(prev => prev.map((s, idx) => idx === i ? 'done' : s));
       }
@@ -4197,13 +4679,13 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
 
     if (!isMulti) {
       const only = active[0];
-      const meta = only?.fileMeta || files[0] || {};
+      const meta = { ...(only?.fileMeta || files[0] || {}), ...(only?.metaDetails || {}) };
       const saved = await saveRecord(buildRecord(meta, agg, sme, only?.scriptData))
         .catch(err => { console.error('[Store] saveRecord failed:', err); return null; });
       primaryRecordId = saved?.record_id || null;
     } else {
       const saved = await Promise.all(active.map(r =>
-        saveRecord(buildRecord(r.fileMeta, r.finalFields, sme, r.scriptData))
+        saveRecord(buildRecord({ ...r.fileMeta, ...(r.metaDetails || {}) }, r.finalFields, sme, r.scriptData))
           .catch(err => { console.error('[Store] saveRecord failed:', err); return null; })
       ));
       primaryRecordId = saved[0]?.record_id || null;
@@ -4232,9 +4714,9 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     }
   };
 
-  const handleFileConfirm = (resolvedFields) => {
+  const handleFileConfirm = (resolvedFields, metaDetails) => {
     advanceAfterFile(
-      fileResults.map((r, i) => i === currentFileIndex ? { ...r, finalFields: resolvedFields, excluded: false } : r)
+      fileResults.map((r, i) => i === currentFileIndex ? { ...r, finalFields: resolvedFields, metaDetails: metaDetails || {}, excluded: false } : r)
     );
   };
 

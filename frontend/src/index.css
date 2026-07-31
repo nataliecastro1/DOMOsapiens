@@ -238,11 +238,9 @@ body {
 .journey-step {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   min-width: 76px; padding: 4px 8px;
-  border: none; background: transparent; cursor: pointer;
+  border: none; background: transparent; cursor: default;
   font-family: inherit; flex-shrink: 0;
-  transition: opacity 0.15s;
 }
-.journey-step:hover { opacity: 0.75; }
 .journey-step-icon {
   width: 44px; height: 44px; border-radius: 50%;
   background: var(--surface-3); color: var(--text-faint);
@@ -1236,11 +1234,14 @@ textarea { resize: vertical; }
 .compare-final{display:flex;align-items:center;gap:6px}
 .compare-final-confirmed{display:flex;align-items:center;gap:6px;min-width:0}
 .compare-final-value{font-size:13px;font-weight:700;color:var(--navy);font-family:monospace}
+.compare-final-value--clickable{cursor:pointer;border-radius:4px;padding:1px 3px;transition:background .15s}
+.compare-final-value--clickable:hover{background:var(--surface-3)}
 .compare-edit-btn{background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--text-muted);font-size:13px;line-height:1;flex-shrink:0}
 .compare-final-editing{display:flex;gap:5px;width:100%;align-items:center}
 .compare-final-input{flex:1}
 .compare-done-btn{padding:4px 10px;font-size:12px;font-weight:700;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer;transition:background .15s;flex-shrink:0}
-.compare-done-btn:disabled{background:var(--green-pale);cursor:not-allowed}
+.compare-cancel-btn{padding:4px 10px;font-size:12px;font-weight:600;background:none;color:var(--text-muted);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;transition:background .15s,color .15s;flex-shrink:0}
+.compare-cancel-btn:hover{background:var(--surface-3);color:var(--text)}
 .compare-approve-btn{padding:3px 8px;font-size:11px;font-weight:700;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0}
 .compare-approved-badge{font-size:11px;font-weight:600;color:var(--green-text);display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0}
 .compare-footer{padding:16px 20px;border-top:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center}
@@ -1368,3 +1369,27 @@ textarea { resize: vertical; }
 .compare-stored-chip.confirmed strong{font-weight:700;margin-left:4px}
 .compare-stored-chip.pending{background:var(--surface);color:var(--text-muted);border-color:var(--border)}
 .compare-stored-chip.pending .ti-circle-dashed{color:var(--text-faint)}
+.compare-stored-chip.needs-approval{background:var(--amber-pale,#fffbeb);color:var(--amber-text,#92400e);border-color:var(--amber,#f59e0b)}
+.compare-stored-chip.needs-approval .ti-circle-dashed{color:var(--amber,#f59e0b)}
+.compare-stored-chip.needs-approval strong{font-weight:700;margin-left:4px}
+
+/* ─── Duplicate-value notice ──────────────────────────────────────────────── */
+.compare-dup-notice{grid-column:1/-1;display:flex;align-items:flex-start;gap:7px;padding:8px 14px;background:var(--amber-pale,#fff8e1);border-top:1px solid var(--amber-border,#ffe082);font-size:12px;color:var(--amber-text,#8a6000)}
+.compare-dup-notice .ti{flex-shrink:0;font-size:14px;margin-top:1px}
+
+/* ─── Aggregate consistency warnings (red — logical inconsistency) ────────── */
+.compare-agg-warnings{border-top:1px solid var(--border);display:flex;flex-direction:column;gap:0}
+.compare-agg-warning{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;background:var(--red-pale,#fff0f0);border-bottom:1px solid var(--red-border,#ffc0c0)}
+.compare-agg-warning-body{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--red-text,#b00020);flex:1;min-width:0}
+.compare-agg-warning-body .ti{flex-shrink:0;font-size:16px;margin-top:1px;color:var(--red,#e53935)}
+.compare-agg-apply-btn{flex-shrink:0;font-size:12px;font-weight:700;white-space:nowrap;border-color:var(--red-border,#ffc0c0);color:var(--red-text,#b00020)}
+
+/* ─── Record Details section ──────────────────────────────────────────────── */
+.compare-record-details{border-top:1px solid var(--border);padding:18px 20px;background:var(--surface)}
+.compare-record-details-header{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.04em;margin-bottom:14px}
+.compare-record-details-header .ti{font-size:14px;color:var(--blue)}
+.compare-record-details-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.compare-record-detail-item{display:flex;flex-direction:column;gap:4px}
+.compare-record-detail-label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em}
+.compare-record-detail-input{padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface-2);width:100%;box-sizing:border-box;transition:border-color .15s}
+.compare-record-detail-input:focus{outline:none;border-color:var(--blue);background:var(--surface)}

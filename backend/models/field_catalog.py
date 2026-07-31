@@ -128,6 +128,26 @@ FIELD_CATALOG: list[FieldDef] = [
         ui_visible=False,
     ),
     FieldDef(
+        key="applicable_from", label="Applicable From", type="date",
+        notes="Start of the date range during which this record's ROI values are considered active. "
+              "Used for time-based reporting (e.g. show only value in effect during Q2). "
+              "Defaults to Jan 1 of the delivery year; confirmed or adjusted by the SME during review.",
+        ui_visible=False, editable=True,
+    ),
+    FieldDef(
+        key="applicable_to", label="Applicable To", type="date",
+        notes="End of the date range during which this record's ROI values are considered active. "
+              "Defaults to Dec 31 of the delivery year; confirmed or adjusted by the SME during review.",
+        ui_visible=False, editable=True,
+    ),
+    FieldDef(
+        key="field_dates", label="Field Date Overrides", type="text",
+        notes="Per-field applicability overrides for values whose active window differs from the "
+              "record-level applicable_from / applicable_to. Keyed by backend field name. "
+              "Only populated when an individual value has a different window than the record default.",
+        ui_visible=False, editable=False, exportable=False,
+    ),
+    FieldDef(
         key="confidence", label="Confidence", type="conf",
         notes="Overall extractor confidence for the record (0–100).",
     ),

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
-import { getRecords } from '../services/api';
+import { getRecords, exportValueAtAGlanceHtml, exportValueAtAGlancePptx, exportLifetimeValueHtml, exportLifetimeValuePptx } from '../services/api';
 import {
   METRICS, labelFor, deriveOptions, sum, countWithMetric,
   formatCurrency, matchFilters, groupSum,
@@ -954,39 +954,294 @@ function ScopeBanner({ count, onClear }) {
   );
 }
 
-// ─── Value at a Glance banner ────────────────────────────────────────────────
-function ValueAtAGlance({ records = [] }) {
-  const allYears = [...new Set(records.map(r => r.year).filter(Boolean))].sort();
-  const minYear = allYears[0] ?? null;
-  const maxYear = allYears[allYears.length - 1] ?? null;
+// ─── Publisher chip bar (shared by Value at a Glance + Lifetime Value) ───────
+const PINNED_PUBLISHERS = ['Microsoft', 'IBM', 'Oracle', 'VMware', 'SAP'];
 
-  const [fromYear, setFromYear] = useState(minYear);
-  const [toYear, setToYear] = useState(maxYear);
+// Props:
+//   allPublishers   – publishers that actually have data in the current filter
+//   activePubs      – publishers currently included in the view
+//   onToggle(pub)   – toggle one individual publisher
+//   onToggleOthers  – toggle all "other" (non-pinned, non-added) publishers as a group
+//   onSelectAll     – select every publisher
+//   extraPubs       – publishers the user pinned via "+"
+//   onAddPub(pub)   – add a publisher chip
+//   onRemoveExtra(pub) – remove an added publisher chip
+//   otherPubs       – publishers in data not in pinned/added set
+function PublisherChipBar({ allPublishers, activePubs, onToggle, onToggleOthers, onSelectAll, extraPubs, onAddPub, onRemoveExtra, otherPubs }) {
+  const [addOpen,    setAddOpen]    = useState(false);
+  const [othersOpen, setOthersOpen] = useState(false);
+  const [query, setQuery]           = useState('');
+  const addRef    = useRef(null);
+  const othersRef = useRef(null);
+  const inputRef  = useRef(null);
 
-  // Update year bounds if records change
   useEffect(() => {
-    const ys = [...new Set(records.map(r => r.year).filter(Boolean))].sort();
-    setFromYear(ys[0] ?? null);
-    setToYear(ys[ys.length - 1] ?? null);
-  }, [records]);
+    if (!addOpen) return;
+    function h(e) { if (!addRef.current?.contains(e.target)) { setAddOpen(false); setQuery(''); } }
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [addOpen]);
 
-  // Derive filtered records by year
-  const yearFiltered = records.filter(r => {
+  useEffect(() => {
+    if (!othersOpen) return;
+    function h(e) { if (!othersRef.current?.contains(e.target)) setOthersOpen(false); }
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [othersOpen]);
+
+  const displayedChips = [...PINNED_PUBLISHERS, ...extraPubs];
+  // Publishers in data that the user can add via "+"
+  const addable = allPublishers.filter(p => !displayedChips.includes(p));
+  const filteredAddable = query.trim()
+    ? addable.filter(p => p.toLowerCase().includes(query.trim().toLowerCase()))
+    : addable;
+
+  const othersOn   = otherPubs.some(p => activePubs.includes(p));
+  const othersCount = otherPubs.length;
+  const allOn = activePubs.length === allPublishers.length;
+
+  const chipStyle = (on, hasData) => ({
+    padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+    fontFamily: 'inherit',
+    cursor: hasData ? 'pointer' : 'default',
+    opacity: hasData ? 1 : 0.28,
+    background: on ? '#fff' : 'transparent',
+    color: on ? '#001941' : '#aab4c4',
+    border: `1px solid ${on ? '#fff' : '#2a4a7e'}`,
+    transition: 'all 0.15s',
+    display: 'flex', alignItems: 'center', gap: 5,
+  });
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, width: '100%', alignItems: 'center' }}>
+
+      {/* Select all */}
+      <button
+        onClick={onSelectAll}
+        disabled={allOn}
+        style={{
+          padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+          fontFamily: 'inherit', cursor: allOn ? 'default' : 'pointer',
+          background: 'transparent', color: allOn ? '#3a5a7e' : '#7ab0d4',
+          border: `1px solid ${allOn ? '#1a3a5e' : '#4a7aae'}`,
+          letterSpacing: '0.04em', transition: 'all 0.15s',
+        }}
+        title="Select all publishers"
+      >
+        Select all
+      </button>
+
+      {/* Pinned chips */}
+      {PINNED_PUBLISHERS.map(pub => {
+        const hasData = allPublishers.includes(pub);
+        const on = hasData && activePubs.includes(pub);
+        return (
+          <button key={pub} onClick={() => hasData && onToggle(pub)} style={chipStyle(on, hasData)}
+            title={hasData ? undefined : 'No data for this publisher in the current filter'}>
+            {pub}
+          </button>
+        );
+      })}
+
+      {/* Extra (user-added) chips */}
+      {extraPubs.map(pub => {
+        const hasData = allPublishers.includes(pub);
+        const on = hasData && activePubs.includes(pub);
+        return (
+          <span key={pub} style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+            <button onClick={() => hasData && onToggle(pub)} style={{ ...chipStyle(on, hasData), borderRadius: '20px 0 0 20px', borderRight: 'none', paddingRight: 6 }}
+              title={hasData ? undefined : 'No data for this publisher'}>
+              {pub}
+            </button>
+            <button onClick={() => onRemoveExtra(pub)}
+              style={{
+                padding: '3px 7px', borderRadius: '0 20px 20px 0', fontSize: 11,
+                fontFamily: 'inherit', cursor: 'pointer',
+                background: on ? '#fff' : 'transparent',
+                color: on ? '#64748b' : '#4a6a8e',
+                border: `1px solid ${on ? '#fff' : '#2a4a7e'}`, borderLeft: 'none',
+                transition: 'all 0.15s',
+              }}
+              title={`Remove ${pub} chip`}>
+              <i className="ti ti-x" style={{ fontSize: 9 }} />
+            </button>
+          </span>
+        );
+      })}
+
+      {/* Others (N) chip — only shown when data has publishers beyond the pinned/added set */}
+      {othersCount > 0 && (
+        <span ref={othersRef} style={{ display: 'flex', alignItems: 'center', gap: 0, position: 'relative' }}>
+          {/* Main chip: click to toggle all others on/off */}
+          <button
+            onClick={onToggleOthers}
+            style={{ ...chipStyle(othersOn, true), borderRadius: '20px 0 0 20px', borderRight: 'none', paddingRight: 6 }}
+            title={othersOn ? 'Deselect all other publishers' : 'Select all other publishers'}
+          >
+            Others ({othersCount})
+          </button>
+          {/* Expand button: shows the individual publishers in the others group */}
+          <button
+            onClick={() => setOthersOpen(o => !o)}
+            style={{
+              padding: '3px 7px', borderRadius: '0 20px 20px 0', fontSize: 11,
+              fontFamily: 'inherit', cursor: 'pointer',
+              background: othersOn ? '#fff' : 'transparent',
+              color: othersOn ? '#64748b' : '#4a6a8e',
+              border: `1px solid ${othersOn ? '#fff' : '#2a4a7e'}`, borderLeft: 'none',
+              transition: 'all 0.15s',
+            }}
+            title="Show publishers in this group"
+          >
+            <i className={`ti ${othersOpen ? 'ti-chevron-up' : 'ti-chevron-down'}`} style={{ fontSize: 9 }} />
+          </button>
+
+          {othersOpen && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 120,
+              background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.22)',
+              minWidth: 200, overflow: 'hidden',
+            }}>
+              <div style={{ padding: '7px 12px 5px', fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Other publishers
+              </div>
+              <div style={{ maxHeight: 200, overflowY: 'auto', paddingBottom: 4 }}>
+                {otherPubs.map(p => {
+                  const on = activePubs.includes(p);
+                  return (
+                    <button key={p} onClick={() => onToggle(p)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        width: '100%', padding: '7px 12px', border: 'none',
+                        background: 'none', cursor: 'pointer', fontSize: 12,
+                        textAlign: 'left', fontFamily: 'inherit', color: '#001941',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >
+                      <span style={{
+                        width: 12, height: 12, borderRadius: 3, flexShrink: 0,
+                        background: on ? '#005f86' : 'transparent',
+                        border: `1.5px solid ${on ? '#005f86' : '#cbd5e1'}`,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {on && <i className="ti ti-check" style={{ fontSize: 8, color: '#fff' }} />}
+                      </span>
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ padding: '6px 12px 8px', borderTop: '1px solid #f1f5f9' }}>
+                <span style={{ fontSize: 10, color: '#94a3b8' }}>Use + to pin a publisher as its own chip</span>
+              </div>
+            </div>
+          )}
+        </span>
+      )}
+
+      {/* "+" add publisher button */}
+      <div ref={addRef} style={{ position: 'relative' }}>
+        <button
+          onClick={() => { setAddOpen(o => !o); setTimeout(() => inputRef.current?.focus(), 40); }}
+          style={{
+            padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+            fontFamily: 'inherit', cursor: 'pointer',
+            background: 'transparent', color: '#aab4c4',
+            border: '1px dashed #2a4a7e',
+            transition: 'all 0.15s',
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}
+          title="Pin a publisher as its own chip"
+        >
+          <i className="ti ti-plus" style={{ fontSize: 11 }} /> Add publisher
+        </button>
+
+        {addOpen && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 120,
+            background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.22)',
+            minWidth: 220, overflow: 'hidden',
+          }}>
+            <div style={{ padding: '8px 10px', borderBottom: '1px solid #e2e8f0' }}>
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search publishers…"
+                style={{
+                  width: '100%', border: '1px solid #e2e8f0', borderRadius: 6,
+                  padding: '5px 8px', fontSize: 12, outline: 'none',
+                  fontFamily: 'inherit', boxSizing: 'border-box',
+                }}
+                onKeyDown={e => e.key === 'Escape' && (setAddOpen(false), setQuery(''))}
+              />
+            </div>
+            <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+              {filteredAddable.length === 0 ? (
+                <div style={{ padding: '10px 12px', fontSize: 12, color: '#94a3b8' }}>
+                  {addable.length === 0 ? 'All publishers already shown' : 'No matches'}
+                </div>
+              ) : filteredAddable.map(p => (
+                <button key={p}
+                  onClick={() => { onAddPub(p); setQuery(''); setAddOpen(false); }}
+                  style={{
+                    display: 'block', width: '100%', padding: '8px 12px',
+                    border: 'none', background: 'none', cursor: 'pointer',
+                    fontSize: 12, textAlign: 'left', fontFamily: 'inherit', color: '#001941',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Value at a Glance banner ────────────────────────────────────────────────
+function ValueAtAGlance({ records = [], loginClient = '', selectedClient, onClientChange, fromYear, onFromYearChange, toYear, onToYearChange }) {
+  const allYears   = useMemo(() => [...new Set(records.map(r => r.year).filter(Boolean))].sort(), [records]);
+  const allClients = useMemo(() => [...new Set(records.map(r => r.client).filter(Boolean))].sort(), [records]);
+
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting]   = useState(false);
+
+  const clientFiltered = useMemo(() => {
+    if (!selectedClient) return records;
+    return records.filter(r => r.client === selectedClient);
+  }, [records, selectedClient]);
+
+  const yearFiltered = useMemo(() => clientFiltered.filter(r => {
     const y = r.year;
     if (!y) return true;
     if (fromYear && y < fromYear) return false;
     if (toYear && y > toYear) return false;
     return true;
-  });
+  }), [clientFiltered, fromYear, toYear]);
 
-  const allPublishers = [...new Set(yearFiltered.map(r => r.publisher).filter(Boolean))].sort();
-  const [selectedPubs, setSelectedPubs] = useState(null); // null = all
+  const allPublishers = useMemo(() => [...new Set(yearFiltered.map(r => r.publisher).filter(Boolean))].sort(), [yearFiltered]);
+  const [selectedPubs, setSelectedPubs] = useState(null);
+  const [extraPubs, setExtraPubs]       = useState([]);
+  const [hoveredPubRow, setHoveredPubRow] = useState(null);
+
+  useEffect(() => { setSelectedPubs(null); setExtraPubs([]); }, [selectedClient, fromYear, toYear]);
 
   const activePubs = selectedPubs ?? allPublishers;
 
+  // Publishers in data that are not pinned or user-added — shown as the "Others" group
+  const otherPubs = useMemo(
+    () => allPublishers.filter(p => ![...PINNED_PUBLISHERS, ...extraPubs].includes(p)),
+    [allPublishers, extraPubs],
+  );
+
   const togglePub = (pub) => {
     if (!selectedPubs) {
-      // was all selected → deselect this one
       setSelectedPubs(allPublishers.filter(p => p !== pub));
     } else if (selectedPubs.includes(pub)) {
       const next = selectedPubs.filter(p => p !== pub);
@@ -997,28 +1252,43 @@ function ValueAtAGlance({ records = [] }) {
     }
   };
 
-  const finalRecords = yearFiltered.filter(r => {
+  const toggleOthers = () => {
+    const anyOtherOn = otherPubs.some(p => activePubs.includes(p));
+    if (anyOtherOn) {
+      // Deselect all others, keep only pinned + added that are active
+      const keep = activePubs.filter(p => !otherPubs.includes(p));
+      setSelectedPubs(keep.length === allPublishers.length ? null : keep.length === 0 ? [] : keep);
+    } else {
+      // Add all others back
+      const next = [...new Set([...activePubs, ...otherPubs])];
+      setSelectedPubs(next.length === allPublishers.length ? null : next);
+    }
+  };
+
+  const selectAll = () => setSelectedPubs(null);
+
+  const finalRecords = useMemo(() => yearFiltered.filter(r => {
     if (!r.publisher) return activePubs.length === 0;
     return activePubs.includes(r.publisher);
-  });
+  }), [yearFiltered, activePubs]);
 
-  // Aggregate by publisher
+  // Addon column order: Risk pair → Cost Avoidance pair → Cost Savings pair
   const METRICS = [
-    { key: 'identified_risk',     label: 'Identified Risk',            color: '#e74c3c' },
-    { key: 'id_cost_avoidance',   label: 'Cost Avoidance Identified',  color: '#f4c300' },
-    { key: 'acc_cost_avoidance',  label: 'Avoidance Accomplished',     color: '#e67e22' },
-    { key: '_remaining_risk',     label: 'Remaining Risk',             color: '#2980b9' },
-    { key: 'id_cost_savings',     label: 'Potential Cost Savings',     color: '#16a085' },
-    { key: 'realized_savings',    label: 'Realized Cost Savings',      color: '#27ae60' },
+    { key: 'identified_risk',    exportKey: 'idRisk',   label: 'Identified Risk',           color: '#e5546a' },
+    { key: '_remaining_risk',    exportKey: 'remRisk',  label: 'Remaining Risk',             color: '#e5546a' },
+    { key: 'id_cost_avoidance',  exportKey: 'avoidId',  label: 'Cost Avoidance Identified', color: '#ffad00' },
+    { key: 'acc_cost_avoidance', exportKey: 'avoidAcc', label: 'Avoidance Accomplished',    color: '#fb790f' },
+    { key: '_pot_savings',       exportKey: 'savPot',   label: 'Potential Cost Savings',    color: '#2aadab' },
+    { key: 'realized_savings',   exportKey: 'savReal',  label: 'Realized Cost Savings',     color: '#5fd1a7' },
   ];
 
   const sumMetric = (rows, key) => {
     if (key === '_remaining_risk') {
-      const id = rows.reduce((s, r) => s + (Number(r.identified_risk) || 0), 0);
+      const id  = rows.reduce((s, r) => s + (Number(r.identified_risk) || 0), 0);
       const acc = rows.reduce((s, r) => s + (Number(r.acc_cost_avoidance) || 0), 0);
       return Math.max(0, id - acc);
     }
-    if (key === 'id_cost_savings') {
+    if (key === '_pot_savings') {
       const a = rows.reduce((s, r) => s + (Number(r.id_cost_optimization) || 0), 0);
       const b = rows.reduce((s, r) => s + (Number(r.id_cost_savings) || 0), 0);
       return a || b;
@@ -1028,87 +1298,165 @@ function ValueAtAGlance({ records = [] }) {
 
   const fmtVal = (v) => {
     if (!v) return '—';
-    if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
-    if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
-    if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
-    return `$${v.toFixed(0)}`;
+    const av = Math.abs(v);
+    if (av >= 1e9) return `$${(v / 1e9).toFixed(1).replace(/\.0$/, '')}B`;
+    if (av >= 1e6) return `$${(v / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+    if (av >= 1e3) return `$${Math.round(v / 1e3).toLocaleString()}K`;
+    return `$${Math.round(v).toLocaleString()}`;
   };
 
-  // KPI totals
-  const kpis = METRICS.map(m => ({ ...m, value: sumMetric(finalRecords, m.key) }));
+  const kpis = useMemo(() => METRICS.map(m => ({ ...m, value: sumMetric(finalRecords, m.key) })), [finalRecords]);
 
-  // Publisher rows
-  const pubRows = allPublishers
-    .filter(p => activePubs.includes(p))
-    .map(pub => {
-      const rows = finalRecords.filter(r => r.publisher === pub);
-      return { pub, values: METRICS.map(m => sumMetric(rows, m.key)) };
+  const pubRows = useMemo(() => {
+    const displayedChips = [...PINNED_PUBLISHERS, ...extraPubs];
+    // Individual rows: pinned + added publishers that have data and are active
+    const rows = displayedChips
+      .filter(p => allPublishers.includes(p) && activePubs.includes(p))
+      .map(pub => {
+        const recs = finalRecords.filter(r => r.publisher === pub);
+        return { pub, vals: METRICS.map(m => sumMetric(recs, m.key)) };
+      });
+    // Aggregate "Others" row
+    const activeOthers = otherPubs.filter(p => activePubs.includes(p));
+    if (activeOthers.length > 0) {
+      const othersRecs = finalRecords.filter(r => activeOthers.includes(r.publisher));
+      rows.push({ pub: `Others (${activeOthers.length})`, vals: METRICS.map(m => sumMetric(othersRecs, m.key)) });
+    }
+    return rows;
+  }, [finalRecords, extraPubs, allPublishers, activePubs, otherPubs]);
+
+  const totalVals = useMemo(() => METRICS.map(m => sumMetric(finalRecords, m.key)), [finalRecords]);
+
+  if (allYears.length === 0 && allClients.length === 0) return null;
+
+  // ── Period label and export payload ──────────────────────────────────────────
+  const periodLabel = fromYear && toYear && String(fromYear) !== String(toYear)
+    ? `${fromYear}–${toYear}`
+    : fromYear ? String(fromYear) : 'All Years';
+
+  const buildExportPayload = () => {
+    const toRow = (vals) => ({
+      idRisk:   vals[0] || null,
+      remRisk:  vals[1] || null,
+      avoidId:  vals[2] || null,
+      avoidAcc: vals[3] || null,
+      savPot:   vals[4] || null,
+      savReal:  vals[5] || null,
     });
+    return {
+      period: periodLabel,
+      client: selectedClient || '',
+      rows:   pubRows.map(({ pub, vals }) => ({ pub, ...toRow(vals) })),
+      total:  { pub: 'Total', ...toRow(totalVals) },
+    };
+  };
 
-  const totalRow = { pub: 'Total', values: METRICS.map(m => sumMetric(finalRecords, m.key)) };
+  const handleExportHtml = async () => {
+    setExportOpen(false);
+    setExporting(true);
+    try { await exportValueAtAGlanceHtml(buildExportPayload()); }
+    catch (err) { alert(`Export failed: ${err.message}`); }
+    finally { setExporting(false); }
+  };
 
-  if (allYears.length === 0) return null;
+  const handleExportPptx = async () => {
+    setExportOpen(false);
+    setExporting(true);
+    try { await exportValueAtAGlancePptx(buildExportPayload()); }
+    catch (err) { alert(`Export failed: ${err.message}`); }
+    finally { setExporting(false); }
+  };
+
+  const selStyle = { background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' };
 
   return (
-    <div style={{ marginBottom: 28, borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.10)' }}>
+    <div style={{ borderRadius: '0 0 12px 12px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.10)' }}>
       {/* Header bar */}
-      <div style={{ background: '#001941', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <span style={{ color: '#fff', fontWeight: 700, fontSize: 15, flex: '0 0 auto' }}>Value at a Glance</span>
+      <div style={{ background: '#001941', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
 
-        {/* Year range selects */}
+        {/* Client selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+          <span style={{ color: '#aab4c4' }}>Client</span>
+          <select value={selectedClient} onChange={e => onClientChange(e.target.value)} style={selStyle}>
+            <option value="">All Clients</option>
+            {allClients.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+
+        {/* Year range */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
           <span style={{ color: '#aab4c4' }}>From</span>
-          <select
-            value={fromYear ?? ''}
-            onChange={e => setFromYear(e.target.value || null)}
-            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}
-          >
+          <select value={fromYear ?? ''} onChange={e => onFromYearChange(e.target.value || null)} style={selStyle}>
             {allYears.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
           <span style={{ color: '#aab4c4' }}>To</span>
-          <select
-            value={toYear ?? ''}
-            onChange={e => setToYear(e.target.value || null)}
-            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}
-          >
+          <select value={toYear ?? ''} onChange={e => onToYearChange(e.target.value || null)} style={selStyle}>
             {allYears.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
 
-        {/* Publisher toggles */}
-        <div style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {allPublishers.map(pub => {
-            const on = activePubs.includes(pub);
-            return (
-              <button
-                key={pub}
-                onClick={() => togglePub(pub)}
-                style={{
-                  padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                  fontFamily: 'inherit', cursor: 'pointer',
-                  background: on ? '#fff' : 'transparent',
-                  color: on ? '#001941' : '#aab4c4',
-                  border: `1px solid ${on ? '#fff' : '#2a4a7e'}`,
-                  transition: 'all 0.15s',
-                }}
-              >
-                {pub}
-              </button>
-            );
-          })}
+        {/* Export dropdown */}
+        <div style={{ position: 'relative', marginLeft: 'auto' }}>
+          <button
+            onClick={() => setExportOpen(o => !o)}
+            disabled={exporting}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+              fontFamily: 'inherit', cursor: exporting ? 'default' : 'pointer',
+              background: 'rgba(255,255,255,0.12)', color: '#fff',
+              border: '1px solid rgba(255,255,255,0.25)',
+            }}
+          >
+            {exporting
+              ? <><i className="ti ti-loader-2 spinning" /> Exporting…</>
+              : <><i className="ti ti-download" /> Export</>
+            }
+          </button>
+          {exportOpen && (
+            <div
+              style={{ position: 'absolute', right: 0, top: '110%', zIndex: 50, background: '#fff', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', minWidth: 180, overflow: 'hidden' }}
+              onMouseLeave={() => setExportOpen(false)}
+            >
+              {[
+                { icon: 'ti-file-code',    label: 'Export as HTML',       action: handleExportHtml },
+                { icon: 'ti-presentation', label: 'Export as PowerPoint',  action: handleExportPptx },
+              ].map(item => (
+                <button
+                  key={item.label}
+                  onClick={item.action}
+                  style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, color: '#001941', fontFamily: 'inherit', fontWeight: 500, textAlign: 'left' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  <i className={`ti ${item.icon}`} style={{ fontSize: 15, color: '#005f86' }} />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* Publisher toggles */}
+        <PublisherChipBar
+          allPublishers={allPublishers}
+          activePubs={activePubs}
+          onToggle={togglePub}
+          onToggleOthers={toggleOthers}
+          onSelectAll={selectAll}
+          extraPubs={extraPubs}
+          onAddPub={p => setExtraPubs(prev => [...prev, p])}
+          onRemoveExtra={p => setExtraPubs(prev => prev.filter(x => x !== p))}
+          otherPubs={otherPubs}
+        />
       </div>
 
       {/* KPI boxes */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', background: '#f5f7fa' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpis.length},1fr)`, background: '#001941', gap: 8, padding: '10px 12px 12px' }}>
         {kpis.map(kpi => (
-          <div key={kpi.key} style={{
-            background: '#fff', borderTop: `4px solid ${kpi.color}`,
-            padding: '16px 14px', textAlign: 'center',
-            borderRight: '1px solid #eaecf0',
-          }}>
+          <div key={kpi.key} style={{ background: '#fff', borderTop: `5px solid ${kpi.color}`, borderRadius: 6, padding: '14px 12px', textAlign: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.22)' }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#001941', lineHeight: 1.1 }}>{fmtVal(kpi.value)}</div>
-            <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 6, lineHeight: 1.3 }}>{kpi.label}</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 6, lineHeight: 1.35 }}>{kpi.label}</div>
           </div>
         ))}
       </div>
@@ -1125,24 +1473,389 @@ function ValueAtAGlance({ records = [] }) {
             </tr>
           </thead>
           <tbody>
-            {pubRows.map(({ pub, values }, ri) => (
-              <tr key={pub} style={{ background: ri % 2 === 0 ? '#001941' : '#00204e' }}>
-                <td style={{ padding: '9px 16px', color: '#fff', fontWeight: 600 }}>{pub}</td>
-                {values.map((v, ci) => (
-                  <td key={ci} style={{ padding: '9px 12px', textAlign: 'right', color: METRICS[ci].color, fontWeight: 500 }}>{fmtVal(v)}</td>
-                ))}
-              </tr>
-            ))}
-            {/* Totals row */}
-            <tr style={{ background: '#001030', borderTop: '2px solid #0a2a5e' }}>
-              <td style={{ padding: '10px 16px', color: '#fff', fontWeight: 800 }}>Total</td>
-              {totalRow.values.map((v, ci) => (
-                <td key={ci} style={{ padding: '10px 12px', textAlign: 'right', color: METRICS[ci].color, fontWeight: 800 }}>{fmtVal(v)}</td>
+            {pubRows.map(({ pub, vals }, ri) => {
+              const isHovered = hoveredPubRow === ri;
+              const baseBg = ri % 2 === 0 ? '#001941' : '#00204e';
+              return (
+                <tr key={pub} onMouseEnter={() => setHoveredPubRow(ri)} onMouseLeave={() => setHoveredPubRow(null)} style={{ background: isHovered ? '#0a2a5e' : baseBg, transition: 'background 0.12s', cursor: 'default' }}>
+                  <td style={{ padding: '9px 16px', color: '#fff', fontWeight: 600 }}>{pub}</td>
+                  {vals.map((v, ci) => (
+                    <td key={ci} style={{ padding: '9px 12px', textAlign: 'right', color: METRICS[ci].color, fontWeight: 500 }}>{fmtVal(v)}</td>
+                  ))}
+                </tr>
+              );
+            })}
+            <tr style={{ background: '#001030', borderTop: '2px solid #1a3a6e' }}>
+              <td style={{ padding: '11px 16px', color: '#fff', fontWeight: 800, letterSpacing: '0.04em', fontSize: 13 }}>TOTAL</td>
+              {totalVals.map((v, ci) => (
+                <td key={ci} style={{ padding: '11px 12px', textAlign: 'right', color: METRICS[ci].color, fontWeight: 800, fontSize: 13 }}>{fmtVal(v)}</td>
               ))}
             </tr>
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+// ─── Lifetime Value slide ─────────────────────────────────────────────────────
+
+function fmtSlideM(v) {
+  if (!v || v <= 0) return '$0M';
+  if (v >= 1000) return `$${(v / 1000).toFixed(1)}B`;
+  if (v >= 100)  return `$${Math.round(v)}M`;
+  return `$${v.toFixed(1)}M`;
+}
+
+function buildSlideData(records, client, fromYear, toYear) {
+  const toM = (key) => records.reduce((s, r) => s + (Number(r[key]) || 0), 0) / 1e6;
+
+  const accAvoidance = toM('acc_cost_avoidance');
+  const idRisk       = toM('identified_risk');
+  const realSavings  = toM('realized_savings') || toM('acc_cost_optimization');
+  const idSavings    = toM('id_cost_optimization') || toM('id_cost_savings');
+  const annualSpend  = toM('annual_contract_spend');
+  const totalAcc     = accAvoidance + realSavings;
+
+  // Publisher breakdown — top 6 by accomplished avoidance
+  const pubMap = {};
+  records.forEach(r => {
+    const pub = r.publisher || 'Unknown';
+    if (!pubMap[pub]) pubMap[pub] = { identified: 0, accomplished: 0 };
+    pubMap[pub].identified  += (Number(r.identified_risk) || 0) / 1e6;
+    pubMap[pub].accomplished += (Number(r.acc_cost_avoidance) || 0) / 1e6;
+  });
+  const categories = Object.entries(pubMap)
+    .sort((a, b) => b[1].accomplished - a[1].accomplished)
+    .slice(0, 6)
+    .map(([label, v]) => ({ label, identified: +v.identified.toFixed(2), accomplished: +v.accomplished.toFixed(2) }));
+
+  const yMax = categories.reduce((m, c) => Math.max(m, c.identified), 0);
+  const yAxisMax = Math.ceil(yMax / 5) * 5 || 10;
+
+  const pubs  = [...new Set(records.map(r => r.publisher).filter(Boolean))];
+  const years = [...new Set(records.map(r => r.year).filter(Boolean))].sort();
+  const scope = pubs.length && years.length
+    ? `${pubs.length} publisher${pubs.length === 1 ? '' : 's'} · FY${years[0]}–FY${years[years.length - 1]}`
+    : 'All engagements';
+
+  return {
+    client: client || 'Client',
+    scope,
+    groups: [
+      { accent: 'opt', tag: 'Optimization Activities', metric: 'Realized Risk Avoidance',
+        value: +accAvoidance.toFixed(2), identified: +idRisk.toFixed(2), identified_label: 'identified risk' },
+      { accent: 'sav', tag: 'Savings Opportunities', metric: 'Accomplished Cost Savings',
+        value: +realSavings.toFixed(2), identified: +idSavings.toFixed(2), identified_label: 'identified optimization' },
+    ],
+    headline: {
+      value: `${fmtSlideM(totalAcc)}+`,
+      caption: 'in total value delivered',
+      subtitle: 'Proactive savings through informed purchases and better decision-making.',
+    },
+    chips: [
+      { value: fmtSlideM(totalAcc),    label: 'Value realized to date' },
+      { value: fmtSlideM(annualSpend), label: 'Annual contract spend managed' },
+    ],
+    chart: {
+      title: 'Value delivered by publisher ($M)',
+      series_names: { identified: 'Identified', accomplished: 'Accomplished' },
+      y_axis_max: yAxisMax,
+      y_ticks: 4,
+      categories,
+    },
+  };
+}
+
+// Inline SVG grouped bar chart for the Lifetime Value preview.
+// Renders identified (navy) vs accomplished (gold) bars side-by-side per publisher.
+function LVBarChart({ categories, yAxisMax }) {
+  if (!categories?.length) return null;
+  const W = 560, H = 160, PAD_L = 10, PAD_B = 22, PAD_T = 8;
+  const innerW = W - PAD_L;
+  const innerH = H - PAD_B - PAD_T;
+  const n = categories.length;
+  const groupW = innerW / n;
+  const barW = Math.min(groupW * 0.35, 22);
+  const gap   = barW * 0.35;
+  const scale = (v) => PAD_T + innerH - (Math.max(0, v) / (yAxisMax || 1)) * innerH;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
+      {/* gridlines */}
+      {[0, 0.25, 0.5, 0.75, 1].map(t => {
+        const y = PAD_T + innerH * (1 - t);
+        return <line key={t} x1={PAD_L} y1={y} x2={W} y2={y} stroke="#1a2a4a" strokeWidth={0.8} />;
+      })}
+      {categories.map((c, i) => {
+        const cx = PAD_L + i * groupW + groupW / 2;
+        const x0 = cx - barW - gap / 2;
+        const x1 = cx + gap / 2;
+        return (
+          <g key={c.label}>
+            {/* identified bar */}
+            <rect x={x0} y={scale(c.identified)} width={barW}
+                  height={Math.max(0, innerH - (scale(c.identified) - PAD_T))}
+                  fill="#005F86" rx={2} />
+            {/* accomplished bar */}
+            <rect x={x1} y={scale(c.accomplished)} width={barW}
+                  height={Math.max(0, innerH - (scale(c.accomplished) - PAD_T))}
+                  fill="#FFAD00" rx={2} />
+            <text x={cx} y={H - 6} textAnchor="middle" fontSize={8.5} fill="#aab8cc">{c.label}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function LifetimeValueSlide({ records = [], loginClient = '', selectedClient, onClientChange, fromYear, onFromYearChange, toYear, onToYearChange }) {
+  const clients  = useMemo(() => [...new Set(records.map(r => r.client).filter(Boolean))].sort(), [records]);
+  const allYears = useMemo(() => [...new Set(records.map(r => r.year).filter(Boolean))].sort(), [records]);
+
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting,  setExporting]  = useState(false);
+
+  const clientYearFiltered = useMemo(() => records.filter(r => {
+    if (selectedClient && r.client !== selectedClient) return false;
+    if (fromYear && r.year < fromYear) return false;
+    if (toYear   && r.year > toYear)   return false;
+    return true;
+  }), [records, selectedClient, fromYear, toYear]);
+
+  const allPublishers = useMemo(
+    () => [...new Set(clientYearFiltered.map(r => r.publisher).filter(Boolean))].sort(),
+    [clientYearFiltered],
+  );
+  const [selectedPubs, setSelectedPubs] = useState(null);
+  const [extraPubs, setExtraPubs]       = useState([]);
+
+  useEffect(() => { setSelectedPubs(null); setExtraPubs([]); }, [selectedClient, fromYear, toYear]);
+
+  const activePubs = selectedPubs ?? allPublishers;
+
+  const otherPubs = useMemo(
+    () => allPublishers.filter(p => ![...PINNED_PUBLISHERS, ...extraPubs].includes(p)),
+    [allPublishers, extraPubs],
+  );
+
+  const togglePub = (pub) => {
+    if (!selectedPubs) {
+      setSelectedPubs(allPublishers.filter(p => p !== pub));
+    } else if (selectedPubs.includes(pub)) {
+      const next = selectedPubs.filter(p => p !== pub);
+      setSelectedPubs(next.length === allPublishers.length ? null : next);
+    } else {
+      const next = [...selectedPubs, pub];
+      setSelectedPubs(next.length === allPublishers.length ? null : next);
+    }
+  };
+
+  const toggleOthers = () => {
+    const anyOtherOn = otherPubs.some(p => activePubs.includes(p));
+    if (anyOtherOn) {
+      const keep = activePubs.filter(p => !otherPubs.includes(p));
+      setSelectedPubs(keep.length === allPublishers.length ? null : keep.length === 0 ? [] : keep);
+    } else {
+      const next = [...new Set([...activePubs, ...otherPubs])];
+      setSelectedPubs(next.length === allPublishers.length ? null : next);
+    }
+  };
+
+  const selectAll = () => setSelectedPubs(null);
+
+  const filtered = useMemo(
+    () => clientYearFiltered.filter(r => !r.publisher || activePubs.includes(r.publisher)),
+    [clientYearFiltered, activePubs],
+  );
+
+  const sd = useMemo(() => buildSlideData(filtered, selectedClient || 'All Clients', fromYear, toYear),
+    [filtered, selectedClient, fromYear, toYear]);
+
+  const handleExportHtml = async () => {
+    setExportOpen(false);
+    setExporting(true);
+    try { await exportLifetimeValueHtml(sd); }
+    catch (err) { alert(`Export failed: ${err.message}`); }
+    finally { setExporting(false); }
+  };
+
+  const handleExportPptx = async () => {
+    setExportOpen(false);
+    setExporting(true);
+    try { await exportLifetimeValuePptx(sd); }
+    catch (err) { alert(`Export failed: ${err.message}`); }
+    finally { setExporting(false); }
+  };
+
+  if (clients.length === 0) return null;
+
+  // Capture % for each group
+  const capPct = (g) => g.identified > 0 ? Math.min(1, g.value / g.identified) : 0;
+
+  return (
+    <div style={{ borderRadius: '0 0 12px 12px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.10)' }}>
+      {/* ── Header bar ── */}
+      <div style={{ background: '#001941', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <span style={{ color: '#fff', fontWeight: 700, fontSize: 15, flex: '0 0 auto' }}>Lifetime Value Slide</span>
+
+        {/* Client selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+          <span style={{ color: '#aab4c4' }}>Client</span>
+          <select
+            value={selectedClient}
+            onChange={e => onClientChange(e.target.value)}
+            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}
+          >
+            <option value="">All Clients</option>
+            {clients.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+
+        {/* Year range */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+          <span style={{ color: '#aab4c4' }}>From</span>
+          <select value={fromYear ?? ''} onChange={e => onFromYearChange(e.target.value || null)}
+            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}>
+            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <span style={{ color: '#aab4c4' }}>To</span>
+          <select value={toYear ?? ''} onChange={e => onToYearChange(e.target.value || null)}
+            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}>
+            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+
+        {/* Export dropdown */}
+        <div style={{ position: 'relative', marginLeft: 'auto' }}>
+          <button
+            onClick={() => setExportOpen(o => !o)}
+            disabled={exporting}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+              fontFamily: 'inherit', cursor: exporting ? 'default' : 'pointer',
+              background: 'rgba(255,255,255,0.12)', color: '#fff',
+              border: '1px solid rgba(255,255,255,0.25)',
+            }}
+          >
+            {exporting
+              ? <><i className="ti ti-loader-2 spinning" /> Exporting…</>
+              : <><i className="ti ti-download" /> Export</>}
+          </button>
+          {exportOpen && (
+            <div
+              onMouseLeave={() => setExportOpen(false)}
+              style={{
+                position: 'absolute', right: 0, top: '110%', zIndex: 50,
+                background: '#fff', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+                minWidth: 200, overflow: 'hidden',
+              }}
+            >
+              {[
+                { icon: 'ti-file-code',    label: 'Export as HTML',       action: handleExportHtml },
+                { icon: 'ti-presentation', label: 'Export as PowerPoint',  action: handleExportPptx },
+              ].map(item => (
+                <button key={item.label} onClick={item.action}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 9,
+                    width: '100%', padding: '10px 14px', border: 'none',
+                    background: 'none', cursor: 'pointer', fontSize: 13,
+                    color: '#001941', fontFamily: 'inherit', fontWeight: 500, textAlign: 'left',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  <i className={`ti ${item.icon}`} style={{ fontSize: 15, color: '#005f86' }} />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Publisher toggles */}
+        <PublisherChipBar
+          allPublishers={allPublishers}
+          activePubs={activePubs}
+          onToggle={togglePub}
+          onToggleOthers={toggleOthers}
+          onSelectAll={selectAll}
+          extraPubs={extraPubs}
+          onAddPub={p => setExtraPubs(prev => [...prev, p])}
+          onRemoveExtra={p => setExtraPubs(prev => prev.filter(x => x !== p))}
+          otherPubs={otherPubs}
+        />
+      </div>
+
+      {/* ── Slide preview ── */}
+      <div style={{ background: '#001941', display: 'flex', minHeight: 240 }}>
+        {/* Left stat rail */}
+        <div style={{ width: '28%', minWidth: 180, background: '#003861', padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#FFAD00', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>{sd.client}</div>
+          <div style={{ fontSize: 9, color: '#aab8cc', marginBottom: 14 }}>{sd.scope}</div>
+
+          {sd.groups.map((g, i) => {
+            const accent = g.accent === 'opt' ? '#FFAD00' : '#005F86';
+            const pct = capPct(g);
+            return (
+              <div key={i} style={{ marginBottom: i === 0 ? 16 : 0 }}>
+                <div style={{ fontSize: 8.5, fontWeight: 700, color: '#aab8cc', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 2 }}>{g.tag}</div>
+                <div style={{ fontSize: 9.5, color: '#ccd5e0', marginBottom: 4 }}>{g.metric}</div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', lineHeight: 1.05, marginBottom: 6 }}>
+                  {fmtSlideM(g.value)}
+                </div>
+                {/* Capture bar */}
+                <div style={{ background: '#1a2a4a', borderRadius: 3, height: 6, marginBottom: 4, overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.round(pct * 100)}%`, height: '100%', background: accent, borderRadius: 3 }} />
+                </div>
+                <div style={{ fontSize: 8.5, color: '#aab8cc' }}>
+                  {Math.round(pct * 100)}% of {g.identified_label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Main area */}
+        <div style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {/* Headline */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 40, fontWeight: 800, color: '#fff', lineHeight: 1, marginBottom: 2 }}>{sd.headline.value}</div>
+            <div style={{ fontSize: 11, color: '#aab8cc', marginBottom: 4 }}>{sd.headline.caption}</div>
+            <div style={{ fontSize: 10, color: '#ccd5e0', lineHeight: 1.45 }}>{sd.headline.subtitle}</div>
+          </div>
+
+          {/* KPI chips */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+            {sd.chips.map((ch, i) => (
+              <div key={i} style={{
+                background: '#F2F4F6', borderRadius: 6, padding: '8px 12px',
+                borderLeft: '4px solid #FFAD00', minWidth: 130,
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#001941' }}>{ch.value}</div>
+                <div style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>{ch.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Chart */}
+          {sd.chart.categories.length > 0 && (
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 9, color: '#aab8cc', marginBottom: 4 }}>{sd.chart.title}</div>
+              <LVBarChart categories={sd.chart.categories} yAxisMax={sd.chart.y_axis_max} />
+              <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: '#aab8cc' }}>
+                  <div style={{ width: 10, height: 10, background: '#005F86', borderRadius: 2 }} /> Identified
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: '#aab8cc' }}>
+                  <div style={{ width: 10, height: 10, background: '#FFAD00', borderRadius: 2 }} /> Accomplished
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1161,12 +1874,25 @@ export default function DashboardsView({ seed = null, onSeedConsumed, loginClien
   // Tracker rather than the full dataset. Null = work off every record.
   const [scopedRecords, setScopedRecords] = useState(null);
 
+  // ── Shared slide-panel state (persists when toggling VAG ↔ LTV) ──
+  const [activeSlide, setActiveSlide] = useState('vag');
+  const [slideClient, setSlideClient] = useState(loginClient || '');
+  const [slideFromYear, setSlideFromYear] = useState(null);
+  const [slideToYear, setSlideToYear]   = useState(null);
+
   useEffect(() => {
     getRecords()
       .then(data => setAllRecords(Array.isArray(data) ? data : []))
       .catch(() => setAllRecords([]))
       .finally(() => setLoading(false));
   }, []);
+
+  // Seed slide year bounds once records arrive
+  useEffect(() => {
+    const ys = [...new Set(allRecords.map(r => r.year).filter(Boolean))].sort();
+    setSlideFromYear(prev => prev ?? (ys[0] ?? null));
+    setSlideToYear(prev => prev ?? (ys[ys.length - 1] ?? null));
+  }, [allRecords]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The Tracker (or history panel) handed over a filtered subset: scope to it
   // and jump into the builder. When a single record is passed, pre-configure
@@ -1691,7 +2417,55 @@ ${body}
   return (
     <>
       {scopedRecords && <ScopeBanner count={scopedRecords.length} onClear={clearScope} />}
-      <ValueAtAGlance records={records} />
+      {/* Slide panel: Value at a Glance / Lifetime Value with shared filters */}
+      {records.length > 0 && (
+        <div style={{ marginBottom: 28, borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.10)' }}>
+          {/* Tab bar */}
+          <div style={{ background: '#001941', borderRadius: '12px 12px 0 0', padding: '10px 16px 0', display: 'flex', gap: 4 }}>
+            {[
+              { id: 'vag', label: 'Value at a Glance' },
+              { id: 'ltv', label: 'Lifetime Value' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSlide(tab.id)}
+                style={{
+                  padding: '7px 16px', borderRadius: '8px 8px 0 0',
+                  border: 'none', fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
+                  cursor: 'pointer', transition: 'all 0.15s',
+                  background: activeSlide === tab.id ? 'rgba(255,255,255,0.12)' : 'transparent',
+                  color: activeSlide === tab.id ? '#fff' : '#aab4c4',
+                  borderBottom: activeSlide === tab.id ? '2px solid #ffad00' : '2px solid transparent',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {activeSlide === 'vag'
+            ? <ValueAtAGlance
+                records={records}
+                loginClient={loginClient}
+                selectedClient={slideClient}
+                onClientChange={setSlideClient}
+                fromYear={slideFromYear}
+                onFromYearChange={setSlideFromYear}
+                toYear={slideToYear}
+                onToYearChange={setSlideToYear}
+              />
+            : <LifetimeValueSlide
+                records={records}
+                loginClient={loginClient}
+                selectedClient={slideClient}
+                onClientChange={setSlideClient}
+                fromYear={slideFromYear}
+                onFromYearChange={setSlideFromYear}
+                toYear={slideToYear}
+                onToYearChange={setSlideToYear}
+              />
+          }
+        </div>
+      )}
       <button
         onClick={() => setBuilding({ templateId: 'custom', initial: null })}
         style={{
