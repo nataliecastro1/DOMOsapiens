@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import AutoDashViewer from '../components/AutoDashViewer';
+import ValueAtAGlanceComponent from '../components/ValueAtAGlance';
 import Badge from '../components/Badge';
 import { getRecords, exportValueAtAGlanceHtml, exportValueAtAGlancePptx, exportLifetimeValueHtml, exportLifetimeValuePptx } from '../services/api';
 import {
@@ -1497,6 +1499,318 @@ function ValueAtAGlance({ records = [], loginClient = '', selectedClient, onClie
     </div>
   );
 }
+// ─── Custom Dashboard Builder ─────────────────────────────────────────────────
+const CUSTOM_FIELD_LABELS = [
+  'Identified Risk',
+  'Identified Cost Avoidance',
+  'Accomplished Cost Avoidance',
+  'Identified Cost Optimization',
+  'Accomplished Cost Optimization',
+  'Identified Cost Savings',
+  'Realized Cost Savings',
+];
+
+const FLAT_FIELD_MAP = {
+  'Identified Risk':               r => Number(r.identified_risk) || 0,
+  'Identified Cost Avoidance':     r => Number(r.id_cost_avoidance) || 0,
+  'Accomplished Cost Avoidance':   r => Number(r.acc_cost_avoidance) || 0,
+  'Identified Cost Optimization':  r => Number(r.id_cost_optimization) || 0,
+  'Accomplished Cost Optimization':r => Number(r.acc_cost_optimization) || 0,
+  'Identified Cost Savings':       r => Number(r.id_cost_savings) || 0,
+  'Realized Cost Savings':         r => Number(r.realized_savings) || 0,
+};
+
+function aggregateFields(records, filterArgs) {
+  const matched = matchFilters(records, filterArgs);
+  const totals = {};
+  CUSTOM_FIELD_LABELS.forEach(lbl => { totals[lbl] = 0; });
+  matched.forEach(r => {
+    CUSTOM_FIELD_LABELS.forEach(lbl => {
+      if (FLAT_FIELD_MAP[lbl]) totals[lbl] += FLAT_FIELD_MAP[lbl](r);
+    });
+    // Also handle extraction-generated records that store data in finalFields
+    (r.finalFields || []).forEach(({ label, value }) => {
+      if (label in totals) {
+        totals[label] += parseFloat(String(value || '').replace(/[$,]/g, '')) || 0;
+      }
+    });
+  });
+  return CUSTOM_FIELD_LABELS
+    .filter(lbl => totals[lbl] > 0)
+    .map(lbl => ({ label: lbl, value: totals[lbl] }));
+}
+
+const SECTION_DEFS = [
+  { key: 'vag',       label: 'Value at a Glance',    icon: 'ti-eye' },
+  { key: 'kpis',      label: 'KPI Tiles',             icon: 'ti-layout-grid' },
+  { key: 'summary',   label: '01 — Executive Summary',icon: 'ti-file-text' },
+  { key: 'breakdown', label: '02 — Value Analysis',   icon: 'ti-chart-bar' },
+  { key: 'journey',   label: '03 — ROI Journey',      icon: 'ti-trending-up' },
+  { key: 'ledger',    label: '04 — Value Ledger',     icon: 'ti-table' },
+];
+
+function CustomDashBuilder({ records, allRecords = [], options, loginClient, onClose, onSave, loggedInUser = '' }) {
+  const clientList = options.clients || [];
+  const [client, setClient]       = useState(loginClient || clientList[0] || '');
+  const [pubMode, setPubMode]     = useState('All publishers');
+  const [selPubs, setSelPubs]     = useState([]);
+  const [yrMode, setYrMode]       = useState('All years');
+  const [selYears, setSelYears]   = useState([]);
+  const [name, setName]           = useState('');
+  const [sumOv,  setSumOv]        = useState('');
+  const [sumAcc, setSumAcc]       = useState('');
+  const [sumRec, setSumRec]       = useState('');
+  // Which sections are hidden (keyed by SECTION_DEFS key)
+  const [hiddenSecs, setHiddenSecs] = useState({});
+  const toggleSec = (k) => setHiddenSecs(p => ({ ...p, [k]: !p[k] }));
+  const toLines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
+
+  const filterArgs = useMemo(() => ({
+    client: client || null,
+    publishers: pubMode === 'Select specific' ? selPubs : null,
+    years:      yrMode  === 'Select specific' ? selYears : null,
+  }), [client, pubMode, selPubs, yrMode, selYears]);
+
+  // Always aggregate from allRecords so a scoped view (from Tracker) doesn't limit the custom builder
+  const previewFields = useMemo(() => aggregateFields(allRecords, filterArgs), [allRecords, filterArgs]);
+
+  const autoName = [
+    client,
+    pubMode === 'All publishers' ? 'All Publishers' : selPubs.join(', '),
+    yrMode  === 'All years'      ? 'All Years'       : selYears.join(', '),
+  ].filter(Boolean).join(' — ');
+
+  // Auto-generate summary + charts from current fields + user text
+  const builtSummary = useMemo(() => {
+    const hasText = sumOv || sumAcc || sumRec;
+    const barData = previewFields.filter(f => f.value > 0).map(f => ({ name: f.label.replace('Identified ', 'Id. ').replace('Accomplished ', 'Acc. ').replace('Cost ', '').replace(' Savings', ' Sav.'), value: f.value }));
+    const getVal = lbl => previewFields.find(f => f.label === lbl)?.value || 0;
+    const totalId  = getVal('Identified Cost Avoidance') + getVal('Identified Cost Optimization') + getVal('Identified Cost Savings') || getVal('Identified Risk');
+    const totalAcc = getVal('Accomplished Cost Avoidance') + getVal('Accomplished Cost Optimization');
+    const charts = barData.length > 0 ? {
+      roi_breakdown: barData,
+      accomplishment_rate: totalId > 0 ? { accomplished: totalAcc, remaining: Math.max(0, totalId - totalAcc) } : {},
+    } : null;
+    if (!hasText && !charts) return null;
+    return {
+      overview: sumOv,
+      key_accomplishments: toLines(sumAcc),
+      recommendations: toLines(sumRec),
+      primary_risks: [],
+      next_steps: [],
+      charts,
+    };
+  }, [previewFields, sumOv, sumAcc, sumRec]);
+
+  const previewDash = useMemo(() => ({
+    id: `custom-preview`,
+    type: 'custom',
+    name: name.trim() || autoName,
+    client,
+    publisher: pubMode === 'Select specific' && selPubs.length === 1 ? selPubs[0] : null,
+    year: yrMode === 'Select specific' && selYears.length === 1 ? selYears[0] : null,
+    fields: previewFields,
+    summary: builtSummary,
+    savedAt: new Date().toISOString(),
+    includeValueAtAGlance: !hiddenSecs.vag,
+    initialHidden: {
+      kpis:      hiddenSecs.kpis      || false,
+      summary:   hiddenSecs.summary   || false,
+      breakdown: hiddenSecs.breakdown || false,
+      journey:   hiddenSecs.journey   || false,
+      ledger:    hiddenSecs.ledger    || false,
+    },
+  }), [name, autoName, client, pubMode, selPubs, yrMode, selYears, previewFields, hiddenSecs, builtSummary]);
+
+  // Use allRecords for full publisher/year lists (not scoped)
+  const pubList = useMemo(() => {
+    const base = allRecords.length ? allRecords : records;
+    const matched = client ? base.filter(r => (r.client || '') === client) : base;
+    return [...new Set(matched.map(r => r.publisher).filter(Boolean))].sort();
+  }, [allRecords, records, client]);
+
+  const yearList = useMemo(() => {
+    const base = allRecords.length ? allRecords : records;
+    const matched = base.filter(r => {
+      if (client && (r.client || '') !== client) return false;
+      if (pubMode === 'Select specific' && selPubs.length && !selPubs.includes(r.publisher)) return false;
+      return true;
+    });
+    return [...new Set(matched.map(r => String(r.year || '')).filter(Boolean))].sort();
+  }, [allRecords, records, client, pubMode, selPubs]);
+
+  const togglePub  = (p) => setSelPubs(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+  const toggleYear = (y) => setSelYears(prev => prev.includes(y) ? prev.filter(x => x !== y) : [...prev, y]);
+
+  const canBuild = Boolean(client);
+
+  const handleBuild = () => {
+    if (!canBuild) return;
+    const dash = {
+      id: `custom-${Date.now()}`,
+      type: 'custom',
+      name: name.trim() || autoName,
+      client,
+      publisher: pubMode === 'Select specific' && selPubs.length === 1 ? selPubs[0] : null,
+      year: yrMode === 'Select specific' && selYears.length === 1 ? selYears[0] : null,
+      pubMode, selPubs, yrMode, selYears,
+      includeValueAtAGlance: !hiddenSecs.vag,
+      initialHidden: {
+        kpis:      hiddenSecs.kpis      || false,
+        summary:   hiddenSecs.summary   || false,
+        breakdown: hiddenSecs.breakdown || false,
+        journey:   hiddenSecs.journey   || false,
+        ledger:    hiddenSecs.ledger    || false,
+      },
+      fields: previewFields,
+      summary: builtSummary,
+      createdBy: loggedInUser,
+      savedAt: new Date().toISOString(),
+    };
+    onSave(dash);
+    onClose();
+  };
+
+  const panelStyle   = { flex: '0 0 300px', minWidth: 250, maxWidth: 340 };
+  const previewStyle = { flex: 1, minWidth: 0 };
+  const tagBtnStyle  = (on) => ({
+    padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: '1.5px solid',
+    borderColor: on ? 'var(--blue)' : 'var(--border)',
+    background: on ? 'var(--blue)' : 'transparent',
+    color: on ? '#fff' : 'var(--text-muted)',
+  });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+        <button className="btn ghost small" onClick={onClose}><i className="ti ti-arrow-left" /> All dashboards</button>
+        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--navy)', flex: 1 }}>New Custom Dashboard</div>
+      </div>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+        {/* ── Left panel ── */}
+        <div style={panelStyle}>
+          <div className="card" style={{ marginBottom: 0 }}>
+            <div className="card-title"><i className="ti ti-sliders" aria-hidden="true" /> Configure</div>
+
+            <div className="field-group">
+              <label className="field-label">Client</label>
+              <SearchableSelect options={clientList} value={client} onChange={v => { setClient(v); setSelPubs([]); setSelYears([]); }} placeholder="Search clients…" emptyText="No clients" />
+            </div>
+
+            <div className="field-group">
+              <label className="field-label">Publishers</label>
+              <ToggleGroup options={['All publishers', 'Select specific']} value={pubMode} onChange={v => { setPubMode(v); if (v === 'All publishers') setSelPubs([]); }} />
+              {pubMode === 'Select specific' && pubList.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {pubList.map(p => (
+                    <button key={p} type="button" style={tagBtnStyle(selPubs.includes(p))} onClick={() => togglePub(p)}>{p}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="field-group">
+              <label className="field-label">Years</label>
+              <ToggleGroup options={['All years', 'Select specific']} value={yrMode} onChange={v => { setYrMode(v); if (v === 'All years') setSelYears([]); }} />
+              {yrMode === 'Select specific' && yearList.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {yearList.map(y => (
+                    <button key={y} type="button" style={tagBtnStyle(selYears.includes(y))} onClick={() => toggleYear(y)}>{y}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="field-group">
+              <label className="field-label">Dashboard name</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={autoName || 'e.g. IBM 2024 Overview'} />
+            </div>
+
+            {/* ── Executive Summary text ── */}
+            <div className="field-group">
+              <label className="field-label" style={{ marginBottom: 8 }}>Executive Summary <span style={{ fontWeight:400, color:'var(--text-muted)', fontSize:11 }}>(optional)</span></label>
+              <textarea
+                value={sumOv} onChange={e => setSumOv(e.target.value)}
+                placeholder="Write an executive overview…"
+                rows={3} style={{ width:'100%', boxSizing:'border-box', resize:'vertical', fontSize:12, fontFamily:'inherit', padding:'7px 9px', borderRadius:6, border:'1.5px solid var(--border)', color:'var(--text)', lineHeight:1.5 }}
+              />
+              <textarea
+                value={sumAcc} onChange={e => setSumAcc(e.target.value)}
+                placeholder="Key accomplishments (one per line)…"
+                rows={2} style={{ width:'100%', boxSizing:'border-box', resize:'vertical', fontSize:12, fontFamily:'inherit', padding:'7px 9px', borderRadius:6, border:'1.5px solid var(--border)', color:'var(--text)', lineHeight:1.5, marginTop:6 }}
+              />
+              <textarea
+                value={sumRec} onChange={e => setSumRec(e.target.value)}
+                placeholder="Recommendations (one per line)…"
+                rows={2} style={{ width:'100%', boxSizing:'border-box', resize:'vertical', fontSize:12, fontFamily:'inherit', padding:'7px 9px', borderRadius:6, border:'1.5px solid var(--border)', color:'var(--text)', lineHeight:1.5, marginTop:6 }}
+              />
+            </div>
+
+            {/* ── Section visibility ── */}
+            <div className="field-group">
+              <label className="field-label" style={{ marginBottom: 8 }}>Sections</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {SECTION_DEFS.map(sec => {
+                  const visible = !hiddenSecs[sec.key];
+                  return (
+                    <button
+                      key={sec.key}
+                      type="button"
+                      onClick={() => toggleSec(sec.key)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 9,
+                        padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
+                        fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+                        border: `1.5px solid ${visible ? 'var(--blue)' : 'var(--border)'}`,
+                        background: visible ? 'rgba(0,95,134,.08)' : 'transparent',
+                        color: visible ? 'var(--blue)' : 'var(--text-muted)',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <i className={`ti ${sec.icon}`} style={{ fontSize: 14 }} />
+                      <span style={{ flex: 1 }}>{sec.label}</span>
+                      <i className={`ti ${visible ? 'ti-eye' : 'ti-eye-off'}`} style={{ fontSize: 13, opacity: 0.7 }} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <button className="btn primary" style={{ width: '100%', marginTop: 8 }} disabled={!canBuild} onClick={handleBuild}>
+              <i className="ti ti-device-floppy" aria-hidden="true" /> Build Dashboard
+            </button>
+          </div>
+        </div>
+
+        {/* ── Right: live preview ── */}
+        <div style={previewStyle}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12 }}>
+            Live Preview
+          </div>
+          {previewFields.length === 0 && (
+            <div style={{ background: 'var(--surface)', border: '1px dashed var(--border)', borderRadius: 'var(--radius-card)', padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              Select a client to see a preview.
+            </div>
+          )}
+          {previewFields.length > 0 && (
+            <AutoDashViewer
+              d={previewDash}
+              viewOnly={true}
+              allRecords={allRecords}
+              controlledHidden={{
+                kpis:      hiddenSecs.kpis      || false,
+                summary:   hiddenSecs.summary   || false,
+                breakdown: hiddenSecs.breakdown || false,
+                journey:   hiddenSecs.journey   || false,
+                ledger:    hiddenSecs.ledger    || false,
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Lifetime Value slide ─────────────────────────────────────────────────────
 
@@ -1861,7 +2175,7 @@ function LifetimeValueSlide({ records = [], loginClient = '', selectedClient, on
 }
 
 // ─── Dashboards view ──────────────────────────────────────────────────────────
-export default function DashboardsView({ seed = null, onSeedConsumed, loginClient = '', loginPublisher = '', targetRecord = null, onTargetConsumed }) {
+export default function DashboardsView({ seed = null, onSeedConsumed, loginClient = '', loginPublisher = '', targetRecord = null, onTargetConsumed, loggedInUser = '' }) {
   const [allRecords, setAllRecords] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [savedList, setSavedList] = useState(loadSaved);
@@ -1927,15 +2241,29 @@ export default function DashboardsView({ seed = null, onSeedConsumed, loginClien
     if (!targetRecord) return;
     onTargetConsumed?.();
     const r = targetRecord;
-    const rClient    = (r.client    || '').toLowerCase();
-    const rPublisher = (r.publisher || '').toLowerCase();
+    const rClient    = (r.client    || '').toLowerCase().trim();
+    const rPublisher = (r.publisher || '').toLowerCase().trim();
     const rYear      = String(r.year || '');
+
+    // Check for auto-saved dashboard first
+    const autoMatch = savedList.find(d => {
+      if (d.type !== 'auto') return false;
+      if ((d.client || '').toLowerCase().trim() !== rClient) return false;
+      const pubMatch = !rPublisher || (d.publisher || '').toLowerCase().trim() === rPublisher;
+      const yrMatch  = !rYear || String(d.year || '') === rYear;
+      return pubMatch && yrMatch;
+    });
+    if (autoMatch) {
+      setViewingAuto(autoMatch);
+      return;
+    }
+
     const match = savedList.find(d => {
       if (!d.templateId) return false;
-      if ((d.client || '').toLowerCase() !== rClient) return false;
+      if ((d.client || '').toLowerCase().trim() !== rClient) return false;
       const pubMatch = !rPublisher
         || d.pubMode === 'All publishers'
-        || (d.selPubs || []).some(p => p.toLowerCase() === rPublisher);
+        || (d.selPubs || []).some(p => p.toLowerCase().trim() === rPublisher);
       const yrMatch  = !rYear
         || d.yrMode  === 'All years'
         || (d.selYears || []).map(String).includes(rYear);
@@ -2297,95 +2625,57 @@ ${body}
   };
 
   if (viewingAuto) {
-    const d = viewingAuto;
-    const T = { navy:'#001941', yellow:'#ffad00', blue:'#005f86', green:'#00875a', teal:'#007b5f', slate:'#4a5568', midGray:'#8a9ab0', navy5:'rgba(0,25,65,.05)', navy10:'rgba(0,25,65,.10)' };
-    const parseDollar = (v) => parseFloat(String(v || '').replace(/[$,]/g, '')) || 0;
-    const fmtM = (n) => { if (!n) return '—'; if (n >= 1_000_000) return `$${(n/1_000_000).toFixed(1)}M`; if (n >= 1_000) return `$${(n/1_000).toFixed(0)}K`; return `$${n.toLocaleString()}`; };
-    const fields = d.fields || [];
-    const get = (lbl) => parseDollar(fields.find(f => f.label === lbl)?.value);
-    const metrics = [
-      { label:'Identified Cost Avoidance',    val: get('Identified Cost Avoidance'),    color: T.teal  },
-      { label:'Accomplished Cost Avoidance',  val: get('Accomplished Cost Avoidance'),  color: T.teal  },
-      { label:'Identified Cost Optimization', val: get('Identified Cost Optimization'), color: T.blue  },
-      { label:'Accomplished Cost Optimization',val:get('Accomplished Cost Optimization'),color:T.blue  },
-      { label:'Identified Cost Savings',      val: get('Identified Cost Savings'),      color: T.green },
-      { label:'Realized Cost Savings',        val: get('Realized Cost Savings'),        color: T.green },
-      { label:'Identified Risk',              val: get('Identified Risk'),              color:'#c0392b'},
-    ].filter(m => m.val > 0);
-    const totalId = metrics.filter(m => m.label.startsWith('Identified')).reduce((s,m)=>s+m.val,0);
-
-    return (
-      <div style={{ fontFamily:"'Figtree','Inter',sans-serif", maxWidth: 900, margin: '0 auto' }}>
-        {/* toolbar */}
-        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
-          <button className="btn ghost small" onClick={() => setViewingAuto(null)}>
-            <i className="ti ti-arrow-left" /> All dashboards
-          </button>
-          <div style={{ fontWeight:700, fontSize:15, color:T.navy, flex:1 }}>{d.name}</div>
-          <div style={{ fontSize:12, color:T.midGray }}>Saved {new Date(d.savedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
-        </div>
-        {/* hero */}
-        <div style={{ background:T.navy, borderRadius:16, marginBottom:20, overflow:'hidden' }}>
-          <div style={{ height:6, background:T.yellow }} />
-          <div style={{ padding:'26px 30px', display:'grid', gridTemplateColumns:'1fr auto', gap:20, alignItems:'center' }}>
-            <div>
-              <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase', color:T.yellow, marginBottom:6 }}>ROAR Executive Dashboard</div>
-              <div style={{ fontSize:'clamp(1.2rem,2vw,1.7rem)', fontWeight:800, color:'#fff', lineHeight:1.2 }}>{[d.client, d.publisher, d.year].filter(Boolean).join(' — ')}</div>
-            </div>
-            <div style={{ textAlign:'right' }}>
-              <div style={{ fontSize:'clamp(1.8rem,3vw,2.4rem)', fontWeight:800, color:T.yellow, letterSpacing:'-0.03em', lineHeight:1 }}>{fmtM(totalId)}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,.6)', marginTop:4 }}>Total Identified Value</div>
-            </div>
-          </div>
-        </div>
-        {/* KPI grid */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:12, marginBottom:20 }}>
-          {metrics.map(m => (
-            <div key={m.label} style={{ background:'#fff', border:`1px solid ${T.navy10}`, borderRadius:10, padding:'14px 16px', boxShadow:'0 4px 14px rgba(0,25,65,.05)' }}>
-              <div style={{ fontSize:'clamp(1rem,1.8vw,1.4rem)', fontWeight:800, color:m.color, letterSpacing:'-0.02em', lineHeight:1 }}>{fmtM(m.val)}</div>
-              <div style={{ marginTop:6, fontSize:10, fontWeight:700, letterSpacing:'0.05em', textTransform:'uppercase', color:T.slate }}>{m.label}</div>
-            </div>
-          ))}
-        </div>
-        {/* summary */}
-        {d.summary?.overview && (
-          <div style={{ background:'#fff', border:`1px solid ${T.navy10}`, borderRadius:16, padding:'22px 26px', boxShadow:'0 6px 22px rgba(0,25,65,.06)', marginBottom:20 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase', color:T.blue, marginBottom:10 }}>Executive Summary</div>
-            <p style={{ fontSize:14, color:T.slate, lineHeight:1.7, margin:0 }}>{d.summary.overview}</p>
-            {d.summary.key_accomplishments?.length > 0 && (
-              <ul style={{ marginTop:14, paddingLeft:18, color:T.slate, fontSize:13, lineHeight:1.7 }}>
-                {d.summary.key_accomplishments.slice(0,4).map((a,i) => <li key={i}>{a}</li>)}
-              </ul>
-            )}
-          </div>
-        )}
-        {/* ledger */}
-        {metrics.length > 0 && (
-          <div style={{ background:'#fff', border:`1px solid ${T.navy10}`, borderRadius:16, overflow:'hidden', boxShadow:'0 6px 22px rgba(0,25,65,.06)' }}>
-            <div style={{ padding:'16px 24px', borderBottom:`1px solid ${T.navy10}`, background:T.navy5 }}>
-              <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase', color:T.blue }}>Value Delivered Ledger</div>
-            </div>
-            <table style={{ width:'100%', borderCollapse:'collapse' }}>
-              <tbody>
-                {metrics.map(m => (
-                  <tr key={m.label} style={{ borderTop:`1px solid ${T.navy10}` }}>
-                    <td style={{ padding:'11px 20px', fontWeight:600, color:T.navy, fontSize:13 }}>{m.label}</td>
-                    <td style={{ padding:'11px 20px', textAlign:'right', fontWeight:800, fontSize:14, color:m.color }}>{fmtM(m.val)}</td>
-                  </tr>
-                ))}
-                <tr style={{ background:T.navy5, borderTop:`2px solid ${T.navy10}` }}>
-                  <td style={{ padding:'11px 20px', fontWeight:800, color:T.navy, fontSize:13 }}>Total Identified</td>
-                  <td style={{ padding:'11px 20px', textAlign:'right', fontWeight:800, fontSize:15, color:T.navy }}>{fmtM(totalId)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    );
+    return <AutoDashViewer
+      d={viewingAuto}
+      currentUser={loggedInUser}
+      allRecords={allRecords}
+      onBack={() => setViewingAuto(null)}
+      onRename={(newName) => {
+        setSavedList(prev => {
+          const next = prev.map(x => x.id === viewingAuto.id ? { ...x, name: newName } : x);
+          persistSaved(next.filter(x => !x.seed));
+          return next;
+        });
+        setViewingAuto(v => ({ ...v, name: newName }));
+      }}
+      onDuplicate={() => {
+        const copy = { ...viewingAuto, id:`auto-copy-${Date.now()}`, name: viewingAuto.name + ' (Copy)', savedAt: new Date().toISOString() };
+        setSavedList(prev => { const next = [copy, ...prev]; persistSaved(next.filter(x => !x.seed)); return next; });
+      }}
+      onDelete={() => {
+        setSavedList(prev => { const next = prev.filter(x => x.id !== viewingAuto.id); persistSaved(next.filter(x => !x.seed)); return next; });
+        setViewingAuto(null);
+      }}
+      onSaveEdits={(editedSummary) => {
+        const updated = { ...viewingAuto, summary: editedSummary };
+        setSavedList(prev => {
+          const next = prev.map(x => x.id === viewingAuto.id ? updated : x);
+          persistSaved(next.filter(x => !x.seed));
+          return next;
+        });
+        setViewingAuto(updated);
+      }}
+    />;
   }
 
   if (building) {
+    // New custom builds (no prior config) go to the redesigned CustomDashBuilder.
+    if (building.templateId === 'custom' && !building.initial) {
+      return (
+        <>
+          {scopedRecords && <ScopeBanner count={scopedRecords.length} onClear={clearScope} />}
+          <CustomDashBuilder
+            records={records}
+            allRecords={allRecords}
+            options={options}
+            loginClient={!lockedClient && loginClient ? loginClient : lockedClient || ''}
+            onClose={() => setBuilding(null)}
+            onSave={(dash) => { handleSave(dash); setBuilding(null); }}
+            loggedInUser={loggedInUser}
+          />
+        </>
+      );
+    }
     return (
       <>
         {scopedRecords && <ScopeBanner count={scopedRecords.length} onClear={clearScope} />}
@@ -2553,7 +2843,7 @@ ${body}
                 </p>
               ) : visibleList.map(d => {
           const reopenable = !d.seed && d.templateId;
-          const isAuto = d.type === 'auto';
+          const isAuto = d.type === 'auto' || d.type === 'custom';
           const clickable = reopenable || isAuto;
           const handleOpen = () => {
             if (isAuto) setViewingAuto(d);
@@ -2574,54 +2864,9 @@ ${body}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Badge color={d.badgeColor}>{d.badge}</Badge>
                 {isAuto && (
-                  <>
-                    <button
-                      className="btn ghost small"
-                      onClick={(e) => { e.stopPropagation(); handleOpen(); }}
-                      aria-label="View dashboard"
-                      title="View"
-                    >
-                      <i className="ti ti-eye" aria-hidden="true" />
-                    </button>
-                    <button
-                      className="btn ghost small"
-                      title="Duplicate"
-                      aria-label="Duplicate dashboard"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const copy = {
-                          ...d,
-                          id: `auto-copy-${Date.now()}`,
-                          name: d.name + ' (Copy)',
-                          savedAt: new Date().toISOString(),
-                        };
-                        setSavedList(prev => {
-                          const next = [copy, ...prev];
-                          persistSaved(next.filter(x => !x.seed));
-                          return next;
-                        });
-                      }}
-                    >
-                      <i className="ti ti-copy" aria-hidden="true" />
-                    </button>
-                    <button
-                      className="btn ghost small"
-                      title="Rename"
-                      aria-label="Rename dashboard"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const newName = window.prompt('Rename dashboard:', d.name);
-                        if (!newName || !newName.trim()) return;
-                        setSavedList(prev => {
-                          const next = prev.map(x => x.id === d.id ? { ...x, name: newName.trim() } : x);
-                          persistSaved(next.filter(x => !x.seed));
-                          return next;
-                        });
-                      }}
-                    >
-                      <i className="ti ti-pencil" aria-hidden="true" />
-                    </button>
-                  </>
+                  <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:4 }}>
+                    <i className="ti ti-eye" style={{ fontSize:13 }} /> View
+                  </span>
                 )}
                 {reopenable && (
                   <button

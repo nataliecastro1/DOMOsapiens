@@ -16576,5 +16576,965 @@
     "executive_summary": null,
     "batch_id": "batch_a7d7c5a864924647",
     "saved_at": "2026-07-30T19:35:41.118274"
+  },
+  {
+    "year": 2025,
+    "client": "Regeneron",
+    "publisher": "Oracle",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": null,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 85,
+    "source_file": "2025 06 - Regeneron - Quest ROAR v.1_FINAL (1).pptx",
+    "sme": "christina",
+    "stored_name": "c7792a5c367649ad8068c292ecfb17ef.pptx",
+    "saved_at": "2026-06-12T18:48:31.026177",
+    "record_id": "r_5d65de1d5b91"
+  },
+  {
+    "record_id": "r_8e830bcdda5c",
+    "year": 2024,
+    "client": "OneMain Financial",
+    "publisher": "IBM",
+    "date_delivered": "August 2024",
+    "currency": "USD",
+    "identified_risk": null,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": 21100.0,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": 398000.0,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 77,
+    "source_file": "2024 08 OneMain_IBM_ROAR.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "contract_spend": {
+        "source_slide": 12,
+        "confidence": 92.0,
+        "alternates": null
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 61.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.274733"
+  },
+  {
+    "record_id": "r_b3c6f4845738",
+    "year": 2026,
+    "client": "KeyBank",
+    "publisher": "IBM",
+    "date_delivered": "2026",
+    "currency": "USD",
+    "identified_risk": 31600.0,
+    "id_cost_avoidance": 31600.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 5200000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 79,
+    "source_file": "2026 04 KeyBank_IBMRH_ROAR_Draft_v2.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "id_cost_optimization": {
+        "source_slide": 12,
+        "confidence": 75.0,
+        "alternates": [
+          {
+            "value": "$714,300",
+            "confidence": 55
+          }
+        ]
+      },
+      "identified_risk": {
+        "source_slide": 11,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 79.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.293955"
+  },
+  {
+    "record_id": "r_7e346cfc8760",
+    "year": 2026,
+    "client": "Walmart",
+    "publisher": "Oracle",
+    "date_delivered": "May 2026",
+    "currency": "USD",
+    "identified_risk": 9300000.0,
+    "id_cost_avoidance": 9300000.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 85,
+    "source_file": "2026 05 06 - Walmart - Oracle ROAR.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 15,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 14,
+        "confidence": 88.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.298934"
+  },
+  {
+    "record_id": "r_84ef007ffbf7",
+    "year": 2025,
+    "client": "NASDAQ (IASP)",
+    "publisher": "IBM",
+    "date_delivered": "May 2025",
+    "currency": "USD",
+    "identified_risk": 0.0,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 82,
+    "source_file": "NASDAQ IBM ROAR 20250501.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 10,
+        "confidence": 82.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.301765"
+  },
+  {
+    "record_id": "r_53501fdbf057",
+    "year": 2023,
+    "client": "Nike",
+    "publisher": "Microsoft",
+    "date_delivered": "May 2023",
+    "currency": "USD",
+    "identified_risk": 685000.0,
+    "id_cost_avoidance": 5400000.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 81,
+    "source_file": "Nike_ROAR_5.5.23.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 11,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 79.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.314733",
+    "executive_summary": {
+      "test": true
+    }
+  },
+  {
+    "record_id": "r_685460c42924",
+    "year": 2024,
+    "client": "State of Utah",
+    "publisher": "IBM Risk & Opportunity Assessment Report (ROAR)",
+    "date_delivered": "July 2024",
+    "currency": "USD",
+    "identified_risk": 2800000.0,
+    "id_cost_avoidance": 2100000.0,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 81,
+    "source_file": "State of Utah_IBM_ROAR 2024 2024.07.18.pptx",
+    "sme": "Seed import",
+    "stored_name": null,
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 10,
+        "confidence": 82.0,
+        "alternates": null
+      },
+      "id_cost_avoidance": {
+        "source_slide": 10,
+        "confidence": 79.0,
+        "alternates": null
+      }
+    },
+    "saved_at": "2026-06-25T15:32:32.327597"
+  },
+  {
+    "record_id": "r_abb_sap_2026",
+    "year": 2026,
+    "client": "ABB",
+    "publisher": "SAP",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 27100000.0,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 297300.0,
+    "acc_cost_optimization": 0.0,
+    "realized_savings": null,
+    "contract_spend": 0.0,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 75,
+    "source_file": "ROAR 2026 March 30  - ABB - SAP_DRAFT.pdf",
+    "sme": "Porter",
+    "stored_name": "af7f2117d107452fb60053c6bc8d990b.pdf",
+    "executive_summary": {
+      "test": true
+    },
+    "saved_at": "2026-06-25T20:20:52.536102"
+  },
+  {
+    "record_id": "r_f6486bba9285",
+    "year": 2025,
+    "client": "UPS",
+    "publisher": "IBM",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 1080000.0,
+    "id_cost_avoidance": 1080000.0,
+    "acc_cost_avoidance": 1080000.0,
+    "id_cost_optimization": 6150000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 85,
+    "source_file": "UPS_IBM_ROAR_2025.pdf",
+    "sme": "christina",
+    "stored_name": "d11df2ce36474f72945d619ed659edfe.pdf",
+    "field_meta": null,
+    "saved_at": "2026-06-29T20:45:47.804597"
+  },
+  {
+    "record_id": "r_d27aafaeb1ed",
+    "year": 2025,
+    "client": "UPS",
+    "publisher": "IBM",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 1080000.0,
+    "id_cost_avoidance": 1080000.0,
+    "acc_cost_avoidance": 1080000.0,
+    "id_cost_optimization": 6150000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 85,
+    "source_file": "UPS IBM ROAR 2025 - Draft V4.pdf",
+    "sme": "Natalie",
+    "stored_name": "8f548513ef9d43e0962886fcd3734389.pdf",
+    "field_meta": null,
+    "executive_summary": {
+      "overview": "UPS engaged Anglepoint for comprehensive IBM license management covering up to 250 IBM products across 70,000 servers, 270,000 workstations, 5 mainframes, and 10,000 Red Hat servers. The engagement identified $8.9M in total optimization opportunities through risk mitigation and license right-sizing across both sub-capacity and non-ILMT products.",
+      "key_accomplishments": [
+        "Achieved full $1.08M cost avoidance by resolving compliance risks across 8 IBM products including InfoSphere DataStage, WebSphere Application Server, and DB2 editions",
+        "Identified $3.59M in potential cost savings from sub-capacity products with 23 products having more licenses than deployed",
+        "Identified $2.56M in potential cost savings from non-ILMT products with 43 products over-licensed",
+        "Reduced IBM ODM Server deployment from 23,400 to 7,420 licenses representing $858K in deployment trend savings",
+        "Completed Effective License Position analysis across 115 total IBM distributed products"
+      ],
+      "key_metrics": [
+        {
+          "label": "Total Optimization Identified",
+          "value": "$8.9M",
+          "context": "Combined cost avoidance and savings opportunities over 1-year period"
+        },
+        {
+          "label": "Sub-Capacity Products Over-Licensed",
+          "value": "23",
+          "context": "Products with more licenses than current deployment requires"
+        },
+        {
+          "label": "Non-ILMT Products Over-Licensed",
+          "value": "43",
+          "context": "Products with excess licenses identified for potential renewal reduction"
+        },
+        {
+          "label": "Zero-Deployment Products (Sub-Capacity)",
+          "value": "17",
+          "context": "Products carrying active S&S with no deployments detected"
+        },
+        {
+          "label": "Zero-Deployment Products (Non-ILMT)",
+          "value": "32",
+          "context": "Non-ILMT products with active maintenance but no usage"
+        }
+      ],
+      "recommendations": [
+        "Remove 23 IBM sub-capacity products with excess licenses from upcoming renewal if no growth planned - $2.34M potential savings",
+        "Validate and remove 17 sub-capacity products with 0% deployment from renewal - $2.91M potential savings",
+        "Remove 43 non-ILMT products with excess licenses from upcoming renewal - $1.82M potential savings",
+        "Confirm 32 non-ILMT products with 0% deployment are not in use and remove from renewal - $743K potential savings",
+        "Schedule WatsonX implementation with product stakeholders as next phase initiative"
+      ],
+      "primary_risks": [
+        "IBM DB2 Enterprise Server Edition deployment increased from 43,280 to 46,800 representing $107K in additional licensing exposure",
+        "IBM InfoSphere DataStage for Non-Production increased from 10,220 to 11,060 adding $12.5K in deployment costs",
+        "ELA renewal deadline of June 30, 2025 requires immediate action on license optimization decisions",
+        "IASP ELP delivery to IBM due July 31, 2025 for all sub-capacity products under IASP agreement"
+      ],
+      "market_risks": [
+        "IBM sub-capacity licensing requires continuous ILMT monitoring to maintain compliance position",
+        "Products with 0% utilization need deployment validation to confirm actual usage versus discovery gaps",
+        "IBM Cloud Pak and containerized product licensing adds complexity to consumption tracking"
+      ],
+      "additional_insights": [
+        "IBM Cloud Pak for Business Automation at 36.59% utilization represents $768K optimization opportunity",
+        "IBM Storage Suite for IBM Cloud Paks shows 0% utilization on 200 licenses worth $592K",
+        "IBM InfoSphere Master Data Management Family at 24.11% utilization offers $807K savings potential",
+        "Deployment trends show positive reduction in 10 products including $85K savings from IBM MQ reduction"
+      ],
+      "next_steps": [
+        "Implement cost savings recommendations by June 30, 2025 target date",
+        "Schedule WatsonX implementation with product stakeholders",
+        "Begin Non-PVU data collection for annual baseline establishment",
+        "Determine license counts for ELA renewal due June 30, 2025",
+        "Submit IASP ELP to IBM by July 31, 2025 with Anglepoint copied"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "$1.08M"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$1.08M"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Sub-Capacity Cost Savings",
+            "value": 3590000
+          },
+          {
+            "name": "Non-ILMT Cost Savings",
+            "value": 2560000
+          },
+          {
+            "name": "Risk Remediation",
+            "value": 1080000
+          },
+          {
+            "name": "Deployment Trend Savings",
+            "value": 1086298
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 12,
+          "remaining": 88
+        }
+      }
+    },
+    "saved_at": "2026-06-29T21:37:43.855501"
+  },
+  {
+    "record_id": "r_f07312a69521",
+    "year": 2026,
+    "client": "UPS",
+    "publisher": "Quest",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 165000.0,
+    "id_cost_avoidance": 30000.0,
+    "acc_cost_avoidance": 0.0,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 88,
+    "source_file": "2025 06 - Regeneron - Quest ROAR v.1_FINAL.pptx",
+    "sme": "christina",
+    "stored_name": "d9029be1670e4245a8b0aacf6253a7e1.pptx",
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 10,
+        "confidence": 82.5,
+        "alternates": []
+      },
+      "id_cost_avoidance": {
+        "source_slide": 9,
+        "confidence": 100.0,
+        "alternates": []
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 11,
+        "confidence": 61.02,
+        "alternates": []
+      }
+    },
+    "executive_summary": {
+      "overview": "Regeneron engaged Anglepoint for a Quest software Risk & Opportunity Assessment Report (ROAR) with a renewal date of September 15th, 2025. The engagement identified $165K in total compliance risk and $24K in cost avoidance opportunities, with $141K of initial risk already mitigated through additional license purchases.",
+      "key_accomplishments": [
+        "Identified and quantified $165K in total compliance risk exposure across Quest software estate",
+        "Achieved $141K risk mitigation through procurement of additional licenses for Change Auditor for AD and Recovery Manager for AD",
+        "Identified $24K in actionable cost avoidance opportunities",
+        "Completed comprehensive Effective License Position analysis across Quest product portfolio"
+      ],
+      "key_metrics": [
+        {
+          "label": "Total Annual Quest Spend",
+          "value": "$248K",
+          "context": "Based on 2024-2025 annual spend for Quest software estate"
+        },
+        {
+          "label": "Total Identified Risk",
+          "value": "$165K",
+          "context": "Quantified financial exposure due to non-compliance with Quest licensing terms"
+        },
+        {
+          "label": "Identified Cost Avoidance",
+          "value": "$24K",
+          "context": "Unbudgeted costs that can be prevented through proactive compliance measures"
+        },
+        {
+          "label": "Risk Mitigated",
+          "value": "$141K",
+          "context": "Initial risk reduced through additional license purchases in 2025 renewal"
+        }
+      ],
+      "recommendations": [
+        "Obtain Toad License Key Information: Request screenshots from end users to determine the edition of Toad deployed to improve Consumption Analysis accuracy",
+        "Optimize Toad Installations: Remove all installations and traces of Toad products (including components) that are not in use from the environment",
+        "Prioritize licensing decisions based on what is installed, licensed, and needed framework to optimize spend"
+      ],
+      "primary_risks": [
+        "Remaining compliance risk exposure after mitigation requires continued monitoring ahead of September 15th, 2025 renewal",
+        "Incomplete Toad license key information may result in inaccurate consumption analysis and unidentified compliance gaps",
+        "Software deployed but not needed represents ongoing cost exposure and compliance risk"
+      ],
+      "market_risks": [
+        "Quest renewal approaching September 15th, 2025 requires proactive preparation to optimize contract terms",
+        "Script output completeness gaps may impact accuracy of license position analysis"
+      ],
+      "additional_insights": [
+        "Year-over-Year analysis demonstrates effective risk mitigation through strategic license purchases",
+        "3-18 month demand forecasting data collection underway to support proactive license planning",
+        "No contracts were provided as part of this review, limiting contract terms analysis"
+      ],
+      "next_steps": [
+        "Procure Additional Licenses - COMPLETED: Additional licenses for Change Auditor for AD and Recovery Manager for AD purchased",
+        "Obtain Toad License Key Information: Request end user screenshots to determine deployed Toad editions",
+        "Optimize Installations: Remove unused Toad products and components from the environment"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "$165K"
+        },
+        {
+          "label": "Risk Mitigated",
+          "value": "$141K"
+        },
+        {
+          "label": "Cost Avoidance Identified",
+          "value": "$24K"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Risk Mitigated",
+            "value": 141000
+          },
+          {
+            "name": "Cost Avoidance Identified",
+            "value": 24000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 85,
+          "remaining": 15
+        }
+      }
+    },
+    "saved_at": "2026-06-30T02:56:58.659511"
+  },
+  {
+    "record_id": "r_89feeffeeef7",
+    "year": 2026,
+    "client": "",
+    "publisher": "",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": null,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 330000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 78,
+    "source_file": "OneMain - ROAR (1).pptx",
+    "sme": "christina",
+    "stored_name": "7fb0adace1c8450eb85a624c9d5b532d.pptx",
+    "field_meta": {
+      "id_cost_optimization": {
+        "source_slide": 10,
+        "confidence": 92.5,
+        "alternates": []
+      }
+    },
+    "executive_summary": {
+      "overview": "Anglepoint conducted an IBM Risk & Opportunity Assessment Report (ROAR) engagement for OneMain in 2026, covering up to 38 IBM Distributed products across 1,900 servers with one ILMT instance. The engagement focused on license compliance assessment and cost optimization opportunities.",
+      "key_accomplishments": [
+        "Completed comprehensive IBM license position assessment covering 38 distributed products",
+        "Analyzed deployment across 1,900 servers running IBM products",
+        "Identified $330K in cost optimization opportunities over a 1-year period"
+      ],
+      "key_metrics": [
+        {
+          "label": "Identified Cost Optimization",
+          "value": "$330K",
+          "context": "Total optimization opportunities identified over a 1-year period"
+        },
+        {
+          "label": "Servers Assessed",
+          "value": "1,900",
+          "context": "Servers running IBM products included in scope"
+        },
+        {
+          "label": "IBM Products Analyzed",
+          "value": "38",
+          "context": "IBM Distributed products assessed for license compliance"
+        }
+      ],
+      "recommendations": [
+        "Implement product-specific tactical actions to achieve strategic program outcomes",
+        "Execute actionable cost savings recommendations identified during the engagement",
+        "Address business needs related to maintenance renewal"
+      ],
+      "primary_risks": [],
+      "market_risks": [],
+      "additional_insights": [
+        "Engagement scope excluded Mainframe, Red Hat, and HCL Products",
+        "ILMT instance management is critical for IBM sub-capacity licensing compliance",
+        "Six-step process followed: Contract Discovery, Deployment Discovery, Effective Entitlement Position, Consumption Position, Effective License Position, and ROAR"
+      ],
+      "next_steps": [
+        "Complete Q2 Effective License Position (ELP) assessment",
+        "Address identified business needs",
+        "Prepare for upcoming maintenance renewal"
+      ],
+      "highlights": [
+        {
+          "label": "Identified Cost Optimization",
+          "value": "$330K"
+        },
+        {
+          "label": "Total Identified Risk",
+          "value": "$0"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Identified Cost Optimization",
+            "value": 330000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 0,
+          "remaining": 100
+        }
+      }
+    },
+    "saved_at": "2026-07-16T21:18:24.520622"
+  },
+  {
+    "record_id": "r_a75197475c98",
+    "year": 2026,
+    "client": "",
+    "publisher": "",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": null,
+    "id_cost_avoidance": 11050000.0,
+    "acc_cost_avoidance": 10400000.0,
+    "id_cost_optimization": null,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": 420000.0,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 85,
+    "source_file": "GeneralMills_QSR_FINAL.pptx",
+    "sme": "christina",
+    "stored_name": "c88e02183ef04c4a8910dcd776648e05.pptx",
+    "field_meta": null,
+    "executive_summary": {
+      "overview": "General Mills SAM engagement spanning from 2019 to 2026, focused on governing the Software Asset Lifecycle and providing actionable asset intelligence to optimize costs, minimize risks, and maximize negotiation leverage across material software assets.",
+      "key_accomplishments": [
+        "$10.4M in cost avoidance accomplished out of $11.1M identified",
+        "Delivered $11M in value over 18 months",
+        "Transitioned from initial engagement to continuous outcomes structure since 2019",
+        "Established SAM Charter Statement governing software asset lifecycle"
+      ],
+      "key_metrics": [
+        {
+          "label": "Identified Cost Avoidance",
+          "value": "$11.1M",
+          "context": "Total cost avoidance opportunities identified across engagement"
+        },
+        {
+          "label": "Accomplished Cost Avoidance",
+          "value": "$10.4M",
+          "context": "Successfully realized cost avoidance representing 94% accomplishment rate"
+        },
+        {
+          "label": "Annual Contract Spend",
+          "value": "$420K",
+          "context": "Current annual SAM service investment"
+        },
+        {
+          "label": "Value Delivered",
+          "value": "$11M",
+          "context": "Total value delivered over 18-month period"
+        }
+      ],
+      "recommendations": [
+        "Confirm SAP expansion approval and initiate scoping as the most critical unassessed software relationship",
+        "Begin Oracle Java initial assessment conversation",
+        "Finalize renewal SOW for signature",
+        "Meet with Marcus and Priya to align on SOW structure and ServiceNow SAM Pro boundary"
+      ],
+      "primary_risks": [
+        "SAP remains unassessed despite being the most critical software relationship at General Mills",
+        "Audit exposure from common triggers including economic downturn, contract cancellations, and publisher licensing model changes"
+      ],
+      "market_risks": [
+        "Multiple publishers actively auditing clients due to economic conditions and publisher revenue pressures",
+        "Risk from customers not following publisher strategy including cloud and subscription transitions",
+        "Exposure from support tickets raised for unlicensed programs"
+      ],
+      "additional_insights": [
+        "Engagement has evolved from initial 2019 engagement to continuous outcomes structure in 2026",
+        "Common audit triggers include M&A activity, employee count changes, agreement expirations, and failure to meet obligations like true-ups and ILMT reporting"
+      ],
+      "next_steps": [
+        "Deliver SAP scoping output and get SAP workstream live in Elevate",
+        "Deliver first SAP findings to Marcus and Sandra",
+        "Activate renewal contract",
+        "Begin Oracle Java initial assessment conversation"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "N/A"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$10.4M"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Cost Avoidance Accomplished",
+            "value": 10400000
+          },
+          {
+            "name": "Remaining Identified Opportunity",
+            "value": 700000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 94,
+          "remaining": 6
+        }
+      }
+    },
+    "saved_at": "2026-07-16T22:10:42.626669"
+  },
+  {
+    "record_id": "r_f30d4ff9406b",
+    "year": 2026,
+    "month": null,
+    "client": "OneMain Financial Holdings, LLC",
+    "publisher": "IBM",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": null,
+    "id_cost_avoidance": null,
+    "acc_cost_avoidance": null,
+    "id_cost_optimization": 330000.0,
+    "acc_cost_optimization": null,
+    "realized_savings": null,
+    "contract_spend": 330400.0,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 95,
+    "source_file": "OneMain - ROAR.pptx",
+    "sme": "christina",
+    "stored_name": "e7c5bbc49c4cc7fa1d9f6b2d89201dbf.pptx",
+    "field_meta": {
+      "id_cost_optimization": {
+        "source_slide": 10,
+        "confidence": 92.5,
+        "alternates": []
+      }
+    },
+    "executive_summary": {
+      "overview": "OneMain Financial Holdings, LLC engaged Anglepoint for IBM Software Asset Management in 2026, focusing on cost optimization opportunities within their IBM licensing portfolio.",
+      "key_accomplishments": [],
+      "key_metrics": [
+        {
+          "label": "Identified Cost Optimization",
+          "value": "$330K",
+          "context": "Potential cost optimization opportunities identified within IBM licensing environment"
+        }
+      ],
+      "recommendations": [
+        "Execute on the $330K identified cost optimization opportunities for IBM licensing",
+        "Establish tracking mechanisms to convert identified optimization into realized savings",
+        "Conduct detailed IBM license position analysis to validate optimization targets"
+      ],
+      "primary_risks": [],
+      "market_risks": [
+        "IBM licensing complexity and evolving subscription models may impact optimization timeline"
+      ],
+      "additional_insights": [
+        "Engagement is in early stages with optimization opportunities identified but not yet accomplished"
+      ],
+      "next_steps": [
+        "Develop implementation roadmap for $330K cost optimization initiatives",
+        "Prioritize optimization opportunities by complexity and potential savings",
+        "Establish baseline metrics to measure accomplished savings against identified targets"
+      ],
+      "highlights": [
+        {
+          "label": "Identified Cost Optimization",
+          "value": "$330K"
+        },
+        {
+          "label": "Accomplished Cost Optimization",
+          "value": "N/A"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Cost Optimization",
+            "value": 330000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 0,
+          "remaining": 100
+        }
+      }
+    },
+    "batch_id": null,
+    "saved_at": "2026-07-29T22:02:10.682987"
+  },
+  {
+    "record_id": "r_bf9c0ae65f74",
+    "year": 2025,
+    "month": null,
+    "client": "",
+    "publisher": "",
+    "date_delivered": null,
+    "currency": "USD",
+    "identified_risk": 222000.0,
+    "id_cost_avoidance": 222000.0,
+    "acc_cost_avoidance": 222000.0,
+    "id_cost_optimization": 507000.0,
+    "acc_cost_optimization": 282000.0,
+    "realized_savings": null,
+    "contract_spend": null,
+    "pricing_available": null,
+    "notes": null,
+    "elevate_deliverable": null,
+    "confidence": 95,
+    "source_file": "2025 December_Encova Insurance_IBM_ROAR_v1.pptx",
+    "sme": "christina",
+    "stored_name": "48db7c9de534b4225cc1cf1492ae3edf.pptx",
+    "field_meta": {
+      "identified_risk": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": []
+      },
+      "id_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 89.2,
+        "alternates": []
+      },
+      "acc_cost_avoidance": {
+        "source_slide": 13,
+        "confidence": 90.0,
+        "alternates": []
+      },
+      "id_cost_optimization": {
+        "source_slide": 12,
+        "confidence": 92.5,
+        "alternates": []
+      },
+      "acc_cost_optimization": {
+        "source_slide": 13,
+        "confidence": 95.0,
+        "alternates": [
+          {
+            "value": "$507,000",
+            "confidence": 62.5
+          }
+        ]
+      }
+    },
+    "executive_summary": {
+      "overview": "This SAM engagement delivered comprehensive license optimization and risk mitigation services, achieving significant cost avoidance and optimization outcomes. The relationship has yielded over $500K in identified cost optimization opportunities with strong execution against avoidance targets.",
+      "key_accomplishments": [
+        "Achieved 100% realization of $222K identified cost avoidance",
+        "Accomplished $282K in cost optimization from $507K identified opportunities (56% realization rate)",
+        "Fully mitigated $222K in identified compliance risk exposure"
+      ],
+      "key_metrics": [
+        {
+          "label": "Identified Risk",
+          "value": "$222K",
+          "context": "Total compliance risk exposure identified during assessment"
+        },
+        {
+          "label": "Cost Avoidance Achieved",
+          "value": "$222K",
+          "context": "100% of identified cost avoidance opportunities realized"
+        },
+        {
+          "label": "Cost Optimization Accomplished",
+          "value": "$282K",
+          "context": "56% of $507K identified optimization opportunities executed"
+        },
+        {
+          "label": "Total Value Delivered",
+          "value": "$504K",
+          "context": "Combined accomplished cost avoidance and optimization"
+        }
+      ],
+      "recommendations": [
+        "Pursue remaining $225K in identified cost optimization opportunities to maximize engagement ROI",
+        "Continue proactive license management to maintain compliance position against $222K risk exposure",
+        "Establish regular cadence to track optimization pipeline and accelerate realization rates"
+      ],
+      "primary_risks": [
+        "$222K in identified compliance risk requiring ongoing monitoring and remediation tracking",
+        "$225K in unrealized cost optimization opportunities at risk of expiration if not actioned"
+      ],
+      "market_risks": [],
+      "additional_insights": [
+        "Strong cost avoidance execution demonstrates effective preventative license management",
+        "Cost optimization realization rate of 56% indicates opportunity for process improvement in execution"
+      ],
+      "next_steps": [
+        "Review remaining $225K optimization backlog and prioritize high-impact opportunities",
+        "Validate risk mitigation status and confirm compliance posture",
+        "Develop action plan to increase cost optimization realization rate toward 80%+ target"
+      ],
+      "highlights": [
+        {
+          "label": "Total Identified Risk",
+          "value": "$222K"
+        },
+        {
+          "label": "Cost Avoidance Accomplished",
+          "value": "$222K"
+        }
+      ],
+      "charts": {
+        "roi_breakdown": [
+          {
+            "name": "Cost Avoidance Accomplished",
+            "value": 222000
+          },
+          {
+            "name": "Cost Optimization Accomplished",
+            "value": 282000
+          },
+          {
+            "name": "Cost Optimization Remaining",
+            "value": 225000
+          }
+        ],
+        "accomplishment_rate": {
+          "accomplished": 69,
+          "remaining": 31
+        }
+      }
+    },
+    "batch_id": null,
+    "saved_at": "2026-07-30T17:26:50.184220"
   }
 ]

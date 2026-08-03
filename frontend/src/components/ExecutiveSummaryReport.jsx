@@ -613,15 +613,6 @@ export default function ExecutiveSummaryReport({
   return (
     <div>
 
-      {/* ── Floating right-side AI chat panel ─────────────────────────────────── */}
-      <ChatSidePanel
-        onSubmit={handleAugment}
-        loading={augmenting}
-        error={augmentError}
-        toast={toast}
-        onDismissToast={() => { setToast(null); setNewKeys(new Set()); }}
-      />
-
       {/* ── PDF-captured report starts here ─────────────────────────────────── */}
       <div ref={innerRef} style={{ background: '#ffffff', borderRadius: 14, padding: '4px 0' }}>
 
@@ -875,6 +866,14 @@ export default function ExecutiveSummaryReport({
       </div>
 
       </div> {/* end PDF-captured ref */}
+
+      <ChatSidePanel
+        onSubmit={handleAugment}
+        loading={augmenting}
+        error={augmentError}
+        toast={toast}
+        onDismissToast={() => setToast(null)}
+      />
     </div>
   );
 }

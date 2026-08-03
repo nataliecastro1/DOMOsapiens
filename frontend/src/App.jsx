@@ -63,7 +63,7 @@ export default function App() {
   const renderView = () => {
     switch (activeView) {
       case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} onOpenRecord={r => { setDashboardTarget(r); setActiveView('dashboards'); }} />;
-      case 'dashboards': return <DashboardsView seed={dashboardSeed} onSeedConsumed={() => setDashboardSeed(null)} loginClient={loginClient} loginPublisher={loginPublisher} targetRecord={dashboardTarget} onTargetConsumed={() => setDashboardTarget(null)} />;
+      case 'dashboards': return <DashboardsView seed={dashboardSeed} onSeedConsumed={() => setDashboardSeed(null)} loginClient={loginClient} loginPublisher={loginPublisher} targetRecord={dashboardTarget} onTargetConsumed={() => setDashboardTarget(null)} loggedInUser={loggedInUser} />;
       case 'tracker':    return <TrackerView loggedInUser={loggedInUser} onSendToDashboards={sendToDashboards} />;
       case 'clients':    return <ClientsView />;
       case 'help':       return <HelpView />;
