@@ -84,11 +84,6 @@ export default function App() {
               <div className="page-title">{meta.title}</div>
               <div className="page-sub">{meta.sub}</div>
             </div>
-            {activeView === 'extract' && (
-              <button className="btn primary" onClick={() => setExtractionKey(k => k + 1)}>
-                <i className="ti ti-plus" aria-hidden="true" /> New Extraction
-              </button>
-            )}
           </div>
           <div className="content">{renderView()}</div>
         </main>

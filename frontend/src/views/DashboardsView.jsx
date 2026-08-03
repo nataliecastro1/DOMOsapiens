@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import AutoDashViewer from '../components/AutoDashViewer';
 import ValueAtAGlanceComponent from '../components/ValueAtAGlance';
 import Badge from '../components/Badge';
-import { getRecords, exportValueAtAGlanceHtml, exportValueAtAGlancePptx, exportLifetimeValueHtml, exportLifetimeValuePptx } from '../services/api';
+import { getRecords, exportValueAtAGlanceHtml, exportValueAtAGlancePptx, exportLifetimeValueHtml, exportLifetimeValuePptx, augmentExecutiveSummary } from '../services/api';
 import {
   METRICS, labelFor, deriveOptions, sum, countWithMetric,
   formatCurrency, matchFilters, groupSum,
@@ -1563,6 +1563,12 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
   // Which sections are hidden (keyed by SECTION_DEFS key)
   const [hiddenSecs, setHiddenSecs] = useState({});
   const toggleSec = (k) => setHiddenSecs(p => ({ ...p, [k]: !p[k] }));
+  // AI chatbox
+  const [chatOpen, setChatOpen]     = useState(false);
+  const [chatInput, setChatInput]   = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError]   = useState(null);
+  const [chatHistory, setChatHistory] = useState([]); // [{role:'user'|'ai', text}]
   const toLines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
 
   const filterArgs = useMemo(() => ({
@@ -1679,6 +1685,40 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
     background: on ? 'var(--blue)' : 'transparent',
     color: on ? '#fff' : 'var(--text-muted)',
   });
+
+  const handleChatSubmit = async () => {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+    setChatInput('');
+    setChatError(null);
+    setChatHistory(h => [...h, { role: 'user', text }]);
+    setChatLoading(true);
+    try {
+      const currentSummary = {
+        overview: sumOv,
+        key_accomplishments: toLines(sumAcc),
+        recommendations: toLines(sumRec),
+        primary_risks: [],
+        next_steps: [],
+      };
+      const updated = await augmentExecutiveSummary({
+        existing_summary: currentSummary,
+        additional_text: text,
+        client,
+        publisher: pubMode === 'Select specific' && selPubs.length === 1 ? selPubs[0] : '',
+      });
+      // Apply AI response back to the summary text fields
+      if (updated.overview)              setSumOv(updated.overview);
+      if (updated.key_accomplishments)   setSumAcc((updated.key_accomplishments || []).join('\n'));
+      if (updated.recommendations)       setSumRec((updated.recommendations || []).join('\n'));
+      setChatHistory(h => [...h, { role: 'ai', text: 'Done! The executive summary has been updated. Check the live preview.' }]);
+    } catch {
+      setChatError('Could not process the request. Please try again.');
+      setChatHistory(h => [...h, { role: 'ai', text: 'Sorry, something went wrong. Please try again.', error: true }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   return (
     <div>
@@ -1807,6 +1847,96 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
             />
           )}
         </div>
+
+        {/* ── AI Chat toggle button (fixed to right edge) ── */}
+        <button
+          onClick={() => setChatOpen(o => !o)}
+          title={chatOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
+          style={{
+            position: 'fixed', right: chatOpen ? 324 : 0, top: '50%', transform: 'translateY(-50%)',
+            zIndex: 200, width: 36, height: 64, borderRadius: '8px 0 0 8px',
+            background: 'var(--navy)', color: '#fff', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+            boxShadow: '-2px 0 10px rgba(0,0,0,.15)', transition: 'right .25s ease',
+          }}
+        >
+          <i className={`ti ${chatOpen ? 'ti-chevron-right' : 'ti-message-bolt'}`} />
+        </button>
+
+        {/* ── AI Chat drawer (fixed right side) ── */}
+        <div style={{
+          position: 'fixed', right: chatOpen ? 0 : -324, top: 0, bottom: 0, width: 320,
+          zIndex: 199, background: 'var(--surface)', borderLeft: '1px solid var(--border)',
+          display: 'flex', flexDirection: 'column', transition: 'right .25s ease',
+          boxShadow: '-4px 0 20px rgba(0,0,0,.12)',
+        }}>
+          {/* Header */}
+          <div style={{ background: 'var(--navy)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <i className="ti ti-sparkles" style={{ color: '#ffad00', fontSize: 16 }} />
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14, flex: 1 }}>AI Dashboard Assistant</span>
+            <button onClick={() => setChatOpen(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.6)', cursor: 'pointer', fontSize: 16, padding: 0 }}>
+              <i className="ti ti-x" />
+            </button>
+          </div>
+
+          {/* History */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {chatHistory.length === 0 && (
+              <div style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6 }}>
+                <p style={{ margin: '0 0 10px', fontWeight: 700, color: 'var(--text)', fontSize: 13 }}>Ask me to improve your dashboard:</p>
+                {[
+                  'Write an executive overview for this client',
+                  'Add a recommendation about cost reduction',
+                  'Summarize the key accomplishments',
+                ].map(ex => (
+                  <button key={ex} onClick={() => setChatInput(ex)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer', marginBottom: 6, fontFamily: 'inherit', lineHeight: 1.4 }}>
+                    "{ex}"
+                  </button>
+                ))}
+              </div>
+            )}
+            {chatHistory.map((msg, i) => (
+              <div key={i} style={{
+                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: '88%',
+                background: msg.role === 'user' ? 'var(--navy)' : msg.error ? '#fef2f2' : 'var(--bg)',
+                color: msg.role === 'user' ? '#fff' : msg.error ? '#b91c1c' : 'var(--text)',
+                border: msg.role === 'ai' ? '1px solid var(--border)' : 'none',
+                borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                padding: '8px 11px', fontSize: 12, lineHeight: 1.5,
+              }}>
+                {msg.role === 'ai' && <i className="ti ti-sparkles" style={{ color: '#ffad00', marginRight: 5, fontSize: 11 }} />}
+                {msg.text}
+              </div>
+            ))}
+            {chatLoading && (
+              <div style={{ alignSelf: 'flex-start', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '12px 12px 12px 2px', padding: '8px 11px', fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="ti ti-loader-2 spinning" /> Thinking…
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div style={{ padding: '12px', borderTop: '1px solid var(--border)', display: 'flex', gap: 6, flexShrink: 0 }}>
+            <input
+              type="text"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleChatSubmit()}
+              placeholder="Ask AI to update the dashboard…"
+              disabled={chatLoading}
+              style={{ flex: 1, fontSize: 12, padding: '8px 10px', borderRadius: 8, border: '1.5px solid var(--border)', fontFamily: 'inherit', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
+            />
+            <button
+              onClick={handleChatSubmit}
+              disabled={!chatInput.trim() || chatLoading}
+              style={{ background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: 8, width: 36, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, opacity: (!chatInput.trim() || chatLoading) ? 0.4 : 1 }}
+            >
+              <i className="ti ti-send" />
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );
