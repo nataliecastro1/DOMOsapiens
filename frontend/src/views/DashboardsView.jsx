@@ -2305,12 +2305,13 @@ function LifetimeValueSlide({ records = [], loginClient = '', selectedClient, on
 }
 
 // ─── Dashboards view ──────────────────────────────────────────────────────────
-export default function DashboardsView({ seed = null, onSeedConsumed, loginClient = '', loginPublisher = '', targetRecord = null, onTargetConsumed, loggedInUser = '' }) {
+export default function DashboardsView({ seed = null, onSeedConsumed, loginClient = '', loginPublisher = '', targetRecord = null, onTargetConsumed, loggedInUser = '', newDashId = null, onNewDashConsumed }) {
   const [allRecords, setAllRecords] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [savedList, setSavedList] = useState(loadSaved);
   const [building, setBuilding] = useState(null); // { templateId, initial }
   const [viewingAuto, setViewingAuto] = useState(null); // auto-saved dashboard from ScreenDone
+  const [highlightId, setHighlightId] = useState(null); // briefly green after coming from ScreenDone
   const [lockedClient, setLockedClient] = useState(null);
   const [showAllClients, setShowAllClients] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
@@ -2363,6 +2364,20 @@ export default function DashboardsView({ seed = null, onSeedConsumed, loginClien
       onSeedConsumed?.();
     }
   }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When coming from ScreenDone, highlight and auto-open the newly saved dashboard
+  useEffect(() => {
+    if (!newDashId) return;
+    onNewDashConsumed?.();
+    const fresh = loadSaved();
+    setSavedList(fresh);
+    const dash = fresh.find(d => d.id === newDashId);
+    if (dash) {
+      setHighlightId(newDashId);
+      setViewingAuto(dash);
+      setTimeout(() => setHighlightId(null), 5000);
+    }
+  }, [newDashId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When a specific past-document record is clicked, find its saved dashboard
   // (matched by client + publisher + year) and open it in view mode.
@@ -2979,16 +2994,20 @@ ${body}
             if (isAuto) setViewingAuto(d);
             else if (reopenable) setBuilding({ templateId: d.templateId, initial: d });
           };
+          const isNew = d.id === highlightId;
           return (
             <div
               className="list-row"
               key={d.id}
               onClick={clickable ? handleOpen : undefined}
-              style={{ cursor: clickable ? 'pointer' : 'default' }}
+              style={{ cursor: clickable ? 'pointer' : 'default', ...(isNew ? { outline: '2px solid #00875a', outlineOffset: -2, borderRadius: 10, background: 'rgba(0,135,90,.06)' } : {}) }}
               title={clickable ? 'Open dashboard' : undefined}
             >
               <div>
-                <div style={{ fontWeight: 500 }}>{d.name}</div>
+                <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {d.name}
+                  {isNew && <span style={{ fontSize: 10, fontWeight: 700, background: '#00875a', color: '#fff', borderRadius: 20, padding: '1px 8px', letterSpacing: '.04em' }}>NEW</span>}
+                </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{d.sub}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
