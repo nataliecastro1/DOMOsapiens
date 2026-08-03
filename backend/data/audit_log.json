@@ -49916,5 +49916,159 @@
     "old_value": null,
     "new_value": null,
     "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "dacc703b594d4e08b9e163c609946082",
+    "record_id": "r_bf9c0ae65f74",
+    "timestamp": "2026-08-03T17:31:08.790913",
+    "user": "christina",
+    "action": "edit",
+    "field": "applicable_from",
+    "old_value": null,
+    "new_value": "2026-01-01",
+    "note": "SME review \u2014 updated on re-extraction"
+  },
+  {
+    "event_id": "d81e446f0e8d413cb0642164bac95e13",
+    "record_id": "r_bf9c0ae65f74",
+    "timestamp": "2026-08-03T17:31:08.838215",
+    "user": "christina",
+    "action": "edit",
+    "field": "applicable_to",
+    "old_value": null,
+    "new_value": "2026-12-31",
+    "note": "SME review \u2014 updated on re-extraction"
+  },
+  {
+    "event_id": "421f2634408a47638a81b39d8ddad5b4",
+    "record_id": "r_bf9c0ae65f74",
+    "timestamp": "2026-08-03T17:31:08.866992",
+    "user": "christina",
+    "action": "edit",
+    "field": "year",
+    "old_value": 2025,
+    "new_value": 2026,
+    "note": "SME review \u2014 updated on re-extraction"
+  },
+  {
+    "event_id": "439c103147754a2f8a931504b95fa4ef",
+    "record_id": "r_bf9c0ae65f74",
+    "timestamp": "2026-08-03T17:31:08.901185",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "01b1cac1527f4c05b9e1a50b0f2fc379",
+    "record_id": "r_bf9c0ae65f74",
+    "timestamp": "2026-08-03T17:42:34.981583",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "f291176da7834c318643d589b6dd69b7",
+    "record_id": "r_f30d4ff9406b",
+    "timestamp": "2026-08-03T20:16:22.918654",
+    "user": "christina",
+    "action": "edit",
+    "field": "contract_spend",
+    "old_value": 330400.0,
+    "new_value": null,
+    "note": "SME review \u2014 updated on re-extraction"
+  },
+  {
+    "event_id": "035ab9b07c6d4a4c8498ea9e5c74f2b7",
+    "record_id": "r_f30d4ff9406b",
+    "timestamp": "2026-08-03T20:16:22.978899",
+    "user": "christina",
+    "action": "edit",
+    "field": "applicable_from",
+    "old_value": null,
+    "new_value": "2026-01-01",
+    "note": "SME review \u2014 updated on re-extraction"
+  },
+  {
+    "event_id": "eded68dc76ac44f28d2351cc540df449",
+    "record_id": "r_f30d4ff9406b",
+    "timestamp": "2026-08-03T20:16:23.016283",
+    "user": "christina",
+    "action": "edit",
+    "field": "applicable_to",
+    "old_value": null,
+    "new_value": "2026-12-31",
+    "note": "SME review \u2014 updated on re-extraction"
+  },
+  {
+    "event_id": "38dcf9238bb040ae9cd4eee0ed4f21f3",
+    "record_id": "r_f30d4ff9406b",
+    "timestamp": "2026-08-03T20:16:23.041912",
+    "user": "christina",
+    "action": "edit",
+    "field": "client",
+    "old_value": "OneMain Financial Holdings, LLC",
+    "new_value": "",
+    "note": "SME review \u2014 updated on re-extraction"
+  },
+  {
+    "event_id": "92f515de15ca4f17bb5159960d559b5e",
+    "record_id": "r_f30d4ff9406b",
+    "timestamp": "2026-08-03T20:16:23.076381",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "f07a3c47532447588b9e30727e8d18b7",
+    "record_id": "r_bf9c0ae65f74",
+    "timestamp": "2026-08-03T21:01:33.338142",
+    "user": "christina",
+    "action": "edit",
+    "field": "identified_risk",
+    "old_value": 222000.0,
+    "new_value": 221600.0,
+    "note": "SME review \u2014 updated on re-extraction"
+  },
+  {
+    "event_id": "240dc9d233004aa0927258f069827cc3",
+    "record_id": "r_bf9c0ae65f74",
+    "timestamp": "2026-08-03T21:01:33.390738",
+    "user": "christina",
+    "action": "edit",
+    "field": "id_cost_avoidance",
+    "old_value": 222000.0,
+    "new_value": 221600.0,
+    "note": "SME review \u2014 updated on re-extraction"
+  },
+  {
+    "event_id": "41bc0f4aa2b2482f96d7cf89a69ddc89",
+    "record_id": "r_bf9c0ae65f74",
+    "timestamp": "2026-08-03T21:01:33.419371",
+    "user": "christina",
+    "action": "edit",
+    "field": "acc_cost_avoidance",
+    "old_value": 222000.0,
+    "new_value": 221600.0,
+    "note": "SME review \u2014 updated on re-extraction"
+  },
+  {
+    "event_id": "05505995e3d04c55b6c9b87dd9b4d068",
+    "record_id": "r_bf9c0ae65f74",
+    "timestamp": "2026-08-03T21:01:33.546598",
+    "user": "christina",
+    "action": "update",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Re-stored from extraction"
   }
 ]

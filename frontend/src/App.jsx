@@ -40,6 +40,7 @@ export default function App() {
   // Null when the user opens Dashboards normally (works off the full dataset).
   const [dashboardSeed, setDashboardSeed] = useState(null);
   const [dashboardTarget, setDashboardTarget] = useState(null); // record to open directly
+  const [newDashId, setNewDashId] = useState(null); // newly saved auto-dashboard to highlight
   const meta = VIEW_META[activeView] || VIEW_META.extract;
 
   // Jump to Dashboards scoped to exactly the rows currently shown in the Tracker.
@@ -62,8 +63,8 @@ export default function App() {
 
   const renderView = () => {
     switch (activeView) {
-      case 'extract':    return <ExtractionView key={extractionKey} onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} onOpenRecord={r => { setDashboardTarget(r); setActiveView('dashboards'); }} />;
-      case 'dashboards': return <DashboardsView seed={dashboardSeed} onSeedConsumed={() => setDashboardSeed(null)} loginClient={loginClient} loginPublisher={loginPublisher} targetRecord={dashboardTarget} onTargetConsumed={() => setDashboardTarget(null)} loggedInUser={loggedInUser} />;
+      case 'extract':    return <ExtractionView key={extractionKey} onNav={(view, dashId) => { if (dashId) setNewDashId(dashId); setActiveView(view); }} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} onOpenRecord={r => { setDashboardTarget(r); setActiveView('dashboards'); }} />;
+      case 'dashboards': return <DashboardsView seed={dashboardSeed} onSeedConsumed={() => setDashboardSeed(null)} loginClient={loginClient} loginPublisher={loginPublisher} targetRecord={dashboardTarget} onTargetConsumed={() => setDashboardTarget(null)} loggedInUser={loggedInUser} newDashId={newDashId} onNewDashConsumed={() => setNewDashId(null)} />;
       case 'tracker':    return <TrackerView loggedInUser={loggedInUser} onSendToDashboards={sendToDashboards} />;
       case 'clients':    return <ClientsView />;
       case 'help':       return <HelpView />;
@@ -84,11 +85,6 @@ export default function App() {
               <div className="page-title">{meta.title}</div>
               <div className="page-sub">{meta.sub}</div>
             </div>
-            {activeView === 'extract' && (
-              <button className="btn primary" onClick={() => setExtractionKey(k => k + 1)}>
-                <i className="ti ti-plus" aria-hidden="true" /> New Extraction
-              </button>
-            )}
           </div>
           <div className="content">{renderView()}</div>
         </main>

@@ -3900,7 +3900,7 @@ function DollarTooltip({ active, payload, label }) {
 }
 
 // ─── ScreenDone: auto-generated dashboard draft ──────────────────────────────
-function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onDashboards, loggedInUser = '', onBack }) {
+function ScreenDone({ finalFields, selectedFile, onTracker, onDashboards, loggedInUser = '', onBack }) {
   const [summary, setSummary]               = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError]     = useState(null);
@@ -3928,6 +3928,7 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
   const accOptim      = get('Accomplished Cost Optimization');
   const idSavings     = get('Identified Cost Savings');
   const realSavings   = get('Realized Cost Savings');
+  const contractSpend = get('Contract Spend') || get('Annual Publisher Contract');
   const totalId       = idAvoidance + idOptim + idSavings || idRisk || 0;
   const totalAcc      = accAvoidance + accOptim || 0;
 
@@ -3953,8 +3954,9 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
       acc_cost_avoidance: accAvoidance || null,
       id_cost_optimization: idOptim || null,
       acc_cost_optimization: accOptim || null,
-      realized_savings: idSavings || null,
-      contract_spend: realSavings || null,
+      id_cost_savings: idSavings || null,
+      realized_savings: realSavings || null,
+      contract_spend: contractSpend || null,
       confidence: avgConf || null,
       stored_name: selectedFile?.stored_name || null,
       file_path: selectedFile?.file_path || null,
@@ -4020,13 +4022,13 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
 
   const handleSaveDashboard = () => {
     setDashSaveError(null);
+    const dash = buildDash();
     try {
-      persistDash(buildDash());
-      setDashSaved(true);
-      setTimeout(() => onDashboards(), 1200);
+      persistDash(dash);
     } catch (e) {
-      setDashSaveError('Could not save — storage may be full. Try clearing old dashboards.');
+      setDashSaveError('Could not save — storage may be full.');
     }
+    onDashboards(dash.id);
   };
 
   const handleDownloadPDF = () => {
@@ -4136,25 +4138,14 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button className="btn ghost small" onClick={() => setEditMode(e => !e)}>
-            <i className={`ti ${editMode ? 'ti-eye' : 'ti-edit'}`} />
-            {editMode ? 'Preview' : 'Edit'}
-          </button>
-          <button className="btn ghost small" onClick={onNewExtraction}>
-            <i className="ti ti-plus" /> New Extraction
-          </button>
           {dashSaveError && (
             <span style={{ fontSize: 12, color: T.red }}>{dashSaveError}</span>
           )}
           <button
             className="btn primary"
             onClick={handleSaveDashboard}
-            disabled={dashSaved}
-            style={dashSaved ? { background: T.green } : {}}
           >
-            {dashSaved
-              ? <><i className="ti ti-circle-check" /> Saved!</>
-              : <><i className="ti ti-layout-dashboard" /> Save Dashboard</>}
+            <i className="ti ti-layout-dashboard" /> Go to Dashboards
           </button>
         </div>
       </div>
@@ -4640,20 +4631,6 @@ function ScreenDone({ finalFields, selectedFile, onNewExtraction, onTracker, onD
         </div>
       </div>
 
-      {editMode && (
-        <div className="no-print" style={{
-          position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
-          background: T.navy, color: '#fff', borderRadius: 30, padding: '10px 20px',
-          fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10,
-          boxShadow: '0 8px 28px rgba(0,25,65,.35)', zIndex: 999,
-        }}>
-          <i className="ti ti-edit" style={{ color: T.yellow }} />
-          Edit mode — click any text to edit · use Hide/Show to toggle sections
-          <button onClick={() => setEditMode(false)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 20, padding: '4px 12px', color: '#fff', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', fontWeight: 700 }}>
-            Done Editing
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -4870,7 +4847,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
       smeName={smeName}
     />,
     null,
-    <ScreenDone     key={6} finalFields={aggregateFields} selectedFile={doneMeta} onNewExtraction={handleReset} onTracker={() => onNav('tracker')} onDashboards={() => onNav('dashboards')} loggedInUser={loggedInUser} onBack={() => setStep(4)} />,
+    <ScreenDone     key={6} finalFields={aggregateFields} selectedFile={doneMeta} onTracker={() => onNav('tracker')} onDashboards={(dashId) => onNav('dashboards', dashId)} loggedInUser={loggedInUser} onBack={() => setStep(4)} />,
   ];
 
   return (

@@ -24,16 +24,16 @@ You are reading a ROAR (Return on Anglepoint Relationship) document.
 
 Extract ALL available information and return ONLY valid JSON (no markdown, no explanation):
 {
-  "overview": "2-3 sentence engagement overview: client name, SAM scope, relationship context",
-  "key_accomplishments": ["Specific accomplishment with numbers/publishers/license counts", "..."],
+  "overview": "A polished 4-6 sentence executive narrative covering scope, financial impact, progress, material exposure, and the decision or action leadership should prioritize",
+  "key_accomplishments": ["Specific, outcome-led accomplishment with quantified business impact and relevant publisher or scope context", "..."],
   "key_metrics": [
     {"label": "Metric name", "value": "$X.XM or a number", "context": "brief one-line explanation"}
   ],
-  "recommendations": ["Actionable recommendation with specific details", "..."],
-  "primary_risks": ["Specific identified risk with context and exposure", "..."],
+  "recommendations": ["Prioritized, actionable recommendation explaining what to do, why it matters, and the expected business outcome", "..."],
+  "primary_risks": ["Specific identified risk with financial or operational context, business implication, and urgency", "..."],
   "market_risks": ["Vendor or market-specific risk", "..."],
   "additional_insights": ["Other relevant insight from the document", "..."],
-  "next_steps": ["Concrete next step, with timeline if mentioned", "..."],
+  "next_steps": ["Concrete next step with an owner or responsible function and timeline when supported by the source", "..."],
   "highlights": [
     {"label": "Total Identified Risk", "value": "$X.XM"},
     {"label": "Cost Avoidance Accomplished", "value": "$X.XM"}
@@ -46,6 +46,14 @@ Extract ALL available information and return ONLY valid JSON (no markdown, no ex
 
 Rules:
 - Use ONLY information actually in the document — never invent data
+- Synthesize information across the full document; do not merely repeat slide headings or isolated bullets
+- Aim for 4-6 accomplishments, 3-5 recommendations, 3-5 risks/insights, and 3-5 next steps when the source supports them
+- Each substantive bullet should normally be 1-2 complete sentences and explain business significance, not just state a number
+- Prioritize material financial impact, realized value versus remaining opportunity, renewal/audit exposure, governance gaps, and decisions requiring executive attention
+- Distinguish identified opportunities from accomplished or realized outcomes; never describe pipeline value as delivered value
+- Reconcile KPI values with the document narrative. If figures conflict, use the most authoritative consolidated figure and note the limitation in context without inventing a resolution
+- Avoid generic consulting language, unsupported superlatives, repetition, and vague recommendations
+- Preserve the source language for proper nouns, but write the narrative in polished US business English
 - Empty arrays [] for sections with no data; do NOT omit any key
 - charts.roi_breakdown values must be plain numbers (no $ signs)
 - accomplishment_rate values are percentages that sum to 100
@@ -79,6 +87,7 @@ class SummaryRequest(BaseModel):
     acc_cost_avoidance: Optional[float] = None
     id_cost_optimization: Optional[float] = None
     acc_cost_optimization: Optional[float] = None
+    id_cost_savings: Optional[float] = None
     realized_savings: Optional[float] = None
     contract_spend: Optional[float] = None
     confidence: Optional[int] = None
@@ -133,6 +142,7 @@ def _build_content(body: SummaryRequest, file_path: str) -> list:
         f"Accomplished Cost Avoidance: {_fmt(body.acc_cost_avoidance) or 'N/A'}",
         f"Identified Cost Optimization: {_fmt(body.id_cost_optimization) or 'N/A'}",
         f"Accomplished Cost Optimization: {_fmt(body.acc_cost_optimization) or 'N/A'}",
+        f"Identified Cost Savings: {_fmt(body.id_cost_savings) or 'N/A'}",
         f"Realized Cost Savings: {_fmt(body.realized_savings) or 'N/A'}",
         f"Annual Contract Spend: {_fmt(body.contract_spend) or 'N/A'}",
         f"SME: {body.sme or 'N/A'}",
@@ -247,11 +257,14 @@ async def generate_summary(body: SummaryRequest):
             f"Accomplished Cost Avoidance: {_fmt(body.acc_cost_avoidance) or 'N/A'}",
             f"Identified Cost Optimization: {_fmt(body.id_cost_optimization) or 'N/A'}",
             f"Accomplished Cost Optimization: {_fmt(body.acc_cost_optimization) or 'N/A'}",
+            f"Identified Cost Savings: {_fmt(body.id_cost_savings) or 'N/A'}",
             f"Realized Cost Savings: {_fmt(body.realized_savings) or 'N/A'}",
+            f"Annual Contract Spend: {_fmt(body.contract_spend) or 'N/A'}",
+            f"Extraction Confidence: {f'{body.confidence}%' if body.confidence is not None else 'N/A'}",
         ]
         content = [{"type": "text", "text": "Generate an executive summary for this ROI engagement:\n\n" + "\n".join(kpi_lines)}]
 
-    data = _call_claude(SUMMARY_PROMPT, content, max_tokens=2000)
+    data = _call_claude(SUMMARY_PROMPT, content, max_tokens=3500)
     return _ensure_structure(data)
 
 
