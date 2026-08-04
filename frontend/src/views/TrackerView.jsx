@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
 import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog, getFields, generateExecutiveSummary, saveExecutiveSummary, deleteRecord } from '../services/api';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
+import SendToHubModal from '../components/SendToHubModal';
 
 // ─── Field catalog ──────────────────────────────────────────────────────────
 // Single source of truth lives in the backend (models/field_catalog.py) and is
@@ -259,6 +260,7 @@ function TabROIData({ onSendToDashboards }) {
   const [summaryRecord, setSummaryRecord] = useState(null);
   const [generating, setGenerating] = useState(null); // record_id being generated
   const [deleteTarget, setDeleteTarget] = useState(null); // { record_id, client }
+  const [hubTarget, setHubTarget] = useState(null); // record being sent to the delivery hub
   const [deleteReason, setDeleteReason] = useState('');
   const [deleteError, setDeleteError] = useState(false);
   // Filter builder: a list of { field, query } conditions, AND-ed together.
@@ -516,7 +518,7 @@ function TabROIData({ onSendToDashboards }) {
 
   if (loading || fieldsLoading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading records…</p>;
 
-  const totalCols = visibleCols.length + 3; // index + exec summary + delete
+  const totalCols = visibleCols.length + 4; // index + exec summary + hub + delete
 
   return (
     <>
@@ -609,6 +611,7 @@ function TabROIData({ onSendToDashboards }) {
                   </th>
                 ))}
                 <th>Exec. Summary</th>
+                <th style={{ width: 44 }}>Hub</th>
                 <th style={{ width: 40 }}></th>
               </tr>
             </thead>
@@ -658,6 +661,22 @@ function TabROIData({ onSendToDashboards }) {
                           : <><i className="ti ti-sparkles" /> Generate</>}
                       </button>
                     )}
+                  </td>
+                  <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                    <button
+                      onClick={() => setHubTarget(r)}
+                      title="Send this record to the Delivery Hub (roi_metrics)"
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--text-faint)', padding: '2px 6px', borderRadius: 6,
+                        fontSize: 15, lineHeight: 1,
+                        transition: 'color 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = 'var(--blue)'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}
+                    >
+                      <i className="ti ti-send" />
+                    </button>
                   </td>
                   <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
                     <button
@@ -711,6 +730,10 @@ function TabROIData({ onSendToDashboards }) {
 
       {summaryRecord && (
         <ExecSummaryDrawer record={summaryRecord} onClose={() => setSummaryRecord(null)} />
+      )}
+
+      {hubTarget && (
+        <SendToHubModal record={hubTarget} onClose={() => setHubTarget(null)} />
       )}
 
       {/* Delete confirmation modal */}

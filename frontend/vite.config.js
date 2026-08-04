@@ -10,6 +10,13 @@ export default defineConfig({
     port: 3600,
     proxy: {
       '/api': 'http://localhost:3599',
+      // Local stand-in for Alfred's same-origin routing: deployed, hub calls
+      // go to /app/delivery-hub/* on the shared origin; locally they hit the
+      // hub dev server directly (cargo run in app-delivery-hub, port 3501).
+      '/hub': {
+        target: 'http://localhost:3501',
+        rewrite: (path) => path.replace(/^\/hub/, ''),
+      },
     },
   },
 });

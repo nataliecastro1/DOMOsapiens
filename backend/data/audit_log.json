@@ -50070,5 +50070,16 @@
     "old_value": null,
     "new_value": null,
     "note": "Re-stored from extraction"
+  },
+  {
+    "event_id": "ed5f9fbb822f4bc38e820e2076707d02",
+    "record_id": "r_4fe33134a030",
+    "timestamp": "2026-08-04T15:11:26.520101",
+    "user": "local-dev",
+    "action": "create",
+    "field": null,
+    "old_value": null,
+    "new_value": null,
+    "note": "Stored from extraction"
   }
 ]
