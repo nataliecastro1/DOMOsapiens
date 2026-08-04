@@ -57,10 +57,14 @@ def validate(filename: str) -> str:
     return ext
 
 
-def save_upload(filename: str, content: bytes) -> dict:
+def save_upload(filename: str, content: bytes, uploaded_by: dict | None = None) -> dict:
     """Persist an uploaded file: durable copy in the file store, metadata row
     in Postgres, and a warm copy in the local render cache. Dedupes by content
-    hash — identical bytes yield the same file ID and a single stored object."""
+    hash — identical bytes yield the same file ID and a single stored object.
+
+    `uploaded_by` is the SSO identity from services.identity.current_user() —
+    resolved from Alfred's headers by the route, never from the request body.
+    """
     ext = validate(filename)
     if not content:
         raise UploadError("Uploaded file is empty.")
@@ -89,6 +93,8 @@ def save_upload(filename: str, content: bytes) -> dict:
         "storage_backend": store.name,
         "size": len(content),
         "content_type": ext.lstrip("."),
+        "uploaded_by": (uploaded_by or {}).get("username") or None,
+        "uploaded_by_email": (uploaded_by or {}).get("email") or None,
     }
 
     if db.db_available():

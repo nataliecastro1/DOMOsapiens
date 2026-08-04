@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getHubClientScopes, getHubDeliverables, saveRoiToHub } from '../services/hub';
+import { updateRecord } from '../services/api';
 
 // Push one reviewed tracker record into the delivery hub's roi_metrics.
 // Flow: pick the hub client scope (pre-matched against the record's client
@@ -19,7 +20,13 @@ export default function SendToHubModal({ record, onClose }) {
     getHubClientScopes()
       .then(list => {
         setScopes(list);
-        // Preselect the scope whose name contains the record's client (or vice versa).
+        // A record created from the Status View ROI button already knows its
+        // scope — use it rather than guessing from the client name.
+        if (record.hub_scope_id && list.some(s => s.id === record.hub_scope_id)) {
+          setScopeId(record.hub_scope_id);
+          return;
+        }
+        // Otherwise preselect the scope whose name contains the record's client.
         const client = (record.client || '').toLowerCase();
         if (client) {
           const hit = list.find(s => {
@@ -37,9 +44,14 @@ export default function SendToHubModal({ record, onClose }) {
     setDeliverables(null);
     setDeliverableId('');
     getHubDeliverables(scopeId)
-      .then(setDeliverables)
+      .then(list => {
+        setDeliverables(list);
+        // Same for the deliverable the hub sent us to.
+        const handoff = record.hub_deliverable_id;
+        if (handoff && list.some(d => d.id === handoff)) setDeliverableId(String(handoff));
+      })
       .catch(e => { setDeliverables([]); setError(e.message); });
-  }, [scopeId]);
+  }, [scopeId, record]);
 
   const canSend = scopeId && deliverableId && phase !== 'sending';
   const scopeName = useMemo(
@@ -57,6 +69,25 @@ export default function SendToHubModal({ record, onClose }) {
       });
       setResult(res);
       setPhase('done');
+
+      // Store the hub references back on our record so the link is visible
+      // here too, and a re-send targets the same row. Best-effort: the hub
+      // already has the data, so a failure here must not look like a failure.
+      try {
+        await updateRecord(record.record_id, {
+          changes: {
+            hub_scope_id: scopeId,
+            hub_deliverable_id: Number(deliverableId),
+            hub_deliverable_name:
+              deliverables?.find(d => String(d.id) === String(deliverableId))?.deliverable_name || null,
+            hub_roi_metric_id: res?.id ?? null,
+            hub_saved_at: new Date().toISOString(),
+          },
+          note: `Pushed to delivery hub (${scopeName})`,
+        });
+      } catch (e) {
+        console.warn('[hub] record saved to hub but back-reference not stored:', e.message);
+      }
     } catch (e) {
       setError(e.message);
       setPhase('idle');

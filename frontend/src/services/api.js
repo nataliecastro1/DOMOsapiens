@@ -1,3 +1,5 @@
+import { withHubContext } from './hubContext';
+
 // API base derived from Vite's base URL: '/' in local dev (the vite proxy
 // forwards /api → localhost:3599), '/app/roi-prototype/' on Alfred (the
 // gateway strips that prefix before forwarding, so the backend sees /api).
@@ -72,7 +74,9 @@ export async function extractFromUpload(file) {
 
 /** Save an extracted ROI record to the tracker (upserts by source_file). */
 export async function saveRecord(record) {
-  return post('/records', record);
+  // Carry the hub's deliverable/workstream references onto every record saved
+  // in a session that started from the Status View ROI button.
+  return post('/records', withHubContext(record));
 }
 
 /** Return all saved ROI records. */

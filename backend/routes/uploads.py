@@ -3,9 +3,10 @@ import os
 import re
 import zipfile
 from pathlib import Path
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 
+from services.identity import current_user
 from services.uploads import UploadError, delete_upload, list_uploads, local_path, save_upload
 
 router = APIRouter(prefix="/api")
@@ -79,11 +80,14 @@ def _first_slide_text(path: str) -> str:
 
 
 @router.post("/uploads")
-async def upload_file(file: UploadFile = File(...)):
-    """Accept a source document (PPTX/PDF/XLSX) and store it on disk."""
+async def upload_file(request: Request, file: UploadFile = File(...)):
+    """Accept a source document (PPTX/PDF/XLSX) and store it durably.
+
+    The uploader is taken from Alfred's SSO headers, so `uploaded_by` records
+    who actually sent the file rather than whatever the client claimed."""
     content = await file.read()
     try:
-        return save_upload(file.filename, content)
+        return save_upload(file.filename, content, uploaded_by=current_user(request))
     except UploadError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

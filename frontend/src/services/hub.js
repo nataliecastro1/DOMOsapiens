@@ -25,6 +25,22 @@ async function hubFetch(path, options = {}) {
   return res.json();
 }
 
+/**
+ * What the signed-in user may do with ROI, per the hub's RBAC.
+ * The hub is the single authority — it enforces the same answer server-side on
+ * /v1/roi/extract (roster role) and /v1/roi/save (Status View edit).
+ * Returns null when the hub can't be reached, so the UI can fail open locally
+ * rather than locking a developer out.
+ */
+export async function getRoiAccess() {
+  try {
+    return await hubFetch('/roi/access');
+  } catch (e) {
+    console.warn('[hub] could not resolve ROI access:', e.message);
+    return null;
+  }
+}
+
 /** Hub client scopes as {id, name}. Uses /v1/sows because its `id` is the
  * client_scopes.id key that both the deliverables listing and roi/save
  * expect (client-scope-ids returns pathfinder ids — a different key). */

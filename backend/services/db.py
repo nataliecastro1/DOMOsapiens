@@ -34,6 +34,9 @@ CREATE TABLE IF NOT EXISTS files (
     size_bytes      BIGINT,
     uploaded_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Attribution comes from Alfred's SSO headers, never the request body.
+ALTER TABLE files ADD COLUMN IF NOT EXISTS uploaded_by       TEXT;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS uploaded_by_email TEXT;
 """
 
 _available = False
@@ -73,13 +76,18 @@ def upsert_file(meta: dict) -> None:
         conn.execute(
             """
             INSERT INTO files (id, filename, stored_name, storage_key,
-                               storage_backend, content_type, size_bytes)
+                               storage_backend, content_type, size_bytes,
+                               uploaded_by, uploaded_by_email)
             VALUES (%(id)s, %(filename)s, %(stored_name)s, %(storage_key)s,
-                    %(storage_backend)s, %(content_type)s, %(size)s)
+                    %(storage_backend)s, %(content_type)s, %(size)s,
+                    %(uploaded_by)s, %(uploaded_by_email)s)
             ON CONFLICT (id) DO UPDATE SET
                 filename = EXCLUDED.filename,
                 storage_key = EXCLUDED.storage_key,
-                storage_backend = EXCLUDED.storage_backend
+                storage_backend = EXCLUDED.storage_backend,
+                -- keep the first uploader on a dedup hit; only fill if unknown
+                uploaded_by = COALESCE(files.uploaded_by, EXCLUDED.uploaded_by),
+                uploaded_by_email = COALESCE(files.uploaded_by_email, EXCLUDED.uploaded_by_email)
             """,
             meta,
         )
@@ -90,7 +98,8 @@ def get_file(file_id_or_stored_name: str) -> dict | None:
         row = conn.execute(
             """
             SELECT id, filename, stored_name, storage_key, storage_backend,
-                   content_type, size_bytes, uploaded_at
+                   content_type, size_bytes, uploaded_at,
+                   uploaded_by, uploaded_by_email
             FROM files
             WHERE id = %(v)s OR stored_name = %(v)s
             """,
@@ -103,7 +112,8 @@ def find_by_id_prefix(prefix: str) -> dict | None:
     with _conn() as conn:
         row = conn.execute(
             "SELECT id, filename, stored_name, storage_key, storage_backend,"
-            "       content_type, size_bytes, uploaded_at"
+            "       content_type, size_bytes, uploaded_at,"
+            "       uploaded_by, uploaded_by_email"
             " FROM files WHERE id LIKE %s ORDER BY uploaded_at DESC LIMIT 1",
             (prefix + "%",),
         ).fetchone()
@@ -114,7 +124,8 @@ def list_files() -> list[dict]:
     with _conn() as conn:
         rows = conn.execute(
             "SELECT id, filename, stored_name, storage_key, storage_backend,"
-            "       content_type, size_bytes, uploaded_at"
+            "       content_type, size_bytes, uploaded_at,"
+            "       uploaded_by, uploaded_by_email"
             " FROM files ORDER BY uploaded_at DESC"
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
@@ -138,4 +149,6 @@ def _row_to_dict(row) -> dict | None:
         "content_type": row[5],
         "size": row[6],
         "uploaded_at": row[7].isoformat() if row[7] else None,
+        "uploaded_by": row[8],
+        "uploaded_by_email": row[9],
     }

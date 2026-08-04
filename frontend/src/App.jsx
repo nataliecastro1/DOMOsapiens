@@ -9,7 +9,10 @@ import HelpView from './views/HelpView';
 import LoginView from './views/LoginView';
 import SettingsView from './views/SettingsView';
 import TutorialOverlay, { shouldShowTutorial } from './components/TutorialOverlay';
+import AccessGuard from './components/AccessGuard';
 import { BASE } from './services/api';
+import { getRoiAccess } from './services/hub';
+import { getHubContext } from './services/hubContext';
 import './index.css';
 
 const VIEW_META = {
@@ -25,12 +28,18 @@ export default function App() {
   const [loggedIn, setLoggedIn]         = useState(false);
   const [loggedInUser, setLoggedInUser] = useState('');
   const [authChecked, setAuthChecked]   = useState(false);
+  // ROI capabilities per the hub's RBAC. null = still resolving or hub
+  // unreachable (fail open, since the hub enforces the real gate server-side).
+  const [roiAccess, setRoiAccess]       = useState(null);
   const [activeView, setActiveView]     = useState('extract');
   const [theme, setTheme]               = useState(() => localStorage.getItem('theme') || 'light');
 
   // Silent sign-in: Alfred SSO headers when deployed, auto dev user locally.
   // The form login only appears if /api/auth/me says unauthenticated.
   useEffect(() => {
+    // Capture the hub handoff (?deliverable_id=…&workstream=…) before anything
+    // else can touch the URL, so it can't be lost before the first save.
+    getHubContext();
     fetch(`${BASE}/auth/me`)
       .then(r => r.json())
       .then(me => {
@@ -42,6 +51,7 @@ export default function App() {
       })
       .catch(() => {})
       .finally(() => setAuthChecked(true));
+    getRoiAccess().then(setRoiAccess);
   }, []);
 
   useEffect(() => {
@@ -85,7 +95,13 @@ export default function App() {
 
   const renderView = () => {
     switch (activeView) {
-      case 'extract':    return <ExtractionView key={extractionKey} onNav={(view, dashId) => { if (dashId) setNewDashId(dashId); setActiveView(view); }} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} onOpenRecord={r => { setDashboardTarget(r); setActiveView('dashboards'); }} />;
+      case 'extract':
+        // The hub gates the extraction engine by roster role; when it says no,
+        // show the guard screen instead of a UI whose every action would 403.
+        if (roiAccess && roiAccess.can_extract === false) {
+          return <AccessGuard role={roiAccess.role} allowedRoles={roiAccess.allowed_roles} user={roiAccess.user || loggedInUser} />;
+        }
+        return <ExtractionView key={extractionKey} onNav={(view, dashId) => { if (dashId) setNewDashId(dashId); setActiveView(view); }} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} onOpenRecord={r => { setDashboardTarget(r); setActiveView('dashboards'); }} />;
       case 'dashboards': return <DashboardsView seed={dashboardSeed} onSeedConsumed={() => setDashboardSeed(null)} loginClient={loginClient} loginPublisher={loginPublisher} targetRecord={dashboardTarget} onTargetConsumed={() => setDashboardTarget(null)} loggedInUser={loggedInUser} newDashId={newDashId} onNewDashConsumed={() => setNewDashId(null)} />;
       case 'tracker':    return <TrackerView loggedInUser={loggedInUser} onSendToDashboards={sendToDashboards} />;
       case 'clients':    return <ClientsView />;

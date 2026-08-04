@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse, Response
 from typing import Optional
 from pydantic import BaseModel
@@ -11,6 +11,7 @@ from models.field_catalog import FIELD_CATALOG
 from services.storage import save_record, get_all_records, update_record, export_csv, export_xlsx, patch_executive_summary, clear_all_records
 from services.audit import get_events
 from services import api_keys
+from services.identity import current_username
 import hmac
 import io
 
@@ -58,8 +59,14 @@ def list_fields():
 
 
 @router.post("/records")
-def create_record(record: ROIRecord):
-    """Save an extracted ROI record to the local JSON file."""
+def create_record(record: ROIRecord, request: Request):
+    """Save an extracted ROI record.
+
+    The reviewing SME is taken from Alfred's SSO identity, so the audit trail
+    records who actually saved it rather than a name the client asserted."""
+    sso_user = current_username(request)
+    if sso_user:
+        record.sme = sso_user
     saved = save_record(record)
     return {"status": "saved", "record": saved}
 
@@ -111,12 +118,13 @@ def delete_record(record_id: str, reason: str = ""):
 
 
 @router.patch("/records/{record_id}")
-def edit_record(record_id: str, update: RecordUpdate):
+def edit_record(record_id: str, update: RecordUpdate, request: Request):
     """Apply a partial edit to a stored record. Each changed field is logged to
-    the append-only audit log with the editor and an optional note."""
+    the append-only audit log with the editor (from SSO) and an optional note."""
+    editor = current_username(request) or update.user
     try:
         updated = update_record(
-            record_id, update.changes, user=update.user, note=update.note,
+            record_id, update.changes, user=editor, note=update.note,
         )
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Record not found: {record_id}")
