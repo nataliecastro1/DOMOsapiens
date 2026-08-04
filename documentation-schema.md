@@ -29,6 +29,8 @@ Metadata for every upload. The bytes live in the file store; this table is the
 | `content_type` | text | Extension without the dot (`pptx`, `pdf`, `xlsx`) |
 | `size_bytes` | bigint | |
 | `uploaded_at` | timestamptz, default `now()` | |
+| `uploaded_by` | text | SSO display name, from Alfred's headers — never the request body |
+| `uploaded_by_email` | text | SSO email. On a dedup hit the first uploader is kept |
 
 ### `json_documents` — the app's document collections
 
@@ -69,6 +71,23 @@ export sheets:
 `contract_spend`, `pricing_available`, `notes`, `elevate_deliverable`,
 `confidence`, `source_file`, `stored_name`, `sme`, `field_meta` (per-field
 provenance: source slide + confidence), `executive_summary`, `saved_at`.
+
+**Delivery-hub provenance inside `roi_records.data`** — populated when the wizard
+is opened from the hub's Status View ROI button, which deep-links with the
+deliverable's identifiers:
+
+| Field | Meaning |
+|---|---|
+| `hub_scope_id` | `client_scopes.id` — the key `/v1/roi/save` expects |
+| `hub_deliverable_id` | `sow_deliverables.id` the ROI belongs to |
+| `hub_deliverable_name` | Deliverable name at handoff time, for display |
+| `hub_pathfinder_id` | Client scope pathfinder id (the business-facing reference) |
+| `workstream` | What the hub calls the *team* |
+| `hub_roi_metric_id` | `roi_metrics.id` the hub returned, set after a successful push |
+| `hub_saved_at` | When it was pushed to the hub |
+
+`sme` is set server-side from the SSO identity on save and edit, so the audit
+trail reflects who actually made the change.
 
 ## File store
 
