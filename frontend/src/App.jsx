@@ -13,6 +13,7 @@ import AccessGuard from './components/AccessGuard';
 import { BASE } from './services/api';
 import { getRoiAccess } from './services/hub';
 import { getHubContext } from './services/hubContext';
+import { hydrate as hydrateDashboards } from './services/dashboards';
 import './index.css';
 
 const VIEW_META = {
@@ -35,12 +36,12 @@ export default function App() {
   const [theme, setTheme]               = useState(() => localStorage.getItem('theme') || 'light');
 
   // Silent sign-in: Alfred SSO headers when deployed, auto dev user locally.
-  // The form login only appears if /api/auth/me says unauthenticated.
+  // The sign-in notice only appears if /api/auth/me says unauthenticated.
   useEffect(() => {
     // Capture the hub handoff (?deliverable_id=…&workstream=…) before anything
     // else can touch the URL, so it can't be lost before the first save.
     getHubContext();
-    fetch(`${BASE}/auth/me`)
+    const signIn = fetch(`${BASE}/auth/me`)
       .then(r => r.json())
       .then(me => {
         if (me.authenticated) {
@@ -49,8 +50,12 @@ export default function App() {
           if (shouldShowTutorial()) setShowTutorial(true);
         }
       })
-      .catch(() => {})
-      .finally(() => setAuthChecked(true));
+      .catch(() => {});
+    // Dashboards are read synchronously by the views, so the cache has to be
+    // warm before the first render — and this is where any dashboards still
+    // stranded in localStorage get adopted by the server.
+    const dashboards = hydrateDashboards().catch(() => {});
+    Promise.all([signIn, dashboards]).finally(() => setAuthChecked(true));
     getRoiAccess().then(setRoiAccess);
   }, []);
 
@@ -75,20 +80,12 @@ export default function App() {
     setActiveView('dashboards');
   };
 
-  const handleLogin = (username, client = '', publisher = '') => {
-    setLoggedIn(true);
-    setLoggedInUser(username);
-    setLoginClient(client);
-    setLoginPublisher(publisher);
-    if (shouldShowTutorial()) setShowTutorial(true);
-  };
-
   if (!authChecked) {
-    return null; // avoid flashing the login form while /api/auth/me resolves
+    return null; // avoid flashing the notice while /api/auth/me resolves
   }
 
   if (!loggedIn) {
-    return <LoginView onLogin={handleLogin} />;
+    return <LoginView />;
   }
 
   const renderView = () => {

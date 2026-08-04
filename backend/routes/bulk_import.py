@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from openpyxl import load_workbook
 
 from models import ROIRecord
-from services.storage import delete_by_batch_id, get_all_records, save_record
+from services.storage import delete_by_batch_id, existing_natural_keys, save_record
 
 router = APIRouter(prefix="/api")
 
@@ -480,14 +480,8 @@ async def bulk_import(file: UploadFile = File(...)):
         seen_keys: set[tuple] = set()
 
         # Snapshot of existing records keyed by (client, publisher, year) for
-        # duplicate detection. Built once so row processing stays fast.
-        existing_db: dict[tuple, dict] = {}
-        for r in get_all_records():
-            c = str(r.get("client") or "").strip().lower()
-            p = str(r.get("publisher") or "").strip().lower()
-            y = r.get("year")
-            if c and p and y:
-                existing_db[(c, p, int(y))] = r
+        # duplicate detection. One indexed query, not a full record load.
+        existing_db = existing_natural_keys()
 
         def sse(data: dict) -> str:
             return f"data: {json.dumps(data)}\n\n"

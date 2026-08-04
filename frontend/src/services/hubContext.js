@@ -1,7 +1,7 @@
 // Context handed over when the wizard is opened from the delivery hub's
 // Status View ROI button (see the hub's src/lib/roiWizard.ts).
 //
-// The hub deep-links with ?scope_id=&deliverable_id=&pathfinder_id=&workstream=
+// The hub deep-links with ?deliverable_id=&pathfinder_id=&workstream=&year=&mode=
 // so a finished extraction can be traced back to the exact deliverable, and the
 // push to /v1/roi/save can target the right row without the user re-picking it.
 //
@@ -13,15 +13,16 @@ let cached = null;
 function parse() {
   const p = new URLSearchParams(window.location.search);
   const deliverableId = p.get('deliverable_id');
-  const scopeId = p.get('scope_id');
-  if (!deliverableId && !scopeId) return null;
+  const pathfinderId = p.get('pathfinder_id');
+  if (!deliverableId && !pathfinderId) return null;
   return {
-    hub_scope_id: scopeId || null,
     hub_deliverable_id: deliverableId ? Number(deliverableId) : null,
     hub_deliverable_name: p.get('deliverable_name') || null,
-    hub_pathfinder_id: p.get('pathfinder_id') || null,
+    hub_pathfinder_id: pathfinderId || null,
     workstream: p.get('workstream') || null,
-    client: p.get('client') || null,
+    client_scope_name: p.get('client_scope_name') || null,
+    year: p.get('year') ? Number(p.get('year')) : null,
+    mode: p.get('mode') || null,         // 'edit' | 'new'
   };
 }
 
@@ -52,7 +53,6 @@ export function withHubContext(record) {
   if (!ctx) return record;
   return {
     ...record,
-    hub_scope_id: ctx.hub_scope_id,
     hub_deliverable_id: ctx.hub_deliverable_id,
     hub_deliverable_name: ctx.hub_deliverable_name,
     hub_pathfinder_id: ctx.hub_pathfinder_id,

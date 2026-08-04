@@ -10,8 +10,7 @@ import {
   NUMERIC_ELEMENTS, SUMMARY_ELEMENTS, CHART_ELEMENTS, elementById, parseElementId,
   isVariantable, groupElements, mostRecentSummary, summaryFieldContent, normalizeElements,
 } from '../services/dashboardData';
-
-const STORAGE_KEY = 'domosapiens.dashboards';
+import { getDashboards, syncDashboards } from '../services/dashboards';
 
 const TEMPLATES = [
   { id: 'client-all-pub', icon: 'ti-building',       title: 'Client — all publishers', sub: 'All publisher ROI for one client in a given year',     tags: ['1 client','All publishers','1 year'] },
@@ -33,20 +32,16 @@ const MAX_BARS = 12;
 // Pipeline stage colors for the ROI journey funnel (navy → blue → gold).
 const STAGE_COLORS = ['var(--navy)', 'var(--blue)', 'var(--gold)'];
 
-// ─── localStorage helpers ─────────────────────────────────────────────────────
+// ─── Saved-dashboard access ───────────────────────────────────────────────────
+// Server-backed (see services/dashboards.js). The signatures are unchanged from
+// when this was localStorage: reads are synchronous off a cache hydrated at
+// startup, and a write persists only the dashboards that actually changed.
 function loadSaved() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.filter(d => !d.seed);
-    }
-  } catch { /* ignore corrupt storage */ }
-  return [];
+  return getDashboards().filter(d => !d.seed);
 }
 
 function persistSaved(list) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch { /* quota / private mode */ }
+  syncDashboards(list);
 }
 
 // ─── Form primitives ──────────────────────────────────────────────────────────

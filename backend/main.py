@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from routes import (
     auth,
     bulk_import,
+    dashboards,
     documents,
     executive_summary,
     export,
@@ -16,6 +17,7 @@ from routes import (
     records,
     uploads,
     roar,
+    workstreams,
 )
 
 app = FastAPI(title="ROI Tracker API")
@@ -52,6 +54,8 @@ app.include_router(documents.router)
 app.include_router(uploads.router)
 app.include_router(roar.router)
 app.include_router(executive_summary.router)
+app.include_router(workstreams.router)
+app.include_router(dashboards.router)
 
 
 @app.get("/api/health")

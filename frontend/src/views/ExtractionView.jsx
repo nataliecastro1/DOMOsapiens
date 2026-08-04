@@ -15,6 +15,68 @@ import {
 } from '../data';
 import { DashboardBuilder } from './DashboardsView';
 import { deriveOptions } from '../services/dashboardData';
+import { getAllowedPublishers } from '../services/workstreams';
+import { getHubContext } from '../services/hubContext';
+import { getDashboards, saveDashboard } from '../services/dashboards';
+
+// ─── Publisher picker ─────────────────────────────────────────────────────────
+// ROI is reported per publisher, but the hub hands us a workstream (its team).
+// When that workstream maps to a known publisher set we constrain the choice to
+// it and preselect the default; otherwise we fall back to a free-text field with
+// suggestions, so an unmapped workstream never blocks a review.
+function PublisherField({ value, onChange, placeholder }) {
+  const [options, setOptions] = useState([]);
+  const [mapped, setMapped] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const ctx = getHubContext();
+    getAllowedPublishers(ctx?.workstream).then(res => {
+      if (!active) return;
+      const list = res.publishers || [];
+      setOptions(list);
+      setMapped(Boolean(res.mapped));
+      // Only fill a blank field — never overwrite what the extractor found.
+      if (!value && res.mapped && list.length) {
+        onChange((list.find(p => p.is_default) || list[0]).publisher);
+      }
+    });
+    return () => { active = false; };
+    // Runs once: the hub handoff is fixed for the session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (mapped && options.length) {
+    return (
+      <select
+        className="compare-record-detail-input"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+      >
+        {!value && <option value="">Select a publisher…</option>}
+        {options.map(o => (
+          <option key={o.publisher} value={o.publisher}>{o.publisher}</option>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <>
+      <input
+        type="text"
+        list="known-publishers"
+        className="compare-record-detail-input"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      <datalist id="known-publishers">
+        {options.map(o => <option key={o.publisher} value={o.publisher} />)}
+      </datalist>
+    </>
+  );
+}
 
 // ─── Blank field template ─────────────────────────────────────────────────────
 // The canonical 7 ROI fields with no data — derived from EXTRACTED_FIELDS so the
@@ -437,7 +499,7 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
   const savedDash = useMemo(() => {
     if (!previewRecord) return null;
     try {
-      const saved = JSON.parse(localStorage.getItem('domosapiens.dashboards') || '[]');
+      const saved = getDashboards();
       const rClient    = (previewRecord.client    || '').toLowerCase();
       const rPublisher = (previewRecord.publisher || '').toLowerCase();
       const rYear      = String(previewRecord.year || '');
@@ -830,14 +892,7 @@ function ScreenRequest({ onNext, onUploaded, clients, year, onYearChange, client
                 initial={savedDash}
                 embedded
                 onClose={() => setPreviewRecord(null)}
-                onSave={updated => {
-                  try {
-                    const all = JSON.parse(localStorage.getItem('domosapiens.dashboards') || '[]');
-                    const idx = all.findIndex(d => d.id === updated.id);
-                    if (idx >= 0) all[idx] = updated; else all.push(updated);
-                    localStorage.setItem('domosapiens.dashboards', JSON.stringify(all));
-                  } catch {}
-                }}
+                onSave={updated => { saveDashboard(updated); }}
               />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 220, gap: 12, color: 'var(--text-muted)', padding: 32 }}>
@@ -3436,13 +3491,21 @@ function ScreenCompare({ fields, scriptData, scriptMeta = null, batchInfo = null
           ].map(({ key, label, type, placeholder }) => (
             <div key={key} className="compare-record-detail-item">
               <label className="compare-record-detail-label">{label}</label>
-              <input
-                type={type}
-                className="compare-record-detail-input"
-                value={metaDetails[key]}
-                onChange={e => setMetaDetails(prev => ({ ...prev, [key]: e.target.value }))}
-                placeholder={placeholder}
-              />
+              {key === 'publisher' ? (
+                <PublisherField
+                  value={metaDetails[key]}
+                  onChange={v => setMetaDetails(prev => ({ ...prev, publisher: v }))}
+                  placeholder={placeholder}
+                />
+              ) : (
+                <input
+                  type={type}
+                  className="compare-record-detail-input"
+                  value={metaDetails[key]}
+                  onChange={e => setMetaDetails(prev => ({ ...prev, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -4000,11 +4063,7 @@ function ScreenDone({ finalFields, selectedFile, onTracker, onDashboards, logged
     };
   };
 
-  const persistDash = (dash) => {
-    const existing = JSON.parse(localStorage.getItem('domosapiens.dashboards') || '[]');
-    const filtered = existing.filter(d => d.id !== dash.id);
-    localStorage.setItem('domosapiens.dashboards', JSON.stringify([dash, ...filtered]));
-  };
+  const persistDash = (dash) => { saveDashboard(dash); };
 
   // Auto-save when the dashboard is first loaded (summary may update later — that's OK)
   useEffect(() => {

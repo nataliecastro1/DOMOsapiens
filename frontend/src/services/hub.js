@@ -47,7 +47,11 @@ export async function getRoiAccess() {
 export async function getHubClientScopes() {
   const rows = await hubFetch('/sows');
   return rows
-    .map((r) => ({ id: r.id, name: r.client_scope_name || r.id }))
+    .map((r) => ({
+      id: r.id,
+      name: r.client_scope_name || r.id,
+      pathfinder_id: r.client_scope_pathfinder_id || null,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -65,6 +69,9 @@ export function saveRoiToHub(record, { deliverableId, clientScopeId }) {
   const payload = {
     deliverable_id: deliverableId,
     client_scope_id: String(clientScopeId),
+    // Our own key, so the hub row can be traced back to this extraction and its
+    // audit trail. The hub stores it as roi_metrics.source_record_id.
+    record_id: record.record_id ?? null,
 
     year: record.year != null ? Number(record.year) : null,
     client: record.client ?? null,

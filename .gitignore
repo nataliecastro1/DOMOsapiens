@@ -77,11 +77,15 @@ env/
 .ruff_cache/
 .ipynb_checkpoints/
 
-# ---- Secrets: issued API keys (hashed, but never commit) ----
-backend/data/api_keys.json
-
-# ---- Runtime storage (render cache + local S3-mimic store) ----
-backend/data/uploads/
-backend/data/s3/
-backend/data/roi_records.json
-backend/data/audit_events.json
+# ---- Runtime storage and client data — never commit ----
+# Everything under backend/data/ is runtime state or real client material:
+# uploaded ROAR decks, extracted ROI records, and the SME audit log. Postgres and
+# the object store are the actual stores; the JSON files here are only a local
+# dev fallback and a one-time migration source.
+#
+# This was previously a list of individual paths, which missed two things: the
+# audit log is audit_log.json (the rule said audit_events.json), and the files
+# had already been committed — gitignore does not apply to tracked files, so
+# they kept updating. They were untracked with `git rm -r --cached backend/data/`;
+# the directory rule below is what stops it happening again.
+backend/data/

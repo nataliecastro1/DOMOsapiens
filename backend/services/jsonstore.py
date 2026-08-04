@@ -1,10 +1,11 @@
 """
 Durable JSON-document collections.
 
-The app's data (ROI records, audit events, client roster) started life as
-`list[dict]` written to JSON files under backend/data/. That works locally but
-not on Alfred, where the container filesystem is recreated on every redeploy —
-records saved through the UI would silently vanish.
+Holds `audit_events` — an append-only history where each row is genuinely a
+document and there is nothing to query relationally. ROI records used to live
+here too but have graduated to their own typed table (see services/storage.py);
+they were tabular data in a document bag, which forced a full rewrite of every
+row on every single save.
 
 This module keeps the exact `list[dict]` semantics those services expect while
 storing each document as a JSONB row in Postgres. Ordering is preserved via a
@@ -28,49 +29,14 @@ from services.identity import IS_DEPLOYED
 
 log = logging.getLogger("roi.jsonstore")
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS json_documents (
-    collection  TEXT   NOT NULL,
-    doc_id      TEXT   NOT NULL,
-    seq         BIGSERIAL,
-    data        JSONB  NOT NULL,
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (collection, doc_id)
-);
-CREATE INDEX IF NOT EXISTS json_documents_collection_seq
-    ON json_documents (collection, seq);
-"""
-
-_schema_ready = False
-_schema_lock = threading.Lock()
-
-
-def _ensure_schema() -> bool:
-    """Create the table once per process. Returns True when Postgres is usable."""
-    global _schema_ready
-    if _schema_ready:
-        return True
-    if not db.db_available():
-        return False
-    with _schema_lock:
-        if _schema_ready:
-            return True
-        try:
-            with db._conn() as conn:
-                conn.execute(_SCHEMA)
-            _schema_ready = True
-        except Exception as e:
-            log.warning("Could not create json_documents table: %s", e)
-            return False
-    return _schema_ready
-
-
 class Collection:
     """A named list of JSON documents, durable in Postgres when available.
 
     `id_key` is the field holding each document's stable identity (e.g.
-    "record_id"). Documents without one get a synthetic positional id, which
-    keeps ad-hoc lists (like the client roster) working.
+    "event_id"). Documents without one get a synthetic positional id.
+
+    The table itself is created by services.schema at startup, not lazily here,
+    so a missing GRANT fails the deploy rather than the first user save.
     """
 
     def __init__(self, name: str, file_path: str, id_key: str):
@@ -117,7 +83,7 @@ class Collection:
             return
         self._migrated = True
         try:
-            with db._conn() as conn:
+            with db.connection() as conn:
                 row = conn.execute(
                     "SELECT COUNT(*) FROM json_documents WHERE collection = %s",
                     (self.name,),
@@ -134,7 +100,7 @@ class Collection:
 
     # ── postgres ─────────────────────────────────────────────────────────
     def _pg_load(self) -> list[dict]:
-        with db._conn() as conn:
+        with db.connection() as conn:
             rows = conn.execute(
                 "SELECT data FROM json_documents WHERE collection = %s ORDER BY seq",
                 (self.name,),
@@ -147,7 +113,7 @@ class Collection:
         Rewrites rather than diffs, matching the previous whole-file save. The
         seq column is reassigned so list order is exactly what the caller passed.
         """
-        with db._conn() as conn:
+        with db.connection() as conn:
             with conn.transaction():
                 conn.execute("DELETE FROM json_documents WHERE collection = %s",
                              (self.name,))
@@ -159,7 +125,7 @@ class Collection:
                     )
 
     def _pg_append(self, item: dict) -> None:
-        with db._conn() as conn:
+        with db.connection() as conn:
             conn.execute(
                 "INSERT INTO json_documents (collection, doc_id, data)"
                 " VALUES (%s, %s, %s)"
@@ -170,7 +136,7 @@ class Collection:
 
     # ── public API (mirrors the old _load/_save pair) ─────────────────────
     def load(self) -> list[dict]:
-        if _ensure_schema():
+        if db.db_available():
             try:
                 self._import_file_once()
                 return self._pg_load()
@@ -183,7 +149,7 @@ class Collection:
         return self._file_load()
 
     def save(self, items: list[dict]) -> None:
-        if _ensure_schema():
+        if db.db_available():
             try:
                 self._import_file_once()
                 self._pg_replace(items)
@@ -198,7 +164,7 @@ class Collection:
 
     def append(self, item: dict) -> None:
         """Add one document without rewriting the collection."""
-        if _ensure_schema():
+        if db.db_available():
             try:
                 self._import_file_once()
                 self._pg_append(item)

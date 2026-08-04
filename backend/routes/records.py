@@ -7,7 +7,17 @@ from pydantic import BaseModel
 
 from models import ROIRecord, RecordUpdate
 from models.field_catalog import FIELD_CATALOG
-from services.storage import save_record, get_all_records, update_record, export_csv, export_xlsx, patch_executive_summary, clear_all_records
+from services.storage import (
+    Conflict,
+    clear_all_records,
+    delete_record,
+    export_csv,
+    export_xlsx,
+    get_all_records,
+    patch_executive_summary,
+    save_record,
+    update_record,
+)
 from services.audit import get_events
 from services.identity import current_username
 import io
@@ -69,17 +79,13 @@ def delete_all_records_endpoint():
 
 
 @router.delete("/records/{record_id}")
-def delete_record(record_id: str, reason: str = ""):
+def delete_one_record(record_id: str, reason: str = ""):
     """Permanently delete a record. Reason must be 'duplicate' or 'error'."""
-    from services.storage import _load, _save
     allowed = {"duplicate", "error"}
     if reason.strip().lower() not in allowed:
         raise HTTPException(status_code=400, detail="invalid_reason")
-    records = _load()
-    new_records = [r for r in records if r.get("record_id") != record_id]
-    if len(new_records) == len(records):
+    if not delete_record(record_id):
         raise HTTPException(status_code=404, detail="Record not found")
-    _save(new_records)
     return {"status": "deleted", "record_id": record_id}
 
 
@@ -94,6 +100,13 @@ def edit_record(record_id: str, update: RecordUpdate, request: Request):
         )
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Record not found: {record_id}")
+    except ValueError as e:
+        # A field name that isn't a column — a client bug, not a server fault.
+        raise HTTPException(status_code=400, detail=str(e))
+    except Conflict as e:
+        # Well-formed but collides with another record (e.g. one ROI per hub
+        # deliverable). 409 so the UI can say what to do about it.
+        raise HTTPException(status_code=409, detail=str(e))
     return {"status": "updated", "record": updated}
 
 

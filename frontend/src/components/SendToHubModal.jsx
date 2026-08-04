@@ -15,16 +15,19 @@ export default function SendToHubModal({ record, onClose }) {
   const [phase, setPhase] = useState('idle');          // idle | sending | done
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  // Set when the hub accepted the push but the local back-reference could not be
+  // stored — a caveat on success, not a failure.
+  const [linkWarning, setLinkWarning] = useState('');
 
   useEffect(() => {
     getHubClientScopes()
       .then(list => {
         setScopes(list);
         // A record created from the Status View ROI button already knows its
-        // scope — use it rather than guessing from the client name.
-        if (record.hub_scope_id && list.some(s => s.id === record.hub_scope_id)) {
-          setScopeId(record.hub_scope_id);
-          return;
+        // pathfinder id — match that rather than guessing from the client name.
+        if (record.hub_pathfinder_id) {
+          const hit = list.find(s => s.pathfinder_id === record.hub_pathfinder_id);
+          if (hit) { setScopeId(hit.id); return; }
         }
         // Otherwise preselect the scope whose name contains the record's client.
         const client = (record.client || '').toLowerCase();
@@ -76,7 +79,6 @@ export default function SendToHubModal({ record, onClose }) {
       try {
         await updateRecord(record.record_id, {
           changes: {
-            hub_scope_id: scopeId,
             hub_deliverable_id: Number(deliverableId),
             hub_deliverable_name:
               deliverables?.find(d => String(d.id) === String(deliverableId))?.deliverable_name || null,
@@ -86,7 +88,11 @@ export default function SendToHubModal({ record, onClose }) {
           note: `Pushed to delivery hub (${scopeName})`,
         });
       } catch (e) {
+        // The hub already has the data, so this is not a failed send — but the
+        // user needs to know the local record is not linked, which happens when
+        // another record already claims this deliverable.
         console.warn('[hub] record saved to hub but back-reference not stored:', e.message);
+        setLinkWarning(e.message);
       }
     } catch (e) {
       setError(e.message);
@@ -120,8 +126,19 @@ export default function SendToHubModal({ record, onClose }) {
               borderRadius: 10, padding: '12px 14px', fontSize: 13, marginBottom: 14,
             }}>
               <i className="ti ti-circle-check" style={{ marginRight: 6, color: 'var(--green, #2e9e5b)' }} />
-              Saved to the hub as ROI record #{result?.id} under <b>{scopeName}</b>.
+              Saved to the hub as ROI record #{result?.id} under <b>{scopeName}</b>
+              {result?.updated ? ' (updated an existing entry).' : '.'}
             </div>
+            {linkWarning && (
+              <div style={{
+                background: 'var(--amber-pale, #fdf6e3)', border: '1.5px solid var(--amber, #b7791f)',
+                borderRadius: 10, padding: '10px 12px', fontSize: 12.5, marginBottom: 14,
+                color: '#7a5200', lineHeight: 1.5,
+              }}>
+                <i className="ti ti-alert-triangle" style={{ marginRight: 6 }} />
+                The hub has the data, but this record could not be linked to it: {linkWarning}
+              </div>
+            )}
             <button className="btn primary" onClick={onClose} style={{ width: '100%' }}>Close</button>
           </div>
         ) : (

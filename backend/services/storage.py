@@ -1,32 +1,34 @@
 """
-Simple file-based storage — saves ROI records to a local JSON file.
-No database needed. File lives at backend/data/roi_records.json.
+ROI record persistence, backed by the typed `roi_records` table.
 
-Each record carries a stable `record_id` used as the join key across the
-export sheets (All_ROI_Data, SME_Audit_Log, Field_Provenance) and the
-append-only audit log (see services/audit.py).
+This used to keep every record as a JSONB document in a shared collection, and
+every save rewrote the entire collection inside one transaction — a full table
+rewrite per edit, guarded only by a `threading.Lock` that protected one process
+and therefore nothing at all once more than one container was running. Two SMEs
+saving different records at the same moment could lose one of the writes.
+
+Now each record is a row. Writes are single-row upserts, and edits take a
+row-level lock (`SELECT … FOR UPDATE`), so concurrent edits to *different*
+records never contend while concurrent edits to the *same* record serialise.
+
+Postgres is required: there is no file fallback. A container-local file would be
+discarded on the next Alfred redeploy, so a save could appear to succeed and
+then vanish — failing loudly is the safer failure mode.
 """
 import csv
 import io
-import json
-import os
 import uuid
-import threading
-from datetime import datetime
+from datetime import datetime, timezone
 
-_lock = threading.Lock()
+import psycopg
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Alignment, Font, PatternFill
+from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
+
 from models import ROIRecord
 from models.field_catalog import FIELD_CATALOG
-from services import audit, jsonstore
-
-DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "roi_records.json")
-
-# Durable in Postgres when DATABASE_URL is set (required on Alfred, where the
-# container filesystem is recreated on every redeploy); falls back to the JSON
-# file above for local dev without a database.
-_records = jsonstore.Collection("roi_records", DATA_FILE, id_key="record_id")
+from services import audit, db, record_columns
 
 # The 15 clean Domo columns (no provenance noise — that lives on its own sheet).
 # Order is the Domo ingestion contract, so it's pinned here rather than derived
@@ -44,151 +46,301 @@ DOMO_COLUMNS = [
 # export and the Tracker can never drift.
 PROVENANCE_METRICS = [(f.key, f.label) for f in FIELD_CATALOG if f.provenance]
 
+_IMMUTABLE = {"record_id", "seq", "saved_at", "updated_at"}
+
+_UPSERT_COLUMNS = ["record_id"] + record_columns.WRITABLE + ["saved_at", "updated_at"]
+
+# `saved_at` is deliberately absent from the DO UPDATE list: re-saving a record
+# must not rewrite when it was first created.
+_UPSERT_SQL = f"""
+INSERT INTO roi_records ({", ".join(_UPSERT_COLUMNS)})
+VALUES ({", ".join(f"%({c})s" for c in _UPSERT_COLUMNS)})
+ON CONFLICT (record_id) DO UPDATE SET
+    {", ".join(f"{c} = EXCLUDED.{c}" for c in record_columns.WRITABLE)},
+    updated_at = EXCLUDED.updated_at
+RETURNING *
+"""
+
+
+class Conflict(Exception):
+    """A write would break a uniqueness guarantee.
+
+    Distinct from a bad request: the payload is well-formed, it just collides
+    with another record. Callers map this to 409.
+    """
+
+
+def _conflict_message(exc: Exception) -> str:
+    """Turn a Postgres unique violation into something a reviewer can act on."""
+    constraint = getattr(getattr(exc, "diag", None), "constraint_name", "") or ""
+    if "one_per_deliverable" in constraint:
+        return (
+            "Another ROI record is already linked to that delivery-hub "
+            "deliverable. Each deliverable holds one ROI record — edit the "
+            "existing one, or unlink it first."
+        )
+    if "stored_name" in constraint:
+        return "Another record already references that uploaded document."
+    return f"This change conflicts with an existing record ({constraint or 'unique constraint'})."
+
 
 def _new_record_id() -> str:
     return f"r_{uuid.uuid4().hex[:12]}"
 
 
-def _ensure_ids(records: list[dict]) -> bool:
-    """Backfill a record_id onto any record missing one. Returns True if any
-    record was changed (so the caller can persist the migration)."""
-    changed = False
-    for r in records:
-        if not r.get("record_id"):
-            r["record_id"] = _new_record_id()
-            changed = True
-    return changed
+def _now():
+    return datetime.now(timezone.utc)
 
 
-def _load() -> list[dict]:
-    records = _records.load()
-    # Migrate legacy records (saved before record_id existed) in place.
-    if _ensure_ids(records):
-        _save(records)
-    return records
+def _row_to_dict(row) -> dict:
+    """Shape a DB row like the JSON documents callers used to receive."""
+    out = dict(row)
+    out.pop("seq", None)  # internal ordering key, never part of the API
+    for key in ("saved_at", "updated_at"):
+        value = out.get(key)
+        if hasattr(value, "isoformat"):
+            out[key] = value.isoformat()
+    return out
 
 
-def _save(records: list[dict]):
-    _records.save(records)
+def _jsonb(field: str, value):
+    """Wrap JSONB column values; leave scalars alone."""
+    if field not in record_columns.JSON:
+        return value
+    return Jsonb(value) if value not in (None, "", {}, []) else None
 
 
+def _upsert_params(entry: dict, *, saved_at, updated_at) -> dict:
+    params = {
+        "record_id": entry["record_id"],
+        "saved_at": saved_at,
+        "updated_at": updated_at,
+    }
+    for col in record_columns.SCALAR:
+        params[col] = entry.get(col)
+    for col in record_columns.JSON:
+        params[col] = _jsonb(col, entry.get(col))
+    # NOT NULL columns must carry a concrete value.
+    for col, default in record_columns.NOT_NULL_TEXT_DEFAULTS.items():
+        if not params.get(col):
+            params[col] = default
+    return params
+
+
+# ── reads ─────────────────────────────────────────────────────────────────────
+def get_all_records() -> list[dict]:
+    """Every record, in insertion order (what the Tracker expects)."""
+    db.require_db()
+    with db.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("SELECT * FROM roi_records ORDER BY seq")
+            return [_row_to_dict(r) for r in cur.fetchall()]
+
+
+def get_record(record_id: str) -> dict | None:
+    db.require_db()
+    with db.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("SELECT * FROM roi_records WHERE record_id = %s", (record_id,))
+            row = cur.fetchone()
+    return _row_to_dict(row) if row else None
+
+
+def existing_natural_keys() -> dict[tuple, dict]:
+    """Existing (client, publisher, year) keys, for bulk-import duplicate checks.
+
+    Reads only the columns the duplicate report needs, over the
+    (client, publisher, year) index, instead of loading every full record.
+    """
+    db.require_db()
+    with db.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT record_id, client, publisher, year, saved_at, source_file, sme,"
+                "       identified_risk, acc_cost_avoidance, realized_savings"
+                " FROM roi_records"
+            )
+            rows = cur.fetchall()
+    out: dict[tuple, dict] = {}
+    for r in rows:
+        client = (r["client"] or "").strip().lower()
+        publisher = (r["publisher"] or "").strip().lower()
+        if client and publisher and r["year"] is not None:
+            out[(client, publisher, int(r["year"]))] = _row_to_dict(r)
+    return out
+
+
+# ── writes ────────────────────────────────────────────────────────────────────
 def save_record(record: ROIRecord) -> dict:
-    """Upsert an ROI record by stored_name or source_file — prevents duplicates.
-    Assigns a stable record_id and preserves the executive_summary on re-save."""
-    with _lock:
-        records = _load()
-        entry = record.model_dump()
-        entry["saved_at"] = datetime.utcnow().isoformat()
+    """Upsert a record, matching an existing one by stored_name or source_file.
 
-        def _matches(r):
-            if entry.get("stored_name") and r.get("stored_name") == entry["stored_name"]:
-                return True
-            if entry.get("source_file") and r.get("source_file") == entry["source_file"]:
-                return True
-            return False
+    Assigns a stable record_id, preserves an executive summary the incoming
+    payload doesn't carry, and logs one audit event per changed metric.
+    """
+    db.require_db()
+    entry = record.model_dump()
+    now = _now()
+    changed: list[tuple] = []
 
-        # Fields tracked for per-change audit events on re-extraction.
-        _AUDIT_FIELDS = [
-            "identified_risk", "id_cost_avoidance", "acc_cost_avoidance",
-            "id_cost_optimization", "acc_cost_optimization", "realized_savings",
-            "contract_spend", "applicable_from", "applicable_to", "field_dates",
-            "publisher", "client", "year",
-        ]
+    with db.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            with conn.transaction():
+                # The ::text casts are required — Postgres cannot infer a
+                # parameter's type from `$1 IS NOT NULL` alone.
+                cur.execute(
+                    "SELECT * FROM roi_records"
+                    " WHERE (%(stored_name)s::text IS NOT NULL AND stored_name = %(stored_name)s::text)"
+                    "    OR (%(source_file)s::text IS NOT NULL AND source_file = %(source_file)s::text)"
+                    " ORDER BY seq LIMIT 1",
+                    {
+                        "stored_name": entry.get("stored_name"),
+                        "source_file": entry.get("source_file"),
+                    },
+                )
+                existing = cur.fetchone()
 
-        for i, r in enumerate(records):
-            if _matches(r):
-                entry["record_id"] = r.get("record_id") or _new_record_id()
-                if not entry.get("executive_summary") and r.get("executive_summary"):
-                    entry["executive_summary"] = r["executive_summary"]
-                # Log per-field changes before overwriting the stored record.
-                for field in _AUDIT_FIELDS:
-                    old_val = r.get(field)
-                    new_val = entry.get(field)
-                    if old_val != new_val:
-                        audit.append_event(
-                            entry["record_id"], "edit",
-                            user=entry.get("sme"), field=field,
-                            old_value=old_val, new_value=new_val,
-                            note="SME review — updated on re-extraction",
-                        )
-                records[i] = entry
-                _save(records)
-                audit.append_event(entry["record_id"], "update", user=entry.get("sme"), note="Re-stored from extraction")
-                return entry
+                if existing:
+                    entry["record_id"] = existing["record_id"]
+                    if not entry.get("executive_summary") and existing.get("executive_summary"):
+                        entry["executive_summary"] = existing["executive_summary"]
+                    for field in record_columns.AUDITED:
+                        old, new = existing.get(field), entry.get(field)
+                        if old != new:
+                            changed.append((field, old, new))
+                    action, updated_at = "update", now
+                else:
+                    entry["record_id"] = entry.get("record_id") or _new_record_id()
+                    action, updated_at = "create", None
 
-        entry["record_id"] = entry.get("record_id") or _new_record_id()
-        records.append(entry)
-        _save(records)
-        audit.append_event(entry["record_id"], "create", user=entry.get("sme"), note="Stored from extraction")
-        return entry
+                cur.execute(
+                    _UPSERT_SQL,
+                    _upsert_params(entry, saved_at=now, updated_at=updated_at),
+                )
+                saved = _row_to_dict(cur.fetchone())
+
+    # Audit only after the write has committed — the log must never describe a
+    # change that rolled back. append_event uses its own connection anyway.
+    for field, old, new in changed:
+        audit.append_event(
+            saved["record_id"], "edit", user=entry.get("sme"), field=field,
+            old_value=old, new_value=new,
+            note="SME review — updated on re-extraction",
+        )
+    audit.append_event(
+        saved["record_id"], action, user=entry.get("sme"),
+        note="Re-stored from extraction" if action == "update" else "Stored from extraction",
+    )
+    return saved
 
 
 def update_record(record_id: str, changes: dict, user: str | None = None,
                   note: str | None = None) -> dict:
-    """Apply a partial edit to a stored record, persist it, and append one
-    immutable audit event per changed field. Raises KeyError if not found."""
-    with _lock:
-        records = _load()
-        for r in records:
-            if r.get("record_id") == record_id:
-                for field, new_value in changes.items():
-                    if field in ("record_id", "saved_at"):
-                        continue
-                    old_value = r.get(field)
-                    if old_value == new_value:
-                        continue
-                    r[field] = new_value
-                    audit.append_event(record_id, "edit", user=user, field=field, old_value=old_value, new_value=new_value, note=note)
-                r["updated_at"] = datetime.utcnow().isoformat()
-                _save(records)
-                return r
-    raise KeyError(record_id)
+    """Apply a partial edit, logging one audit event per changed field.
+
+    Raises KeyError when the record is missing and ValueError for a field that
+    isn't a writable column. Takes a row-level lock so two concurrent edits to
+    the same record serialise instead of clobbering each other.
+    """
+    db.require_db()
+    applied = {k: v for k, v in changes.items() if k not in _IMMUTABLE}
+    unknown = sorted(k for k in applied if k not in record_columns.WRITABLE)
+    if unknown:
+        raise ValueError(f"Not an editable field: {', '.join(unknown)}")
+
+    now = _now()
+    changed: list[tuple] = []
+
+    try:
+        with db.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                with conn.transaction():
+                    cur.execute(
+                        "SELECT * FROM roi_records WHERE record_id = %s FOR UPDATE",
+                        (record_id,),
+                    )
+                    existing = cur.fetchone()
+                    if existing is None:
+                        raise KeyError(record_id)
+
+                    sets, params = [], {"record_id": record_id, "updated_at": now}
+                    for field, new_value in applied.items():
+                        if existing.get(field) == new_value:
+                            continue
+                        sets.append(f"{field} = %({field})s")
+                        params[field] = _jsonb(field, new_value)
+                        changed.append((field, existing.get(field), new_value))
+
+                    if not sets:
+                        return _row_to_dict(existing)
+
+                    cur.execute(
+                        f"UPDATE roi_records SET {', '.join(sets)},"
+                        " updated_at = %(updated_at)s"
+                        " WHERE record_id = %(record_id)s RETURNING *",
+                        params,
+                    )
+                    updated = _row_to_dict(cur.fetchone())
+    except psycopg.errors.UniqueViolation as e:
+        # Most likely two records claiming one hub deliverable.
+        raise Conflict(_conflict_message(e)) from e
+
+    for field, old, new in changed:
+        audit.append_event(record_id, "edit", user=user, field=field,
+                           old_value=old, new_value=new, note=note)
+    return updated
 
 
 def patch_executive_summary(identifier: str, summary: dict) -> dict | None:
-    """Attach an executive summary to an existing record.
-    Matches by record_id, stored_name, or source_file — whichever works first.
+    """Attach a generated executive summary to one record.
+
+    Matches by record_id, stored_name, or source_file — whichever hits first.
     """
-    with _lock:
-        records = _load()
-        for i, r in enumerate(records):
-            if (r.get("record_id") == identifier
-                    or r.get("stored_name") == identifier
-                    or r.get("source_file") == identifier):
-                records[i]["executive_summary"] = summary
-                _save(records)
-                return records[i]
-    return None
+    db.require_db()
+    with db.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "UPDATE roi_records SET executive_summary = %(summary)s,"
+                "                       updated_at = %(now)s"
+                " WHERE record_id = ("
+                "     SELECT record_id FROM roi_records"
+                "      WHERE record_id = %(id)s OR stored_name = %(id)s"
+                "         OR source_file = %(id)s"
+                "      ORDER BY seq LIMIT 1)"
+                " RETURNING *",
+                {"summary": Jsonb(summary), "now": _now(), "id": identifier},
+            )
+            row = cur.fetchone()
+    return _row_to_dict(row) if row else None
 
 
-def get_all_records() -> list[dict]:
-    return _load()
+# ── deletes ───────────────────────────────────────────────────────────────────
+def delete_record(record_id: str) -> bool:
+    """Permanently remove one record. Returns False when it did not exist."""
+    db.require_db()
+    with db.connection() as conn:
+        cur = conn.execute("DELETE FROM roi_records WHERE record_id = %s", (record_id,))
+        return cur.rowcount > 0
 
 
 def clear_all_records() -> int:
     """Delete every record. Returns the count removed."""
-    with _lock:
-        records = _load()
-        count = len(records)
-        if count:
-            _save([])
-        return count
+    db.require_db()
+    with db.connection() as conn:
+        cur = conn.execute("DELETE FROM roi_records")
+        return cur.rowcount
 
 
 def delete_by_batch_id(batch_id: str) -> int:
     """Delete all records tagged with batch_id. Returns the count removed."""
-    with _lock:
-        records = _load()
-        kept = [r for r in records if r.get("batch_id") != batch_id]
-        deleted = len(records) - len(kept)
-        if deleted:
-            _save(kept)
-        return deleted
+    db.require_db()
+    with db.connection() as conn:
+        cur = conn.execute("DELETE FROM roi_records WHERE batch_id = %s", (batch_id,))
+        return cur.rowcount
 
 
+# ── exports ───────────────────────────────────────────────────────────────────
 def export_csv() -> str:
     """Return all records as a CSV string with the 15 Domo columns."""
-    records = _load()
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
@@ -197,7 +349,7 @@ def export_csv() -> str:
         lineterminator="\n",
     )
     writer.writeheader()
-    for r in records:
+    for r in get_all_records():
         writer.writerow(r)
     return output.getvalue()
 
@@ -226,7 +378,7 @@ def export_xlsx() -> bytes:
                              ui_visible / editable / exportable / provenance flags
     Sheets 1–3 join on record_id; sheet 4 documents what every column means.
     """
-    records = _load()
+    records = get_all_records()
     by_id = {r.get("record_id"): r for r in records}
     header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
@@ -238,7 +390,8 @@ def export_xlsx() -> bytes:
     ws_data.title = "All_ROI_Data"
     data_columns = (
         ["record_id"] + DOMO_COLUMNS
-        + ["applicable_from", "applicable_to", "confidence", "source_file", "sme", "stored_name", "saved_at"]
+        + ["applicable_from", "applicable_to", "confidence", "source_file", "sme",
+           "stored_name", "saved_at"]
     )
     _style_header(ws_data, data_columns, header_fill, header_font)
     for row_idx, record in enumerate(records, start=2):

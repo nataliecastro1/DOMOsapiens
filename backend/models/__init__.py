@@ -21,6 +21,9 @@ class ROIRecord(BaseModel):
     year:                    int
     month:                   Optional[str]   = None
     client:                  str
+    # The ROI dimension. The hub hands over a `workstream` (its team); the user
+    # picks the publisher it covers from that workstream's allowed set — see
+    # services/workstreams.py. Publisher is what both apps store on the record.
     publisher:               str
     date_delivered:          Optional[str]   = None
     currency:                str             = "USD"
@@ -53,11 +56,10 @@ class ROIRecord(BaseModel):
     # (see frontend/src/services/hubContext.js). Keeping these on the record is
     # what lets a saved extraction be traced back to the deliverable it came
     # from, and lets the push back to the hub target the right row.
-    hub_scope_id:            Optional[str]   = None  # client_scopes.id
     hub_deliverable_id:      Optional[int]   = None
     hub_deliverable_name:    Optional[str]   = None
-    hub_pathfinder_id:       Optional[str]   = None  # client scope pathfinder id
-    workstream:              Optional[str]   = None  # the hub calls this the team
+    hub_pathfinder_id:       Optional[str]   = None  # the canonical cross-system scope key
+    workstream:              Optional[str]   = None  # the hub's team; maps to publisher
     hub_saved_at:            Optional[str]   = None  # set once pushed to the hub
     hub_roi_metric_id:       Optional[int]   = None  # roi_metrics.id returned by the hub
     # Set by bulk import to group records from the same upload for undo support.
