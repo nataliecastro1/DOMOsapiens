@@ -80,4 +80,10 @@ if __name__ == "__main__":
     # On Alfred the Dockerfile CMD runs uvicorn with $PORT instead.
     import uvicorn
 
-    uvicorn.run("main:app", host="127.0.0.1", port=int(os.getenv("PORT", "3599")), reload=True)
+    uvicorn.run(
+        "main:app",
+        host="127.0.0.1",
+        port=int(os.getenv("PORT", "3599")),
+        reload=True,
+        reload_dirs=[str(Path(__file__).parent)],
+    )

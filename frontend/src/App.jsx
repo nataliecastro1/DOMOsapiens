@@ -23,8 +23,25 @@ const VIEW_META = {
 export default function App() {
   const [loggedIn, setLoggedIn]         = useState(false);
   const [loggedInUser, setLoggedInUser] = useState('');
+  const [authChecked, setAuthChecked]   = useState(false);
   const [activeView, setActiveView]     = useState('extract');
   const [theme, setTheme]               = useState(() => localStorage.getItem('theme') || 'light');
+
+  // Silent sign-in: Alfred SSO headers when deployed, auto dev user locally.
+  // The form login only appears if /api/auth/me says unauthenticated.
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(me => {
+        if (me.authenticated) {
+          setLoggedIn(true);
+          setLoggedInUser(me.username);
+          if (shouldShowTutorial()) setShowTutorial(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setAuthChecked(true));
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -56,6 +73,10 @@ export default function App() {
     setLoginPublisher(publisher);
     if (shouldShowTutorial()) setShowTutorial(true);
   };
+
+  if (!authChecked) {
+    return null; // avoid flashing the login form while /api/auth/me resolves
+  }
 
   if (!loggedIn) {
     return <LoginView onLogin={handleLogin} />;
