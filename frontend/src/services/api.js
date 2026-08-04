@@ -1,4 +1,8 @@
-const BASE = 'http://localhost:8000/api';
+// API base derived from Vite's base URL: '/' in local dev (the vite proxy
+// forwards /api → localhost:3599), '/app/roi-prototype/' on Alfred (the
+// gateway strips that prefix before forwarding, so the backend sees /api).
+// Root-relative '/api' would hit Alfred's own platform API — never that.
+export const BASE = `${import.meta.env.BASE_URL}api`.replace(/\/{2,}/g, '/');
 
 export async function get(path) {
   const res = await fetch(`${BASE}${path}`);

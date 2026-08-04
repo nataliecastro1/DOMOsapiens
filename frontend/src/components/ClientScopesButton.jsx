@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
+import { BASE } from '../services/api';
 
 // Self-contained component: click the button, it fetches the Alfred client
 // scopes from our backend and logs them to the console. If we're not
 // authenticated yet, it runs the device-auth flow (opens the approval tab,
 // polls until approved) and then fetches.
-//
-// Relies on the Vite dev proxy mapping /api -> http://localhost:8000.
 export default function ClientScopesButton() {
   const [status, setStatus] = useState('idle'); // idle | authing | loading | done | error
 
   async function fetchScopes() {
-    const res = await fetch('/api/client-scopes');
+    const res = await fetch(`${BASE}/client-scopes`);
     if (res.status === 401) return null; // not authenticated
     if (!res.ok) throw new Error(`GET /api/client-scopes failed: ${res.status}`);
     return res.json();
@@ -18,7 +17,7 @@ export default function ClientScopesButton() {
 
   async function authenticate() {
     setStatus('authing');
-    const start = await (await fetch('/api/auth/start', { method: 'POST' })).json();
+    const start = await (await fetch(`${BASE}/auth/start`, { method: 'POST' })).json();
     console.log('[client-scopes] Approve access here:', start.verification_uri_complete);
     window.open(start.verification_uri_complete, '_blank', 'noopener');
 
@@ -27,7 +26,7 @@ export default function ClientScopesButton() {
     const deadline = Date.now() + (start.expires_in || 600) * 1000;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, intervalMs));
-      const { state } = await (await fetch('/api/auth/status')).json();
+      const { state } = await (await fetch(`${BASE}/auth/status`)).json();
       console.log('[client-scopes] auth state:', state);
       if (state === 'authenticated') return true;
       if (state === 'denied' || state === 'expired') return false;

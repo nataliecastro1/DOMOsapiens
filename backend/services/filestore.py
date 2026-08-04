@@ -1,14 +1,17 @@
 """
 Durable file store for uploaded source documents.
 
-Two interchangeable backends, selected by environment:
-  - s3:    real S3 (boto3) — used on Alfred. Configure S3_BUCKET plus the
-           usual AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (and optionally
-           S3_ENDPOINT_URL for R2/MinIO-compatible stores).
+Backends, in auto-detection order:
+  - Alfred managed bucket: when the project's bucket storage is enabled
+    (POST /api/projects/:id/bucket), Alfred injects BUCKET_NAME, BUCKET_REGION,
+    BUCKET_ENDPOINT, BUCKET_ACCESS_KEY_ID, BUCKET_SECRET_ACCESS_KEY, and
+    BUCKET_PREFIX at deploy time. Nothing to configure manually.
+  - Generic S3: S3_BUCKET plus standard AWS_* credential env vars (and
+    optionally S3_ENDPOINT_URL for R2/MinIO-compatible stores).
   - local: a folder that mimics S3 keys on disk — used for local dev.
-           Root: FILE_STORE_DIR (default backend/data/s3).
+    Root: FILE_STORE_DIR (default backend/data/s3).
 
-Selection: STORAGE_BACKEND=s3|local wins; otherwise s3 iff S3_BUCKET is set.
+STORAGE_BACKEND=s3|local overrides auto-detection.
 
 Keys are flat S3-style paths, e.g. "uploads/<md5><ext>". The store holds the
 durable copy; rendering code works off a local cache (see services/uploads.py).
@@ -22,16 +25,26 @@ load_dotenv()  # env is read at import time — don't depend on config.py's impo
 
 log = logging.getLogger("roi.filestore")
 
+# Alfred-managed bucket (platform-injected, cannot be overridden by secrets)
+BUCKET_NAME = os.getenv("BUCKET_NAME", "")
+BUCKET_REGION = os.getenv("BUCKET_REGION") or None
+BUCKET_ENDPOINT = os.getenv("BUCKET_ENDPOINT") or None
+BUCKET_ACCESS_KEY_ID = os.getenv("BUCKET_ACCESS_KEY_ID") or None
+BUCKET_SECRET_ACCESS_KEY = os.getenv("BUCKET_SECRET_ACCESS_KEY") or None
+BUCKET_PREFIX = os.getenv("BUCKET_PREFIX", "").strip("/")
+
+# Generic S3 (non-Alfred deployments)
 S3_BUCKET = os.getenv("S3_BUCKET", "")
 S3_PREFIX = os.getenv("S3_PREFIX", "roi-tracker").strip("/")
 S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL") or None
+
 FILE_STORE_DIR = os.getenv(
     "FILE_STORE_DIR",
     os.path.join(os.path.dirname(__file__), "..", "data", "s3"),
 )
 
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "").lower() or (
-    "s3" if S3_BUCKET else "local"
+    "s3" if (BUCKET_NAME or S3_BUCKET) else "local"
 )
 
 
@@ -89,16 +102,27 @@ class LocalFileStore:
 
 
 class S3FileStore:
-    """S3-backed store. All keys are namespaced under S3_PREFIX."""
+    """S3-backed store. All keys are namespaced under the configured prefix.
+
+    boto3 honors HTTPS_PROXY from the environment, which Alfred's network
+    sandbox requires for any egress — no extra proxy wiring needed."""
 
     name = "s3"
 
-    def __init__(self, bucket: str, prefix: str = "", endpoint_url: str | None = None):
+    def __init__(self, bucket: str, prefix: str = "", endpoint_url: str | None = None,
+                 region: str | None = None, access_key: str | None = None,
+                 secret_key: str | None = None):
         import boto3  # imported lazily so local dev never needs AWS config
 
         self.bucket = bucket
         self.prefix = prefix.strip("/")
-        self.client = boto3.client("s3", endpoint_url=endpoint_url)
+        kwargs = {"endpoint_url": endpoint_url}
+        if region:
+            kwargs["region_name"] = region
+        if access_key and secret_key:
+            kwargs["aws_access_key_id"] = access_key
+            kwargs["aws_secret_access_key"] = secret_key
+        self.client = boto3.client("s3", **kwargs)
 
     def _key(self, key: str) -> str:
         key = key.replace("\\", "/").lstrip("/")
@@ -141,10 +165,18 @@ class S3FileStore:
 
 def _build_store():
     if STORAGE_BACKEND == "s3":
-        if not S3_BUCKET:
-            raise RuntimeError("STORAGE_BACKEND=s3 requires S3_BUCKET to be set")
-        log.info("File store: S3 bucket=%s prefix=%s", S3_BUCKET, S3_PREFIX)
-        return S3FileStore(S3_BUCKET, S3_PREFIX, S3_ENDPOINT_URL)
+        if BUCKET_NAME:
+            # Alfred-managed bucket: BUCKET_PREFIX scopes us to app-data/{name}/
+            log.info("File store: Alfred bucket=%s prefix=%s", BUCKET_NAME, BUCKET_PREFIX)
+            return S3FileStore(
+                BUCKET_NAME, BUCKET_PREFIX,
+                endpoint_url=BUCKET_ENDPOINT, region=BUCKET_REGION,
+                access_key=BUCKET_ACCESS_KEY_ID, secret_key=BUCKET_SECRET_ACCESS_KEY,
+            )
+        if S3_BUCKET:
+            log.info("File store: S3 bucket=%s prefix=%s", S3_BUCKET, S3_PREFIX)
+            return S3FileStore(S3_BUCKET, S3_PREFIX, endpoint_url=S3_ENDPOINT_URL)
+        raise RuntimeError("STORAGE_BACKEND=s3 requires BUCKET_NAME (Alfred) or S3_BUCKET")
     log.info("File store: local folder %s", os.path.abspath(FILE_STORE_DIR))
     return LocalFileStore(FILE_STORE_DIR)
 

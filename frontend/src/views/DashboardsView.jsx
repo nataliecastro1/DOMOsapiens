@@ -215,7 +215,7 @@ function BrandHeader({ tag = 'ROI Dashboard' }) {
       padding: '11px 16px', background: 'var(--navy)',
       borderRadius: 10, borderBottom: '3px solid var(--gold)', marginBottom: 14,
     }}>
-      <img src="/anglepoint-logo.png" alt="Anglepoint" style={{ height: 26 }} />
+      <img src={`${import.meta.env.BASE_URL}anglepoint-logo.png`} alt="Anglepoint" style={{ height: 26 }} />
       <span style={{ color: '#fff', fontWeight: 800, fontSize: 14, letterSpacing: 1 }}>ANGLEPOINT</span>
       <span style={{ marginLeft: 'auto', color: 'var(--gold)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tag}</span>
     </div>
@@ -2470,7 +2470,7 @@ export default function DashboardsView({ seed = null, onSeedConsumed, loginClien
   // (a root-relative path breaks when the .html is opened from disk).
   const fetchLogoDataUri = async () => {
     try {
-      const res = await fetch('/anglepoint-logo.png');
+      const res = await fetch(`${import.meta.env.BASE_URL}anglepoint-logo.png`);
       if (!res.ok) return null;
       const blob = await res.blob();
       return await new Promise(resolve => {

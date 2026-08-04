@@ -9,6 +9,7 @@ import HelpView from './views/HelpView';
 import LoginView from './views/LoginView';
 import SettingsView from './views/SettingsView';
 import TutorialOverlay, { shouldShowTutorial } from './components/TutorialOverlay';
+import { BASE } from './services/api';
 import './index.css';
 
 const VIEW_META = {
@@ -30,7 +31,7 @@ export default function App() {
   // Silent sign-in: Alfred SSO headers when deployed, auto dev user locally.
   // The form login only appears if /api/auth/me says unauthenticated.
   useEffect(() => {
-    fetch('/api/auth/me')
+    fetch(`${BASE}/auth/me`)
       .then(r => r.json())
       .then(me => {
         if (me.authenticated) {

@@ -4,7 +4,7 @@ import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
 import AutoDashViewer from '../components/AutoDashViewer';
-import { extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, deleteUpload, getSlideMeta, bulkImport, undoBulkImport } from '../services/api';
+import { BASE, extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, deleteUpload, getSlideMeta, bulkImport, undoBulkImport } from '../services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -1291,7 +1291,6 @@ function ScreenFiles({ filters = {}, clientDir = null, onSelect, onBack }) {
 // PPTX → embedded thumbnail (instant, zero conversion, zero extra disk).
 // PDF  → PDF.js full-page navigation at device pixel ratio (sharp vectors).
 function SlideCarousel({ storedName }) {
-  const BASE = 'http://localhost:8000/api';
   const isPDF = storedName.toLowerCase().endsWith('.pdf');
 
   // ── PPTX: simple thumbnail image ──────────────────────────────────────────
@@ -1436,7 +1435,6 @@ function PdfCarousel({ storedName, BASE }) {
 
 // ─── Slide stack: all PDF pages rendered top-to-bottom ───────────────────────
 const SlideStack = React.forwardRef(function SlideStack({ storedName }, ref) {
-  const BASE = 'http://localhost:8000/api';
   const [total, setTotal]   = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState(false);

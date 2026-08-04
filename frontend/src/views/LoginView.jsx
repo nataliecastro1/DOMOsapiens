@@ -22,7 +22,7 @@ export default function LoginView({ onLogin }) {
     <div className="login-wrap">
       <div className="login-card">
         <div style={{ marginBottom: 36 }}>
-          <img src="/anglepoint-logo.png" alt="Anglepoint" style={{ height: 32 }} />
+          <img src={`${import.meta.env.BASE_URL}anglepoint-logo.png`} alt="Anglepoint" style={{ height: 32 }} />
         </div>
 
         <div className="login-title">Sign in</div>

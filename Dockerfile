@@ -1,6 +1,10 @@
 ## ── Stage 1: Build React frontend ────────────────────────────────────────────
 FROM node:22-slim AS frontend-builder
 
+# Alfred serves the app at /app/roi-prototype/ — built asset URLs must
+# resolve under that path (the gateway strips it before the backend sees it).
+ENV VITE_BASE_URL=/app/roi-prototype/
+
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci --ignore-scripts
