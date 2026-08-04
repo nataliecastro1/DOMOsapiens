@@ -1,0 +1,17 @@
+{
+  "project_name": "roi-prototype",
+  "project_id": "fb24e1d6-16f9-42b1-b8dd-7512e005ce83",
+  "required_files": [
+    "Dockerfile",
+    "backend/main.py",
+    "backend/requirements.txt"
+  ],
+  "exclude": [
+    "*.egg-info",
+    "temp_*",
+    "backend/data/*",
+    "backend/documents/*",
+    "cd_ui_template/",
+    "*.csv"
+  ]
+}

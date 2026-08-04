@@ -2,10 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "DOMOsapiens",
+      "name": "roi-frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
-      "port": 5174
+      "port": 3600
+    },
+    {
+      "name": "roi-backend",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["backend/main.py"],
+      "port": 3599
     }
   ]
 }

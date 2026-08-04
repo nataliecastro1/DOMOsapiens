@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.claude_extraction import extract_with_claude
-from services.uploads import UPLOAD_DIR
+from services.uploads import UPLOAD_DIR, local_path, resolve_by_id_prefix
 from config import DOCUMENTS_DIR
 
 router = APIRouter(prefix="/api")
@@ -41,17 +41,14 @@ async def extract_from_file(body: ExtractionRequest):
     abs_path = None
 
     if body.file_id or body.stored_name:
-        # File from uploads folder
+        # Uploaded file — local_path pulls it from the file store if the
+        # render cache is cold (e.g. after a redeploy on Alfred).
         stored = body.stored_name or body.file_id
-        candidate = os.path.realpath(os.path.join(UPLOAD_DIR, stored))
-        if os.path.exists(candidate):
-            abs_path = candidate
-        else:
-            # Try finding by id prefix
-            for f in os.listdir(UPLOAD_DIR):
-                if f.startswith(body.file_id):
-                    abs_path = os.path.join(UPLOAD_DIR, f)
-                    break
+        abs_path = local_path(stored)
+        if not abs_path and body.file_id:
+            resolved = resolve_by_id_prefix(body.file_id)
+            if resolved:
+                abs_path = local_path(resolved)
 
     elif body.file_path.strip():
         abs_path = _resolve_safe(body.file_path)

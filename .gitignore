@@ -79,3 +79,9 @@ env/
 
 # ---- Secrets: issued API keys (hashed, but never commit) ----
 backend/data/api_keys.json
+
+# ---- Runtime storage (render cache + local S3-mimic store) ----
+backend/data/uploads/
+backend/data/s3/
+backend/data/roi_records.json
+backend/data/audit_events.json

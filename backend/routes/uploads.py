@@ -6,9 +6,18 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from services.uploads import UploadError, UPLOAD_DIR, delete_upload, list_uploads, save_upload
+from services.uploads import UploadError, delete_upload, list_uploads, local_path, save_upload
 
 router = APIRouter(prefix="/api")
+
+
+def _resolve(stored_name: str) -> str:
+    """Turn a stored_name into a local path (fetching from the file store if
+    the render cache is cold), or 404."""
+    path = local_path(stored_name)
+    if not path:
+        raise HTTPException(status_code=404, detail="File not found")
+    return path
 
 SUSPICIOUS_PATTERNS = [
     (r'\bdraft\b',              'Looks like a draft — the document may be incomplete.'),
@@ -122,9 +131,7 @@ def check_upload(stored_name: str, client: str = '', publisher: str = '', year: 
     """Scan an uploaded file for red flags: draft/copy/versioned filename, and
     whether the first page text mentions the expected client, publisher, and year."""
     safe = os.path.basename(stored_name)
-    path = os.path.join(UPLOAD_DIR, safe)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
+    path = _resolve(safe)
 
     name_to_check = original_filename if original_filename else safe
     warnings = _check_name(name_to_check)
@@ -149,10 +156,7 @@ def check_upload(stored_name: str, client: str = '', publisher: str = '', year: 
 @router.get("/uploads/{stored_name}/slide-meta")
 def slide_meta(stored_name: str):
     """Extract year (and raw text snippet) from the first slide/page of an uploaded file."""
-    safe = os.path.basename(stored_name)
-    path = os.path.join(UPLOAD_DIR, safe)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
+    path = _resolve(stored_name)
 
     text = _first_slide_text(path)
     # Prefer years in the 2000s/2010s/2020s range; take the first one found
@@ -166,10 +170,7 @@ def serve_thumbnail(stored_name: str):
     """Return the cover thumbnail for a document.
     PPTX: extracts the embedded docProps/thumbnail.jpeg (instant, zero conversion).
     PDF: renders page 1 at 2× via fitz."""
-    safe = os.path.basename(stored_name)
-    path = os.path.join(UPLOAD_DIR, safe)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
+    path = _resolve(stored_name)
     ext = Path(path).suffix.lower()
 
     if ext in ('.pptx', '.ppt'):
@@ -257,10 +258,7 @@ def _pptx_to_pdf(pptx_path: str) -> str:
 @router.get("/uploads/{stored_name}/slides")
 def get_slide_count(stored_name: str):
     """Return the total number of slides/pages for a document."""
-    safe = os.path.basename(stored_name)
-    path = os.path.join(UPLOAD_DIR, safe)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
+    path = _resolve(stored_name)
     try:
         count = _get_slide_count(path)
         return {"count": count}
@@ -271,10 +269,7 @@ def get_slide_count(stored_name: str):
 @router.get("/uploads/{stored_name}/slides/{index}.png")
 def get_slide_image(stored_name: str, index: int):
     """Render and return a single slide as a PNG image."""
-    safe = os.path.basename(stored_name)
-    path = os.path.join(UPLOAD_DIR, safe)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
+    path = _resolve(stored_name)
     try:
         png_bytes = _render_slide_png(path, index, scale=2.0)
         return Response(png_bytes, media_type='image/png')
@@ -287,10 +282,7 @@ def get_slide_image(stored_name: str, index: int):
 @router.get("/uploads/{stored_name}/preview.pdf")
 def serve_preview_pdf(stored_name: str):
     """Serve a PDF for in-browser rendering via PDF.js. Converts PPTX to PDF on demand."""
-    safe = os.path.basename(stored_name)
-    path = os.path.join(UPLOAD_DIR, safe)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
+    path = _resolve(stored_name)
     ext = Path(path).suffix.lower()
     if ext == '.pdf':
         return FileResponse(path, media_type='application/pdf')
@@ -306,11 +298,7 @@ def serve_preview_pdf(stored_name: str):
 @router.get("/uploads/{stored_name}")
 def serve_upload(stored_name: str):
     """Serve an uploaded file by its stored name."""
-    safe = os.path.basename(stored_name)
-    path = os.path.join(UPLOAD_DIR, safe)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path)
+    return FileResponse(_resolve(stored_name))
 
 
 @router.delete("/uploads/{stored_name}")

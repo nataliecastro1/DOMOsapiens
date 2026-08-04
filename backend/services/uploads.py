@@ -1,15 +1,33 @@
 """
-Persists uploaded source documents (PPTX / PDF / XLSX) to local disk.
+Uploaded source documents (PPTX / PDF / XLSX).
 
-No database — files live under backend/data/uploads/ with a unique stored name,
-mirroring the file-based approach used in storage.py. The original filename is
-preserved in the returned metadata so the UI can still show it to the user.
+Storage architecture (works the same locally and on Alfred):
+  1. Durable copy   → the file store (S3 on Alfred, a local folder mimicking
+                      S3 in dev — see services/filestore.py).
+  2. Metadata + ID  → Postgres `files` table (see services/db.py). The file
+                      ID is the MD5 of the content, so identical uploads
+                      dedupe to one object and one row.
+  3. Render cache   → backend/data/uploads/ on local disk. Thumbnails, slide
+                      rendering, and PPTX→PDF conversion need a real path, so
+                      files are materialised here on demand from the store.
+                      The cache is disposable — it is rebuilt lazily, which is
+                      what makes redeploys on Alfred safe.
+
+`local_path()` is the only way route code should turn a stored_name into a
+filesystem path.
 """
 import hashlib
+import logging
 import os
 from datetime import datetime, timezone
 
+from services import db
+from services.filestore import store
+
+log = logging.getLogger("roi.uploads")
+
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "uploads")
+STORE_PREFIX = "uploads"
 
 # Extensions the Upload card in the Extraction view advertises.
 ALLOWED_EXTENSIONS = {".pptx", ".ppt", ".pdf", ".xlsx"}
@@ -24,6 +42,10 @@ def _ext(filename: str) -> str:
     return os.path.splitext(filename or "")[1].lower()
 
 
+def _store_key(stored_name: str) -> str:
+    return f"{STORE_PREFIX}/{stored_name}"
+
+
 def validate(filename: str) -> str:
     """Return the lower-cased extension, or raise UploadError if unsupported."""
     ext = _ext(filename)
@@ -36,71 +58,145 @@ def validate(filename: str) -> str:
 
 
 def save_upload(filename: str, content: bytes) -> dict:
-    """Persist an uploaded file, deduplicating by content hash.
-    If an identical file already exists, returns its metadata without writing again."""
+    """Persist an uploaded file: durable copy in the file store, metadata row
+    in Postgres, and a warm copy in the local render cache. Dedupes by content
+    hash — identical bytes yield the same file ID and a single stored object."""
     ext = validate(filename)
     if not content:
         raise UploadError("Uploaded file is empty.")
     if len(content) > MAX_BYTES:
         raise UploadError(f"File exceeds the {MAX_BYTES // (1024 * 1024)} MB limit.")
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-    # Use MD5 of content as the stable file ID — same bytes → same name, no duplicate
     file_id = hashlib.md5(content).hexdigest()
     stored_name = f"{file_id}{ext}"
-    full_path = os.path.join(UPLOAD_DIR, stored_name)
+    key = _store_key(stored_name)
 
-    if not os.path.exists(full_path):
-        with open(full_path, "wb") as fh:
+    if not store.exists(key):
+        store.put(key, content)
+
+    # Warm the render cache so the first preview doesn't round-trip the store.
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    cache_path = os.path.join(UPLOAD_DIR, stored_name)
+    if not os.path.exists(cache_path):
+        with open(cache_path, "wb") as fh:
             fh.write(content)
 
-    return {
+    meta = {
         "id": file_id,
         "filename": os.path.basename(filename),
         "stored_name": stored_name,
-        "path": full_path,
+        "storage_key": key,
+        "storage_backend": store.name,
         "size": len(content),
         "content_type": ext.lstrip("."),
+    }
+
+    if db.db_available():
+        try:
+            db.upsert_file(meta)
+        except Exception as e:
+            log.warning("Could not record upload %s in Postgres: %s", stored_name, e)
+    else:
+        log.warning("Postgres unavailable — upload %s stored without a DB row", stored_name)
+
+    return {
+        **meta,
+        "path": cache_path,
+        "uri": store.uri(key),
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
-def delete_upload(stored_name: str) -> bool:
-    """Delete an uploaded file and any cached preview. Returns True if the file existed."""
+def local_path(stored_name: str) -> str | None:
+    """Return a real filesystem path for a stored upload, materialising it
+    from the file store into the render cache if needed. None if unknown."""
     safe = os.path.basename(stored_name)
-    path = os.path.join(UPLOAD_DIR, safe)
+    cache_path = os.path.join(UPLOAD_DIR, safe)
+    if os.path.exists(cache_path):
+        return cache_path
+
+    key = _store_key(safe)
+    if not store.exists(key):
+        return None
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    tmp = cache_path + ".tmp"
+    with open(tmp, "wb") as fh:
+        fh.write(store.get(key))
+    os.replace(tmp, cache_path)
+    log.info("Materialised %s from %s store into render cache", safe, store.name)
+    return cache_path
+
+
+def resolve_by_id_prefix(file_id_prefix: str) -> str | None:
+    """Find a stored_name from a (possibly truncated) file ID."""
+    if db.db_available():
+        try:
+            row = db.find_by_id_prefix(file_id_prefix)
+            if row:
+                return row["stored_name"]
+        except Exception as e:
+            log.warning("DB lookup failed for id prefix %s: %s", file_id_prefix, e)
+    # Fall back to scanning the store, then the cache.
+    for key in store.list_keys(STORE_PREFIX):
+        name = key.split("/")[-1]
+        if name.startswith(file_id_prefix):
+            return name
+    if os.path.isdir(UPLOAD_DIR):
+        for name in os.listdir(UPLOAD_DIR):
+            if name.startswith(file_id_prefix):
+                return name
+    return None
+
+
+def delete_upload(stored_name: str) -> bool:
+    """Delete an upload everywhere: file store, Postgres row, render cache,
+    and any cached preview PDF. Returns True if anything existed."""
+    safe = os.path.basename(stored_name)
     deleted = False
-    if os.path.exists(path):
-        os.remove(path)
-        deleted = True
-    # Remove cached preview PDF if present
-    preview = path + ".preview.pdf"
-    if os.path.exists(preview):
-        os.remove(preview)
+
+    try:
+        deleted = store.delete(_store_key(safe)) or deleted
+    except Exception as e:
+        log.warning("File store delete failed for %s: %s", safe, e)
+
+    if db.db_available():
+        try:
+            deleted = db.delete_file(safe) or deleted
+        except Exception as e:
+            log.warning("DB delete failed for %s: %s", safe, e)
+
+    for path in (
+        os.path.join(UPLOAD_DIR, safe),
+        os.path.join(UPLOAD_DIR, safe) + ".preview.pdf",
+    ):
+        if os.path.exists(path):
+            os.remove(path)
+            deleted = True
     return deleted
 
 
 def list_uploads() -> list[dict]:
-    """Return metadata for every stored upload, newest first."""
-    if not os.path.isdir(UPLOAD_DIR):
-        return []
+    """Return metadata for every stored upload, newest first.
+    Prefers Postgres (has original filenames); falls back to the file store."""
+    if db.db_available():
+        try:
+            return db.list_files()
+        except Exception as e:
+            log.warning("DB list failed, falling back to file store: %s", e)
+
     items = []
-    for name in os.listdir(UPLOAD_DIR):
-        path = os.path.join(UPLOAD_DIR, name)
-        if not os.path.isfile(path):
-            continue
-        stat = os.stat(path)
+    for key in store.list_keys(STORE_PREFIX):
+        name = key.split("/")[-1]
         file_id, ext = os.path.splitext(name)
         items.append(
             {
                 "id": file_id,
                 "stored_name": name,
-                "size": stat.st_size,
+                "storage_key": key,
+                "storage_backend": store.name,
+                "size": None,
                 "content_type": ext.lstrip("."),
-                "uploaded_at": datetime.fromtimestamp(
-                    stat.st_mtime, timezone.utc
-                ).isoformat(),
+                "uploaded_at": None,
             }
         )
-    return sorted(items, key=lambda x: x["uploaded_at"], reverse=True)
+    return items

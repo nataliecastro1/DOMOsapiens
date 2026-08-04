@@ -11,7 +11,7 @@ import json
 import re
 from pathlib import Path
 
-from config import ANTHROPIC_API_KEY
+from config import ANTHROPIC_API_KEY, ROI_MODEL, ROI_MAX_TOKENS
 from services.prompt import EXTRACTION_PROMPT
 
 
@@ -114,8 +114,8 @@ async def extract_with_claude(file_path: str) -> dict:
         ]
 
     message = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=1024,
+        model=ROI_MODEL,
+        max_tokens=ROI_MAX_TOKENS,
         system=EXTRACTION_PROMPT,
         messages=[{"role": "user", "content": content}],
     )
