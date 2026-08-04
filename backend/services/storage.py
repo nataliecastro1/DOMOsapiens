@@ -19,9 +19,14 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from models import ROIRecord
 from models.field_catalog import FIELD_CATALOG
-from services import audit
+from services import audit, jsonstore
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "roi_records.json")
+
+# Durable in Postgres when DATABASE_URL is set (required on Alfred, where the
+# container filesystem is recreated on every redeploy); falls back to the JSON
+# file above for local dev without a database.
+_records = jsonstore.Collection("roi_records", DATA_FILE, id_key="record_id")
 
 # The 15 clean Domo columns (no provenance noise — that lives on its own sheet).
 # Order is the Domo ingestion contract, so it's pinned here rather than derived
@@ -56,11 +61,7 @@ def _ensure_ids(records: list[dict]) -> bool:
 
 
 def _load() -> list[dict]:
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    if not os.path.exists(DATA_FILE):
-        return []
-    with open(DATA_FILE, "r") as f:
-        records = json.load(f)
+    records = _records.load()
     # Migrate legacy records (saved before record_id existed) in place.
     if _ensure_ids(records):
         _save(records)
@@ -68,11 +69,7 @@ def _load() -> list[dict]:
 
 
 def _save(records: list[dict]):
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    tmp = DATA_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(records, f, indent=2, default=str)
-    os.replace(tmp, DATA_FILE)  # atomic — prevents partial-write corruption
+    _records.save(records)
 
 
 def save_record(record: ROIRecord) -> dict:

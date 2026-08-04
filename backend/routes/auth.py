@@ -1,12 +1,14 @@
-"""Auth routes: drive Alfred's device-authorization flow from the frontend."""
+"""Auth route: report who the caller is.
+
+Alfred fronts every deployed service with SSO and injects x-alfred-user-*
+headers on each proxied request, so there is nothing to negotiate — no
+device flow, no tokens, no login form. Locally there is no SSO, so we
+report an automatic dev user instead of prompting for credentials.
+"""
 
 import os
 
-import httpx
-from fastapi import APIRouter, HTTPException, Request
-
-from models import AuthStatus, DeviceAuthStart
-from services import alfred
+from fastapi import APIRouter, Request
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -21,13 +23,7 @@ IS_DEPLOYED = bool(
 
 @router.get("/me")
 def me(request: Request):
-    """Identify the current user without a login form.
-
-    On Alfred, the platform fronts every request with SSO and injects
-    x-alfred-user-* headers (same contract the delivery hub trusts).
-    Locally there is no SSO, so we auto-sign-in a dev user instead of
-    prompting for credentials. The form login remains only as a fallback
-    when neither applies."""
+    """Identify the current user without a login form."""
     name = (request.headers.get("x-alfred-user-name") or "").strip()
     email = (request.headers.get("x-alfred-user-email") or "").strip()
     uid = (request.headers.get("x-alfred-user-id") or "").strip()
@@ -48,28 +44,3 @@ def me(request: Request):
             "id": "",
         }
     return {"authenticated": False, "source": "none", "username": "", "email": "", "id": ""}
-
-
-@router.post("/start", response_model=DeviceAuthStart)
-def start():
-    """Begin device authorization. Returns a URL + code for the user to approve."""
-    try:
-        return alfred.start_device_auth()
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"Alfred device authorization failed: {exc}")
-
-
-@router.get("/status", response_model=AuthStatus)
-def status():
-    """Poll the token endpoint once and report the current auth state."""
-    try:
-        return alfred.poll_once()
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"Alfred token poll failed: {exc}")
-
-
-@router.post("/logout", response_model=AuthStatus)
-def logout():
-    """Discard the stored token and pending device-flow state."""
-    alfred.logout()
-    return AuthStatus(state="unauthenticated")

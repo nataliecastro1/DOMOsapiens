@@ -1,15 +1,18 @@
 """
-File-based store for the client dropdown roster.
+Store for the client dropdown roster.
 
-Follows the same JSON-file persistence pattern as storage.py (no separate
-database engine). The list lives at backend/data/clients.json and is seeded with
-a default roster on first use so the dropdown is never empty.
+Persisted in Postgres when DATABASE_URL is set (see services/jsonstore.py),
+falling back to backend/data/clients.json for local dev without a database.
+Seeded with a default roster on first use so the dropdown is never empty.
 """
-import json
 import os
 from datetime import datetime, timezone
 
+from services import jsonstore
+
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "clients.json")
+
+_clients = jsonstore.Collection("clients", DATA_FILE, id_key="name")
 
 # Initial roster — mirrors the old hard-coded CLIENTS list in the frontend.
 SEED_CLIENTS = ["Encova Insurance", "Northgate LLC", "Acme Corp"]
@@ -22,19 +25,15 @@ class ClientError(Exception):
 
 
 def _load() -> list[dict]:
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    if not os.path.exists(DATA_FILE):
-        seeded = [{"name": n, "added_at": None} for n in SEED_CLIENTS]
-        _save(seeded)
-        return seeded
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    clients = _clients.load()
+    if not clients:
+        clients = [{"name": n, "added_at": None} for n in SEED_CLIENTS]
+        _save(clients)
+    return clients
 
 
 def _save(clients: list[dict]) -> None:
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(clients, f, indent=2)
+    _clients.save(clients)
 
 
 def _sorted_names(clients: list[dict]) -> list[str]:

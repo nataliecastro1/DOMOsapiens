@@ -1,5 +1,4 @@
-from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -62,27 +61,3 @@ class RecordUpdate(BaseModel):
     note:    Optional[str] = None
     executive_summary:       Optional[dict]  = None
 
-AuthState = Literal[
-    "unauthenticated",
-    "pending",
-    "authenticated",
-    "expired",
-    "denied",
-]
-
-
-class ClientScope(BaseModel):
-    client_scope_pathfinder_id: str
-    client_scope_name: str
-
-
-class DeviceAuthStart(BaseModel):
-    verification_uri_complete: str
-    user_code: str
-    expires_in: int
-    interval: int
-
-
-class AuthStatus(BaseModel):
-    state: AuthState
-    expires_at: Optional[datetime] = None

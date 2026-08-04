@@ -21,32 +21,27 @@ low-entropy passwords, which would need a slow KDF).
 """
 import hashlib
 import hmac
-import json
 import os
 import secrets
 import uuid
 from datetime import datetime
 
+from services import jsonstore
+
 KEYS_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "api_keys.json")
 KEY_PREFIX = "tk_"
 
+# Durable in Postgres when DATABASE_URL is set; JSON file fallback otherwise.
+# Only sha256 hashes are stored, never the raw key.
+_keys = jsonstore.Collection("api_keys", KEYS_FILE, id_key="id")
+
 
 def _load() -> list[dict]:
-    os.makedirs(os.path.dirname(KEYS_FILE), exist_ok=True)
-    if not os.path.exists(KEYS_FILE):
-        return []
-    with open(KEYS_FILE, "r") as f:
-        try:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-        except json.JSONDecodeError:
-            return []
+    return _keys.load()
 
 
 def _save(keys: list[dict]) -> None:
-    os.makedirs(os.path.dirname(KEYS_FILE), exist_ok=True)
-    with open(KEYS_FILE, "w") as f:
-        json.dump(keys, f, indent=2, default=str)
+    _keys.save(keys)
 
 
 def _hash(raw: str) -> str:

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -9,7 +9,6 @@ from fastapi.responses import FileResponse
 from routes import (
     auth,
     bulk_import,
-    client_scopes,
     clients,
     documents,
     executive_summary,
@@ -48,7 +47,6 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(bulk_import.router)
 app.include_router(export.router)
-app.include_router(client_scopes.router)
 app.include_router(extraction.router)
 app.include_router(records.router)
 app.include_router(documents.router)
@@ -63,12 +61,25 @@ def health():
     return {"status": "ok"}
 
 
+# Alfred's optional deploy healthcheck probes GET /health for a 2xx before
+# routing traffic to a new version.
+@app.get("/health")
+def platform_health():
+    return {"status": "ok"}
+
+
 STATIC_DIR = Path(__file__).parent / "static"
 if STATIC_DIR.is_dir():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
     @app.get("/{path:path}")
     async def spa_fallback(path: str):
+        # Never let the SPA shell answer for an unmatched API route — that would
+        # turn a deployed 404 into a 200 page of HTML and hide real bugs (the
+        # fallback only exists when a built frontend is present, so this
+        # otherwise differs between local dev and Alfred).
+        if path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
         file = STATIC_DIR / path
         if file.is_file():
             return FileResponse(file)

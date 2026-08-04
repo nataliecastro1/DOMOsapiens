@@ -20,31 +20,27 @@ File lives at backend/data/audit_log.json. Each event:
       "note":      str | None,     # free-text context ("client confirmed via X")
     }
 """
-import json
 import os
 import uuid
 from datetime import datetime
 from typing import Any, Optional
 
+from services import jsonstore
+
 AUDIT_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "audit_log.json")
+
+# Durable in Postgres when DATABASE_URL is set; JSON file fallback otherwise.
+# An audit trail that disappears on redeploy is worse than none, so this is the
+# collection that most needs real persistence on Alfred.
+_events = jsonstore.Collection("audit_events", AUDIT_FILE, id_key="event_id")
 
 
 def _load() -> list[dict]:
-    os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
-    if not os.path.exists(AUDIT_FILE):
-        return []
-    with open(AUDIT_FILE, "r") as f:
-        try:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-        except json.JSONDecodeError:
-            return []
+    return _events.load()
 
 
 def _save(events: list[dict]) -> None:
-    os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
-    with open(AUDIT_FILE, "w") as f:
-        json.dump(events, f, indent=2, default=str)
+    _events.save(events)
 
 
 def append_event(
@@ -68,9 +64,7 @@ def append_event(
         "new_value": new_value,
         "note":      note,
     }
-    events = _load()
-    events.append(event)
-    _save(events)
+    _events.append(event)  # single insert — never rewrites the history
     return event
 
 
