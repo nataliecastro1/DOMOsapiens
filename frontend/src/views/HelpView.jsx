@@ -22,9 +22,9 @@ const ITEMS = [
     sub: 'Three sheets in Client_ROI_Tracker.xlsx, all joined on record_id: All_ROI_Data (clean ROI values), SME_Audit_Log (the change history), and Field_Provenance (per-field source slide + confidence).',
   },
   {
-    icon: 'ti-lock',
-    title: 'Secure API access',
-    sub: 'Domo and BI apps can ingest tracker rows from GET /api/records/secure with Authorization: Bearer <TRACKER_API_KEY> or X-Tracker-Api-Key.',
+    icon: 'ti-file-search',
+    title: 'Source documents are kept',
+    sub: 'Every record links back to the deck its numbers came from — click the source file in the Tracker to open the original ROAR document.',
   },
   {
     icon: 'ti-layout-dashboard',
@@ -35,35 +35,14 @@ const ITEMS = [
 
 // Compact API endpoint reference.
 const ENDPOINTS = [
-  { method: 'GET',   path: '/api/records/secure',        desc: 'All ROI records (API-key protected) — for BI ingestion' },
-  { method: 'GET',   path: '/api/records',               desc: 'All ROI records (open, local use)' },
+  { method: 'GET',   path: '/api/records',               desc: 'All ROI records' },
+  { method: 'GET',   path: '/api/uploads/{stored_name}',  desc: 'Download a retained source document' },
   { method: 'PATCH', path: '/api/records/{record_id}',   desc: 'Edit fields; each change is logged to the audit trail' },
   { method: 'GET',   path: '/api/audit-log',             desc: 'Full append-only audit event history' },
   { method: 'GET',   path: '/api/records/export.xlsx',   desc: 'Download the 3-sheet workbook' },
 ];
 
 const METHOD_COLOR = { GET: '#1f8a4c', PATCH: '#b8860b', POST: '#005f86' };
-
-const SAMPLE_PYTHON = `import requests
-
-KEY = "your-secret-key"            # matches backend TRACKER_API_KEY
-res = requests.get(
-    "http://localhost:8000/api/records/secure",
-    headers={"X-Tracker-Api-Key": KEY},
-)
-records = res.json()
-print(len(records), "records")`;
-
-const SAMPLE_KEYS = `# An admin issues a named key (the full key prints ONCE):
-python manage_keys.py create "Domo-prod"
-#   ✓ Issued key 'Domo-prod'  (id: f3659c0927f8)
-#       tk_-LMWA2SpxvmnFaePCmLA-Lz0lPrUXg0vYWwbkz9Zpjo
-
-python manage_keys.py list           # all keys (no secrets shown)
-python manage_keys.py revoke <id>    # revoke one, anytime`;
-
-const SAMPLE_CURL = `curl -H "X-Tracker-Api-Key: $TRACKER_API_KEY" \\
-  http://localhost:8000/api/records/secure`;
 
 const SAMPLE_OUTPUT = `[
   {
@@ -89,7 +68,7 @@ const SAMPLE_OUTPUT = `[
   …  // one object per record
 ]`;
 
-const SAMPLE_PATCH = `curl -X PATCH http://localhost:8000/api/records/r_2cc46a833b73 \\
+const SAMPLE_PATCH = `curl -X PATCH /api/records/r_2cc46a833b73 \\
   -H "Content-Type: application/json" \\
   -d '{"changes": {"realized_savings": 500000},
        "user": "Integration Bot",
@@ -134,17 +113,14 @@ export default function HelpView() {
       <div className="card">
         <div className="card-title"><i className="ti ti-plug-connected" aria-hidden="true" /> Developer · API Integration</div>
         <p className="help-sub" style={{ marginBottom: 4 }}>
-          Pull tracker data into Domo or any BI pipeline. Access is protected by API keys.
-          An admin issues a <strong>named key</strong> with the CLI below (each is revocable and
-          stored hashed); the integrator receives it over a secure channel and sends it as the
-          <strong> X-Tracker-Api-Key</strong> header (or <strong>Authorization: Bearer</strong>).
+          These endpoints are for use inside the app. Reporting is served from the
+          delivery hub, not from here — a reviewed record is pushed to the hub with
+          the <strong>Hub</strong> action in the Tracker, and BI reads it there so
+          there is only one published set of numbers.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <CodeBlock title="Issue / manage keys (admin)" icon="ti-key">{SAMPLE_KEYS}</CodeBlock>
-          <CodeBlock title="Fetch records — curl" icon="ti-terminal-2">{SAMPLE_CURL}</CodeBlock>
-          <CodeBlock title="Fetch records — Python" icon="ti-brand-python">{SAMPLE_PYTHON}</CodeBlock>
-          <CodeBlock title="Sample response" icon="ti-code">{SAMPLE_OUTPUT}</CodeBlock>
+          <CodeBlock title="Sample record" icon="ti-code">{SAMPLE_OUTPUT}</CodeBlock>
           <CodeBlock title="Edit a value (logged to audit) — curl" icon="ti-pencil">{SAMPLE_PATCH}</CodeBlock>
         </div>
 

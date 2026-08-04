@@ -1,52 +1,18 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse, Response
 from typing import Optional
 from pydantic import BaseModel
 
-from config import TRACKER_API_KEY
 from models import ROIRecord, RecordUpdate
 from models.field_catalog import FIELD_CATALOG
 from services.storage import save_record, get_all_records, update_record, export_csv, export_xlsx, patch_executive_summary, clear_all_records
 from services.audit import get_events
-from services import api_keys
 from services.identity import current_username
-import hmac
 import io
 
 router = APIRouter(prefix="/api")
-
-
-def require_tracker_api_key(
-    authorization: str | None = Header(None),
-    x_tracker_api_key: str | None = Header(None),
-):
-    """Accept any active named key (services/api_keys), with the single
-    TRACKER_API_KEY env value as a legacy fallback."""
-    supplied_key = None
-    if authorization:
-        scheme, _, token = authorization.partition(" ")
-        if scheme.lower() == "bearer" and token:
-            supplied_key = token.strip()
-    if x_tracker_api_key:
-        supplied_key = x_tracker_api_key.strip()
-
-    # Nothing configured at all → tell the caller it's not set up.
-    if not TRACKER_API_KEY and not api_keys.any_active():
-        raise HTTPException(status_code=503, detail="No API keys configured. Run: python manage_keys.py create \"<name>\"")
-
-    if not supplied_key:
-        raise HTTPException(status_code=401, detail="Unauthorized: missing API key.")
-
-    # Named keys (preferred) …
-    if api_keys.verify(supplied_key):
-        return
-    # … or the legacy shared env key.
-    if TRACKER_API_KEY and hmac.compare_digest(supplied_key, TRACKER_API_KEY):
-        return
-
-    raise HTTPException(status_code=401, detail="Unauthorized: invalid API key.")
 
 
 @router.get("/fields")
@@ -141,12 +107,6 @@ def record_audit(record_id: str):
 def audit_log():
     """Return the full append-only audit event history across all records."""
     return get_events()
-
-
-@router.get("/records/secure")
-def list_records_secure(_auth: None = Depends(require_tracker_api_key)):
-    """Return all saved ROI records via a secure API endpoint."""
-    return get_all_records()
 
 
 @router.get("/records/export.csv")

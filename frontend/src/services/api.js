@@ -172,19 +172,6 @@ export async function saveExecutiveSummary(identifier, executive_summary) {
   return res.json();
 }
 
-/** Return the client roster (sorted names) for the dropdown. */
-export async function getClients() {
-  return get('/clients');
-}
-
-/**
- * Add a new client to the roster.
- * Returns { name: <canonical name>, clients: <updated sorted name list> }.
- */
-export async function addClient(name) {
-  return post('/clients', { name });
-}
-
 /**
  * Upload a source document (PPTX/PDF/XLSX) via multipart/form-data.
  * Returns the stored file's metadata { id, filename, size, content_type, uploaded_at }.
@@ -200,7 +187,8 @@ export async function uploadFile(file) {
   return res.json();
 }
 
-/** Delete a raw uploaded file from the server once extraction is complete. */
+/** Delete a stored source document. Uploads are retained after extraction, so
+ *  this is only for explicit removal — not part of the normal flow. */
 export async function deleteUpload(storedName) {
   await fetch(`${BASE}/uploads/${encodeURIComponent(storedName)}`, { method: 'DELETE' })
     .catch(() => {});  // best-effort — never throw

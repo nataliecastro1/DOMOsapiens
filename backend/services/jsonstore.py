@@ -10,10 +10,13 @@ This module keeps the exact `list[dict]` semantics those services expect while
 storing each document as a JSONB row in Postgres. Ordering is preserved via a
 monotonic sequence, so append-only histories stay chronological.
 
-If Postgres is unreachable (or DATABASE_URL is unset), every operation falls
-back to the original JSON file, so local dev without a database keeps working
-unchanged. On first successful connect, an existing JSON file is imported once
-so no local data is lost.
+Locally (or with DATABASE_URL unset) operations fall back to the original JSON
+file, so dev without a database keeps working. On first successful connect an
+existing JSON file is imported once so no local data is lost.
+
+Deployed, that fallback is DISABLED on purpose: a container-local file would be
+silently discarded on the next redeploy, so a save could appear to succeed and
+then vanish. Failing loudly is the safer failure mode.
 """
 import json
 import logging
@@ -21,6 +24,7 @@ import os
 import threading
 
 from services import db
+from services.identity import IS_DEPLOYED
 
 log = logging.getLogger("roi.jsonstore")
 
@@ -77,6 +81,14 @@ class Collection:
         self._lock = threading.Lock()
 
     # ── file fallback ────────────────────────────────────────────────────
+    def _no_fallback(self, op: str):
+        """Deployed, there is no safe local fallback — surface the failure."""
+        raise RuntimeError(
+            f"Cannot {op} '{self.name}': Postgres is unavailable and this is a "
+            "deployed instance, where a local file would be lost on redeploy. "
+            "Check DATABASE_URL and the managed database."
+        )
+
     def _file_load(self) -> list[dict]:
         if not os.path.exists(self.file_path):
             return []
@@ -163,7 +175,11 @@ class Collection:
                 self._import_file_once()
                 return self._pg_load()
             except Exception as e:
-                log.warning("%s: Postgres read failed, using file: %s", self.name, e)
+                log.warning("%s: Postgres read failed: %s", self.name, e)
+                if IS_DEPLOYED:
+                    raise
+        elif IS_DEPLOYED:
+            self._no_fallback("read")
         return self._file_load()
 
     def save(self, items: list[dict]) -> None:
@@ -173,7 +189,11 @@ class Collection:
                 self._pg_replace(items)
                 return
             except Exception as e:
-                log.warning("%s: Postgres write failed, using file: %s", self.name, e)
+                log.error("%s: Postgres write failed: %s", self.name, e)
+                if IS_DEPLOYED:
+                    raise
+        elif IS_DEPLOYED:
+            self._no_fallback("write")
         self._file_save(items)
 
     def append(self, item: dict) -> None:
@@ -184,7 +204,11 @@ class Collection:
                 self._pg_append(item)
                 return
             except Exception as e:
-                log.warning("%s: Postgres append failed, using file: %s", self.name, e)
+                log.error("%s: Postgres append failed: %s", self.name, e)
+                if IS_DEPLOYED:
+                    raise
+        elif IS_DEPLOYED:
+            self._no_fallback("append to")
         with self._lock:
             items = self._file_load()
             items.append(item)

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Badge from '../components/Badge';
-import { getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog, getFields, generateExecutiveSummary, saveExecutiveSummary, deleteRecord } from '../services/api';
+import { BASE, getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog, getFields, generateExecutiveSummary, saveExecutiveSummary, deleteRecord } from '../services/api';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
 import SendToHubModal from '../components/SendToHubModal';
 
@@ -461,7 +461,7 @@ function TabROIData({ onSendToDashboards }) {
         return fmtAmount(record[col.key]);
       case 'file':
         return record.stored_name
-          ? <a href={`http://localhost:8000/api/uploads/${record.stored_name}`} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>{record.source_file || record.stored_name}</a>
+          ? <a href={`${BASE}/uploads/${record.stored_name}`} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>{record.source_file || record.stored_name}</a>
           : <span style={{ color: 'var(--text-muted)' }}>{record.source_file || '—'}</span>;
       default:
         return record[col.key] ?? '—';
@@ -886,7 +886,7 @@ function TabSourceFiles() {
               <tr key={r.record_id || i}>
                 <td style={{ fontWeight: 500 }}>
                     {r.stored_name
-                      ? <a href={`http://localhost:8000/api/uploads/${r.stored_name}`} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>{r.source_file || r.stored_name}</a>
+                      ? <a href={`${BASE}/uploads/${r.stored_name}`} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>{r.source_file || r.stored_name}</a>
                       : <span style={{ color: 'var(--text-muted)' }}>{r.source_file || '—'}</span>}
                   </td>
                 <td>{r.client}</td>

@@ -8,7 +8,6 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY"
 
 ROI_MODEL = os.getenv("ROI_MODEL", "claude-sonnet-4-20250514")
 ROI_MAX_TOKENS = int(os.getenv("ROI_MAX_TOKENS", "2048"))
-TRACKER_API_KEY = os.getenv("TRACKER_API_KEY", "")
 
 # Folder where local ROAR/ELP documents are stored.
 # Drop new documents here — they will appear automatically in search results.

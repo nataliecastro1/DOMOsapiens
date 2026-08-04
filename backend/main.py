@@ -9,7 +9,6 @@ from fastapi.responses import FileResponse
 from routes import (
     auth,
     bulk_import,
-    clients,
     documents,
     executive_summary,
     export,
@@ -51,7 +50,6 @@ app.include_router(extraction.router)
 app.include_router(records.router)
 app.include_router(documents.router)
 app.include_router(uploads.router)
-app.include_router(clients.router)
 app.include_router(roar.router)
 app.include_router(executive_summary.router)
 

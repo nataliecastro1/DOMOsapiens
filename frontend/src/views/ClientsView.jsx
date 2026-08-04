@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Badge from '../components/Badge';
-import { getRecords } from '../services/api';
+import { BASE, getRecords } from '../services/api';
 
 // ─── Client Detail Panel ──────────────────────────────────────────────────────
 function ClientDetail({ client, records, onClose }) {
@@ -46,7 +46,7 @@ function ClientDetail({ client, records, onClose }) {
                 <td>{r.sme || '—'}</td>
                 <td style={{ fontSize: 11 }}>
                   {r.stored_name
-                    ? <a href={`http://localhost:8000/api/uploads/${r.stored_name}`} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>{r.source_file || r.stored_name}</a>
+                    ? <a href={`${BASE}/uploads/${r.stored_name}`} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>{r.source_file || r.stored_name}</a>
                     : <span style={{ color: 'var(--text-muted)' }}>{r.source_file || '—'}</span>}
                 </td>
                 <td style={{ color: 'var(--text-faint)', fontSize: 11 }}>{r.saved_at ? new Date(r.saved_at).toLocaleDateString() : '—'}</td>

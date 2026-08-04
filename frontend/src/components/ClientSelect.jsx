@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CLIENTS } from '../data';
-import { addClient } from '../services/api';
 
 export default function ClientSelect({ value, onChange, clients }) {
   const list = (clients && clients.length) ? clients : CLIENTS;
@@ -46,11 +45,12 @@ export default function ClientSelect({ value, onChange, clients }) {
     setOpen(false);
   };
 
-  const handleSaveNew = async () => {
+  const handleSaveNew = () => {
     const name = newName.trim();
     if (!name) return;
     setSaving(true);
-    try { await addClient(name); } catch (_) {}
+    // No server-side roster: the typed name applies to this record. Client
+    // names that matter come from the hub's scopes via the Status View handoff.
     onChange(name);
     setQuery(name);
     setAdding(false);

@@ -61,8 +61,6 @@ export default function App() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [loginClient, setLoginClient]   = useState('');
   const [loginPublisher, setLoginPublisher] = useState('');
-  const [clients, setClients]           = useState(null);
-  const [clientHandles, setClientHandles] = useState(null);
   const [extractionKey, setExtractionKey] = useState(0);
   // A filtered subset of records handed off from the Tracker → Dashboards.
   // Null when the user opens Dashboards normally (works off the full dataset).
@@ -101,13 +99,13 @@ export default function App() {
         if (roiAccess && roiAccess.can_extract === false) {
           return <AccessGuard role={roiAccess.role} allowedRoles={roiAccess.allowed_roles} user={roiAccess.user || loggedInUser} />;
         }
-        return <ExtractionView key={extractionKey} onNav={(view, dashId) => { if (dashId) setNewDashId(dashId); setActiveView(view); }} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} onOpenRecord={r => { setDashboardTarget(r); setActiveView('dashboards'); }} />;
+        return <ExtractionView key={extractionKey} onNav={(view, dashId) => { if (dashId) setNewDashId(dashId); setActiveView(view); }} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} onOpenRecord={r => { setDashboardTarget(r); setActiveView('dashboards'); }} />;
       case 'dashboards': return <DashboardsView seed={dashboardSeed} onSeedConsumed={() => setDashboardSeed(null)} loginClient={loginClient} loginPublisher={loginPublisher} targetRecord={dashboardTarget} onTargetConsumed={() => setDashboardTarget(null)} loggedInUser={loggedInUser} newDashId={newDashId} onNewDashConsumed={() => setNewDashId(null)} />;
       case 'tracker':    return <TrackerView loggedInUser={loggedInUser} onSendToDashboards={sendToDashboards} />;
       case 'clients':    return <ClientsView />;
       case 'help':       return <HelpView />;
       case 'settings':   return <SettingsView theme={theme} onThemeChange={setTheme} />;
-      default:           return <ExtractionView onNav={setActiveView} clients={clients} clientHandles={clientHandles} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} />;
+      default:           return <ExtractionView onNav={setActiveView} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} />;
     }
   };
 

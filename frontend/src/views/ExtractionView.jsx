@@ -4,7 +4,7 @@ import Badge from '../components/Badge';
 import ClientSelect from '../components/ClientSelect';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
 import AutoDashViewer from '../components/AutoDashViewer';
-import { BASE, extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, deleteUpload, getSlideMeta, bulkImport, undoBulkImport } from '../services/api';
+import { BASE, extractROAR, extractFromFile, uploadFile, searchDocuments, saveRecord, getRecords, generateExecutiveSummary, saveExecutiveSummary, checkUpload, getSlideMeta, bulkImport, undoBulkImport } from '../services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -4636,7 +4636,7 @@ function ScreenDone({ finalFields, selectedFile, onTracker, onDashboards, logged
 // ─── ExtractionView ───────────────────────────────────────────────────────────
 // Orchestrates the batch as a thin layer over the per-file screens. A single
 // file is simply a batch of length one, so the original flow is preserved.
-export default function ExtractionView({ onNav, clients, clientHandles, loggedInUser = '', initialClient = '', initialPublisher = '', onOpenRecord }) {
+export default function ExtractionView({ onNav, loggedInUser = '', initialClient = '', initialPublisher = '', onOpenRecord }) {
   const [step, setStep]                         = useState(0);
   const [files, setFiles]                       = useState([]);            // the batch
   const [currentFileIndex, setCurrentFileIndex] = useState(0);            // file under review at Compare
@@ -4753,7 +4753,10 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     setAggregateFields(agg);
     setFileResults(results);
     setStep(6);
-    files.forEach(f => { if (f?.stored_name) deleteUpload(f.stored_name); });
+    // Source documents are deliberately RETAINED: each record links back to the
+    // deck its numbers came from, which is the evidence trail an auditor asks
+    // for. Uploads are removed only when a record is deleted, or explicitly via
+    // DELETE /api/uploads/{stored_name}.
   };
 
   // Advance to the next file, or save and go to Done on the last file.
@@ -4798,11 +4801,9 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
     setReqPublisher('');
   };
 
-  // Resolve the loaded folder handle for the chosen client, if we have one,
-  // so the Files step can scan it automatically.
-  const clientDir = (clientHandles && filters.client)
-    ? (clientHandles.get(filters.client) || null)
-    : null;
+  // No pre-loaded folder handles: the Files step asks the user to pick a
+  // folder itself (File System Access API), which is what already happened.
+  const clientDir = null;
 
   // A representative meta for the Done summary (common client/publisher/year,
   // first file's stored reference for the executive-summary call).
@@ -4818,7 +4819,7 @@ export default function ExtractionView({ onNav, clients, clientHandles, loggedIn
   };
 
   const screens = [
-    <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFilesSelected} clients={clients}
+    <ScreenRequest  key={0} onNext={(f) => { setFilters(f); setStep(1); }} onUploaded={handleFilesSelected}
       year={reqYear} onYearChange={setReqYear}
       client={reqClient}
       publisher={reqPublisher}
