@@ -79,9 +79,9 @@ Rules:
 # ─── Models ───────────────────────────────────────────────────────────────────
 
 class SummaryRequest(BaseModel):
-    client: str = ""
+    client_scope_name: str = ""
     publisher: str = ""
-    year: Optional[int] = None
+    period: Optional[str] = None
     identified_risk: Optional[float] = None
     id_cost_avoidance: Optional[float] = None
     acc_cost_avoidance: Optional[float] = None
@@ -99,7 +99,7 @@ class SummaryRequest(BaseModel):
 class AugmentRequest(BaseModel):
     existing_summary: dict
     additional_text: str
-    client: str = ""
+    client_scope_name: str = ""
     publisher: str = ""
 
 
@@ -134,9 +134,9 @@ def _build_content(body: SummaryRequest, file_path: str) -> list:
     ext = Path(file_path).suffix.lower()
 
     kpi_lines = [
-        f"Client: {body.client or 'N/A'}",
+        f"Client: {body.client_scope_name or 'N/A'}",
         f"Publisher: {body.publisher or 'N/A'}",
-        f"Year: {body.year or 'N/A'}",
+        f"Period: {body.period or 'N/A'}",
         f"Identified Risk: {_fmt(body.identified_risk) or 'N/A'}",
         f"Identified Cost Avoidance: {_fmt(body.id_cost_avoidance) or 'N/A'}",
         f"Accomplished Cost Avoidance: {_fmt(body.acc_cost_avoidance) or 'N/A'}",
@@ -249,9 +249,9 @@ async def generate_summary(body: SummaryRequest):
         content = _build_content(body, file_path)
     else:
         kpi_lines = [
-            f"Client: {body.client or 'N/A'}",
+            f"Client: {body.client_scope_name or 'N/A'}",
             f"Publisher: {body.publisher or 'N/A'}",
-            f"Year: {body.year or 'N/A'}",
+            f"Period: {body.period or 'N/A'}",
             f"Identified Risk: {_fmt(body.identified_risk) or 'N/A'}",
             f"Identified Cost Avoidance: {_fmt(body.id_cost_avoidance) or 'N/A'}",
             f"Accomplished Cost Avoidance: {_fmt(body.acc_cost_avoidance) or 'N/A'}",
@@ -274,7 +274,7 @@ async def augment_summary(body: AugmentRequest):
         {
             "type": "text",
             "text": (
-                f"Client: {body.client or 'N/A'}\nPublisher: {body.publisher or 'N/A'}\n\n"
+                f"Client: {body.client_scope_name or 'N/A'}\nPublisher: {body.publisher or 'N/A'}\n\n"
                 f"Existing summary:\n{json.dumps(body.existing_summary, indent=2)}\n\n"
                 f"Additional information from the user:\n{body.additional_text}\n\n"
                 "Update the summary to integrate the additional information professionally. "

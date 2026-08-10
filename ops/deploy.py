@@ -175,16 +175,20 @@ def deploy_to_alfred(config, tarball_name, skip_wait=False):
         time.sleep(5)
         r = alfred_api("GET", f"/api/projects/{pid}/deployments/{dep_id}")
         if r.status_code == 200:
-            d = r.json()
-            status = d.get("status")
-            elapsed = (i + 1) * 5
-            print(f"    [{elapsed}s] status={status}")
-            if status == "success":
-                print(f"\n    [OK] DEPLOYED AND LIVE — v{ver}")
-                return
-            elif status in ("failed", "error"):
-                print(f"\n    [X] DEPLOY FAILED: {d.get('error_message', 'unknown')}")
-                sys.exit(1)
+            try:
+                d = r.json()
+                status = d.get("status")
+                elapsed = (i + 1) * 5
+                print(f"    [{elapsed}s] status={status}")
+                if status == "success":
+                    print(f"\n    [OK] DEPLOYED AND LIVE — v{ver}")
+                    return
+                elif status in ("failed", "error"):
+                    print(f"\n    [X] DEPLOY FAILED: {d.get('error_message', 'unknown')}")
+                    sys.exit(1)
+            except Exception as e:
+                pass
+
 
     print("    Timed out waiting for build. Check Alfred UI.")
 

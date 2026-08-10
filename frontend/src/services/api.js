@@ -23,11 +23,11 @@ export async function post(path, body) {
 }
 
 /**
- * Search local documents folder by client, year, publisher.
+ * Search local documents folder by hub_deliverable_id, publisher.
  * Returns { files: [...], total: N }
  */
-export async function searchDocuments({ client = '', year = '', publisher = '' } = {}) {
-  const params = new URLSearchParams({ client, year, publisher });
+export async function searchDocuments({ hub_deliverable_id = '', publisher = '' } = {}) {
+  const params = new URLSearchParams({ hub_deliverable_id, publisher });
   return get(`/documents/search?${params}`);
 }
 
@@ -35,17 +35,37 @@ export async function searchDocuments({ client = '', year = '', publisher = '' }
  * Extract ROI data from a local document file (selected from search results).
  * file_path is the path returned by searchDocuments.
  */
-export async function extractFromFile(fileRef) {
-  // fileRef can be a string path (from search results) or
-  // an object with { id, stored_name, path } (from uploaded file)
-  if (typeof fileRef === 'string') {
-    return post('/extract', { file_path: fileRef });
+async function _pollExtractionJob(res) {
+  if (res.status === 'ok' && res.data) return res;
+  if (res.job_id) {
+    while (true) {
+      await new Promise(r => setTimeout(r, 3000));
+      const poll = await get(`/extract/${res.job_id}`);
+      if (poll.status === 'COMPLETED') return { status: 'ok', data: poll.result_data };
+      if (poll.status === 'FAILED') throw new Error(poll.error_message || 'Extraction failed');
+    }
   }
-  return post('/extract', {
-    file_path:   fileRef.path        || '',
-    file_id:     fileRef.id          || '',
-    stored_name: fileRef.stored_name || '',
-  });
+  return res;
+}
+
+export async function extractFromFile(fileRef, background = false) {
+  let res;
+  if (typeof fileRef === 'string') {
+    res = await post('/extract', { file_path: fileRef });
+  } else {
+    res = await post('/extract', {
+      file_path:   fileRef.path        || '',
+      file_id:     fileRef.id          || '',
+      stored_name: fileRef.stored_name || '',
+      name:        fileRef.name        || '',
+    });
+  }
+  if (background) return res; // Return job info immediately
+  return _pollExtractionJob(res);
+}
+
+export async function getExtractionJobs() {
+  return get('/extract/jobs');
 }
 
 /**
@@ -134,9 +154,9 @@ export async function augmentExecutiveSummary(data) {
   return post('/executive-summary/augment', data);
 }
 
-/** Check an uploaded file for red flags (draft/copy/version, client+publisher match). */
-export async function checkUpload(storedName, { client = '', publisher = '', year = '', original_filename = '' } = {}) {
-  const params = new URLSearchParams({ client, publisher, year, original_filename });
+/** Check an uploaded file for red flags (draft/copy/version, client_scope_name+publisher match). */
+export async function checkUpload(storedName, { client_scope_name = '', publisher = '', original_filename = '' } = {}) {
+  const params = new URLSearchParams({ client_scope_name, publisher, original_filename });
   return get(`/uploads/${encodeURIComponent(storedName)}/check?${params}`);
 }
 

@@ -13,6 +13,8 @@ File lives at backend/data/audit_log.json. Each event:
       "record_id": str,            # which ROI record this is about
       "timestamp": str,            # ISO 8601 UTC
       "user":      str | None,     # who did it (SME name)
+      "user_email": str | None,    # Alfred SSO email (immutable)
+      "user_id":   str | None,     # Alfred SSO user ID (immutable)
       "action":    "create" | "edit" | "approve",
       "field":     str | None,     # metric key for edits (e.g. "realized_savings")
       "old_value": Any | None,     # value before the edit
@@ -47,6 +49,8 @@ def append_event(
     record_id: str,
     action: str,
     user: Optional[str] = None,
+    user_email: Optional[str] = None,
+    user_id: Optional[str] = None,
     field: Optional[str] = None,
     old_value: Any = None,
     new_value: Any = None,
@@ -58,6 +62,8 @@ def append_event(
         "record_id": record_id,
         "timestamp": datetime.utcnow().isoformat(),
         "user":      user,
+        "user_email": user_email,
+        "user_id":   user_id,
         "action":    action,
         "field":     field,
         "old_value": old_value,

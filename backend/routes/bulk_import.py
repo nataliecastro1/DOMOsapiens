@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from openpyxl import load_workbook
 
 from models import ROIRecord
-from services.storage import delete_by_batch_id, existing_natural_keys, save_record
+from services.storage import delete_by_batch_id, save_record
 
 router = APIRouter(prefix="/api")
 
@@ -22,8 +22,9 @@ class SkipRow(Exception):
 # Maps spreadsheet column headers (lowercased) to ROIRecord field names.
 # Covers both the user-facing labels from the sample file and the raw backend keys.
 _COLUMN_MAP = {
-    "year":                           "year",
-    "client":                         "client",
+    "hub_deliverable_id":             "hub_deliverable_id",
+    "hub deliverable id":             "hub_deliverable_id",
+    "deliverable id":                 "hub_deliverable_id",
     "publisher":                      "publisher",
     "currency":                       "currency",
     "date delivered":                 "date_delivered",
@@ -363,13 +364,6 @@ def _parse_number(val) -> float | None:
         return None
 
 
-def _parse_year(val) -> int | None:
-    if val is None:
-        return None
-    if isinstance(val, int):
-        return val
-    try:
-        return int(str(val).strip())
     except ValueError:
         return None
 
@@ -424,33 +418,27 @@ def _map_row(
     for i, key in col_index.items():
         raw[key] = values[i] if i < len(values) else None
 
-    # Truly blank row — silently skip, no need to flag.
     if all(v is None or str(v).strip() == "" for v in raw.values()):
         return None
 
-    year_val = _parse_year(raw.get("year"))
-    if not year_val:
-        raw_year = raw.get("year")
-        raise SkipRow(
-            f"Could not parse year{f': {raw_year!r}' if raw_year is not None else ' (column missing or empty)'}"
-        )
+    hub_val = _parse_number(raw.get("hub_deliverable_id"))
+    if not hub_val:
+        raise SkipRow("Missing or invalid hub_deliverable_id")
+    hub_id = int(hub_val)
 
-    # Tab name is authoritative; fall back to the column value only for CSV.
-    client = client_override if client_override else str(raw.get("client") or "").strip()
     publisher = _normalize_publisher(str(raw.get("publisher") or ""))
     if not publisher:
         raise SkipRow("Missing publisher")
 
     fields: dict = {
-        "year":           year_val,
-        "client":         client,
+        "hub_deliverable_id": hub_id,
         "publisher":      publisher,
         "currency":       str(raw.get("currency") or "USD").strip(),
         "date_delivered": str(raw.get("date_delivered") or "").strip() or None,
         "month":          str(raw.get("month") or "").strip() or None,
         "notes":          str(raw.get("notes") or "").strip() or None,
         "sme":            str(raw.get("sme") or "").strip() or None,
-        "source_file":    f"{client} — {publisher} — {year_val} (bulk import)",
+        "source_file":    f"{publisher} — {hub_id} (bulk import)",
         "batch_id":       batch_id,
     }
     for num_key in _NUMERIC_FIELDS:
@@ -479,9 +467,9 @@ async def bulk_import(file: UploadFile = File(...)):
         sheets: list[dict] = []
         seen_keys: set[tuple] = set()
 
-        # Snapshot of existing records keyed by (client, publisher, year) for
-        # duplicate detection. One indexed query, not a full record load.
-        existing_db = existing_natural_keys()
+        # Snapshot of existing records keyed by hub_deliverable_id
+        from services.storage import existing_hub_ids
+        existing_db = existing_hub_ids()
 
         def sse(data: dict) -> str:
             return f"data: {json.dumps(data)}\n\n"
@@ -502,15 +490,15 @@ async def bulk_import(file: UploadFile = File(...)):
             nonlocal imported
             raw_data = _row_data(headers, row, client_override)
             try:
-                record = _map_row(headers, row, client_override=client_override, batch_id=batch_id)
+                record = _map_row(headers, row, batch_id=batch_id)
                 if record is None:
                     return "blank"
-                dup_key = (record.client.lower(), record.publisher.lower(), record.year)
+                dup_key = record.hub_deliverable_id
                 # Within-file duplicate
                 if dup_key in seen_keys:
                     flagged.append({
                         "location": location, "row": row_num,
-                        "reason": f"Duplicate within file — {record.client} / {record.publisher} / {record.year} already appears in this import",
+                        "reason": f"Duplicate within file — hub_deliverable_id {record.hub_deliverable_id} already appears in this import",
                         "data": raw_data,
                     })
                     return "flagged"
@@ -519,7 +507,7 @@ async def bulk_import(file: UploadFile = File(...)):
                     existing = existing_db[dup_key]
                     flagged.append({
                         "location": location, "row": row_num,
-                        "reason": f"Already in database — {record.client} / {record.publisher} / {record.year} was previously imported",
+                        "reason": f"Already in database — hub_deliverable_id {record.hub_deliverable_id} was previously imported",
                         "data": raw_data,
                         "existing": {
                             "record_id":    existing.get("record_id"),

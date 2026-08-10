@@ -105,7 +105,7 @@ class GlanceRow(BaseModel):
 
 class ValueAtAGlanceExportRequest(BaseModel):
     period: str           # e.g. "FY2023 – FY2026"
-    client: str = ""      # used for filename
+    client_scope_name: str = ""      # used for filename
     rows:   list[GlanceRow]
     total:  GlanceRow
 
@@ -327,7 +327,7 @@ def _build_vag_html(req: ValueAtAGlanceExportRequest) -> str:
 @router.post("/value-at-a-glance.pptx")
 def export_value_at_a_glance_pptx(req: ValueAtAGlanceExportRequest):
     pptx_bytes = _build_vag_pptx(req)
-    slug = req.client.replace(" ", "_") if req.client else "Value_at_a_Glance"
+    slug = req.client_scope_name.replace(" ", "_") if req.client_scope_name else "Value_at_a_Glance"
     filename = f"{slug}_Value_at_a_Glance.pptx"
     return Response(
         content=pptx_bytes,
@@ -339,7 +339,7 @@ def export_value_at_a_glance_pptx(req: ValueAtAGlanceExportRequest):
 @router.post("/value-at-a-glance.html")
 def export_value_at_a_glance_html(req: ValueAtAGlanceExportRequest):
     html = _build_vag_html(req)
-    slug = req.client.replace(" ", "_") if req.client else "Value_at_a_Glance"
+    slug = req.client_scope_name.replace(" ", "_") if req.client_scope_name else "Value_at_a_Glance"
     filename = f"{slug}_Value_at_a_Glance.html"
     return Response(
         content=html.encode("utf-8"),
@@ -380,7 +380,7 @@ class LVChart(BaseModel):
     y_ticks: int = 4
 
 class LifetimeValueExportRequest(BaseModel):
-    client: str
+    client_scope_name: str
     scope: str
     groups: list[LVGroup]
     headline: LVHeadline
@@ -420,7 +420,7 @@ def _build_slide_data_js(req: LifetimeValueExportRequest) -> str:
     sn = req.chart.series_names
     return (
         f'const slideData = {{\n'
-        f'  client:{_js(req.client)},\n'
+        f'  client:{_js(req.client_scope_name)},\n'
         f'  scope:{_js(req.scope)},\n'
         f'  groups:[\n    {groups_js}\n  ],\n'
         f'  headline:{{ value:{_js(req.headline.value)}, caption:{_js(req.headline.caption)},\n'
@@ -486,7 +486,7 @@ def _build_lv_pptx(req: LifetimeValueExportRequest) -> bytes:
 
     # Client name + scope
     _lv_text(slide, Inches(0.22), Inches(0.2), RAIL_W - Inches(0.3), Inches(0.38),
-             req.client.upper(), 9, bold=True, color=_LV_GOLD)
+             req.client_scope_name.upper(), 9, bold=True, color=_LV_GOLD)
     _lv_text(slide, Inches(0.22), Inches(0.56), RAIL_W - Inches(0.3), Inches(0.32),
              req.scope, 7.5, color="#aab8cc")
 
@@ -651,7 +651,7 @@ def export_lifetime_value_html(req: LifetimeValueExportRequest):
         template,
         flags=re.DOTALL,
     )
-    filename = f"{req.client.replace(' ', '_')}_Lifetime_Value.html"
+    filename = f"{req.client_scope_name.replace(' ', '_')}_Lifetime_Value.html"
     return Response(
         content=new_html.encode("utf-8"),
         media_type="text/html",
@@ -663,7 +663,7 @@ def export_lifetime_value_html(req: LifetimeValueExportRequest):
 def export_lifetime_value_pptx(req: LifetimeValueExportRequest):
     """Build a widescreen PowerPoint slide for the Lifetime Value view."""
     pptx_bytes = _build_lv_pptx(req)
-    filename = f"{req.client.replace(' ', '_')}_Lifetime_Value.pptx"
+    filename = f"{req.client_scope_name.replace(' ', '_')}_Lifetime_Value.pptx"
     return Response(
         content=pptx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",

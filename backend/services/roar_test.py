@@ -15,7 +15,7 @@ import csv
 import json
 from pathlib import Path
 
-from roar_extractor import extract_roar
+from services.roar_extractor import extract_roar
 
 
 def flatten_roi_field(field_data: dict) -> dict:

@@ -1,38 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Badge from '../components/Badge';
-import { BASE, getRecords, downloadRecordsAsXlsx, updateRecord, getAuditLog, getFields, generateExecutiveSummary, saveExecutiveSummary, deleteRecord } from '../services/api';
+import { BASE, downloadRecordsAsXlsx, updateRecord, getAuditLog, generateExecutiveSummary, saveExecutiveSummary, deleteRecord } from '../services/api';
 import ExecutiveSummaryReport from '../components/ExecutiveSummaryReport';
 import SendToHubModal from '../components/SendToHubModal';
-
-// ─── Field catalog ──────────────────────────────────────────────────────────
-// Single source of truth lives in the backend (models/field_catalog.py) and is
-// fetched once from GET /api/fields. The Tracker renders only `ui_visible`
-// fields, marks `editable` ones inline-editable, and uses `notes` for column
-// tooltips — so the column definitions are never duplicated here.
-let _fieldsCache = null;
-
-function useFields() {
-  const [catalog, setCatalog] = useState(_fieldsCache || []);
-  const [loading, setLoading] = useState(!_fieldsCache);
-
-  useEffect(() => {
-    if (_fieldsCache) return;
-    let alive = true;
-    getFields()
-      .then(f => { _fieldsCache = Array.isArray(f) ? f : []; if (alive) setCatalog(_fieldsCache); })
-      .catch(() => { if (alive) setCatalog([]); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
-
-  return useMemo(() => ({
-    catalog,
-    loading,
-    columns:     catalog.filter(f => f.ui_visible),
-    colByKey:    Object.fromEntries(catalog.map(f => [f.key, f])),
-    provMetrics: catalog.filter(f => f.provenance).map(f => [f.key, f.label]),
-  }), [catalog, loading]);
-}
+import useFields from '../hooks/useFields';
+import { useRecords } from '../hooks/useRecords';
 
 const COL_STORAGE = 'domosapiens.tracker.columns';
 
@@ -141,7 +114,7 @@ function ExecSummaryDrawer({ record, onClose }) {
   const handleDownloadPDF = () => {
     import('html2pdf.js').then(mod => {
       const html2pdf = mod.default;
-      const name = [record.client, record.publisher, record.year].filter(Boolean).join('_') || 'ROI';
+      const name = [record.client_scope_name, record.publisher].filter(Boolean).join('_') || 'ROI';
       html2pdf()
         .set({
           margin: [12, 12, 12, 12],
@@ -158,7 +131,7 @@ function ExecSummaryDrawer({ record, onClose }) {
 
   if (!record) return null;
 
-  const subtitle = [record.client, record.publisher, record.year].filter(Boolean).join(' · ');
+  const subtitle = [record.client_scope_name, record.publisher].filter(Boolean).join(' · ');
 
   return (
     <>
@@ -218,7 +191,7 @@ function ExecSummaryDrawer({ record, onClose }) {
             <ExecutiveSummaryReport
               summary={summary}
               subtitle={subtitle}
-              client={record.client || ''}
+              client={record.client_scope_name || ''}
               publisher={record.publisher || ''}
               innerRef={printRef}
             />
@@ -249,8 +222,8 @@ function ExecSummaryDrawer({ record, onClose }) {
 // ─── Tab: ROI Data (editable) ──────────────────────────────────────────────────
 function TabROIData({ onSendToDashboards }) {
   const { catalog, columns, colByKey, loading: fieldsLoading } = useFields();
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: records = [], isLoading: loading } = useRecords();
+  const queryClient = useQueryClient();
   const [edits, setEdits]     = useState({});        // { recordId: { field: stringValue } }
   const [editingCell, setEditingCell] = useState(null); // { rid, key }
   const [colPrefs, setColPrefs] = useState({ order: [], hidden: [] });
@@ -269,12 +242,7 @@ function TabROIData({ onSendToDashboards }) {
   const [conditions, setConditions] = useState([{ field: ANY_FIELD, query: '' }]);
   const dragKey = useRef(null);
 
-  const load = () => getRecords()
-    .then(data => setRecords(Array.isArray(data) ? data : []))
-    .catch(() => setRecords([]))
-    .finally(() => setLoading(false));
-
-  useEffect(() => { load(); }, []);
+  const reload = () => queryClient.invalidateQueries({ queryKey: ['records'] });
 
   // Column prefs depend on the fetched catalog, so load them once it arrives.
   const colKeySig = columns.map(c => c.key).join(',');
@@ -405,7 +373,7 @@ function TabROIData({ onSendToDashboards }) {
           await updateRecord(rid, { changes, user: editor, note });
         }
       }
-      await load();
+      await reload();
       discard();
     } catch (e) {
       console.error('[Tracker] save failed:', e);
@@ -476,7 +444,7 @@ function TabROIData({ onSendToDashboards }) {
     }
     try {
       await deleteRecord(deleteTarget.record_id, reason);
-      setRecords(prev => prev.filter(r => r.record_id !== deleteTarget.record_id));
+      reload();
       setDeleteTarget(null);
       setDeleteReason('');
       setDeleteError(false);
@@ -489,9 +457,8 @@ function TabROIData({ onSendToDashboards }) {
     setGenerating(r.record_id);
     try {
       const data = await generateExecutiveSummary({
-        client:               r.client,
+        client:               r.client_scope_name,
         publisher:            r.publisher,
-        year:                 r.year,
         identified_risk:      r.identified_risk,
         id_cost_avoidance:    r.id_cost_avoidance,
         acc_cost_avoidance:   r.acc_cost_avoidance,
@@ -504,10 +471,12 @@ function TabROIData({ onSendToDashboards }) {
       });
       const identifier = r.stored_name || r.source_file;
       if (identifier) await saveExecutiveSummary(identifier, data).catch(() => {});
-      // Update local state so drawer opens immediately
-      setRecords(prev => prev.map(rec =>
-        rec.record_id === r.record_id ? { ...rec, executive_summary: data } : rec
-      ));
+      // Update query cache so drawer opens immediately
+      queryClient.setQueryData(['records'], (old) =>
+        (old || []).map(rec =>
+          rec.record_id === r.record_id ? { ...rec, executive_summary: data } : rec
+        )
+      );
       setSummaryRecord({ ...r, executive_summary: data });
     } catch (e) {
       alert('Could not generate summary. Check your API key.');
@@ -751,7 +720,7 @@ function TabROIData({ onSendToDashboards }) {
               <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--navy)' }}>Delete Record</span>
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              <strong>{deleteTarget.client || deleteTarget.record_id}</strong> will be permanently removed. Select a reason:
+              <strong>{deleteTarget.client_scope_name || deleteTarget.record_id}</strong> will be permanently removed. Select a reason:
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               {['duplicate', 'error'].map(opt => (
@@ -799,19 +768,18 @@ function TabROIData({ onSendToDashboards }) {
 
 // ─── Tab: Audit Log (append-only event history) ─────────────────────────────────
 function TabAuditLog() {
+  const { data: records = [], isLoading: recordsLoading } = useRecords();
   const [events, setEvents]   = useState([]);
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [evLoading, setEvLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getAuditLog(), getRecords()])
-      .then(([ev, rec]) => {
-        setEvents(Array.isArray(ev) ? ev : []);
-        setRecords(Array.isArray(rec) ? rec : []);
-      })
-      .catch(() => { setEvents([]); setRecords([]); })
-      .finally(() => setLoading(false));
+    getAuditLog()
+      .then(ev => setEvents(Array.isArray(ev) ? ev : []))
+      .catch(() => setEvents([]))
+      .finally(() => setEvLoading(false));
   }, []);
+
+  const loading = recordsLoading || evLoading;
 
   const recById = useMemo(() => Object.fromEntries(records.map(r => [r.record_id, r])), [records]);
   const ordered = useMemo(
@@ -827,7 +795,7 @@ function TabAuditLog() {
       <div className="table-wrap">
         <table className="data-table">
           <thead>
-            <tr><th>Timestamp</th><th>Client</th><th>Publisher</th><th>Action</th><th>Field</th><th>Change</th><th>User</th><th>Note</th></tr>
+            <tr><th>Timestamp</th><th>Scope</th><th>Publisher</th><th>Action</th><th>Field</th><th>Change</th><th>User</th><th>Note</th></tr>
           </thead>
           <tbody>
             {ordered.length === 0 ? (
@@ -837,7 +805,7 @@ function TabAuditLog() {
               return (
                 <tr key={e.event_id}>
                   <td style={{ color: 'var(--text-faint)' }}>{e.timestamp ? new Date(e.timestamp).toLocaleString() : '—'}</td>
-                  <td>{rec.client || '—'}</td>
+                  <td>{rec.client_scope_name || '—'}</td>
                   <td>{rec.publisher || '—'}</td>
                   <td><Badge color={actionColor(e.action)}>{e.action}</Badge></td>
                   <td style={{ fontSize: 12 }}>{e.field || '—'}</td>
@@ -860,15 +828,7 @@ function TabAuditLog() {
 
 // ─── Tab: Source Files ────────────────────────────────────────────────────────
 function TabSourceFiles() {
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getRecords()
-      .then(data => setRecords(Array.isArray(data) ? data : []))
-      .catch(() => setRecords([]))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: records = [], isLoading: loading } = useRecords();
 
   if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>;
 
@@ -877,7 +837,7 @@ function TabSourceFiles() {
       <div className="table-wrap">
         <table className="data-table">
           <thead>
-            <tr><th>Filename</th><th>Client</th><th>Publisher</th><th>Year</th><th>Month</th><th>Used on</th><th>SME</th></tr>
+            <tr><th>Filename</th><th>Scope</th><th>Publisher</th><th>Start Date</th><th>End Date</th><th>Used on</th><th>SME</th></tr>
           </thead>
           <tbody>
             {records.length === 0 ? (
@@ -889,10 +849,10 @@ function TabSourceFiles() {
                       ? <a href={`${BASE}/uploads/${r.stored_name}`} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>{r.source_file || r.stored_name}</a>
                       : <span style={{ color: 'var(--text-muted)' }}>{r.source_file || '—'}</span>}
                   </td>
-                <td>{r.client}</td>
+                <td>{r.client_scope_name}</td>
                 <td>{r.publisher}</td>
-                <td>{r.year}</td>
-                <td>{r.month || '—'}</td>
+                <td>{r.applicable_from || '—'}</td>
+                <td>{r.applicable_to || '—'}</td>
                 <td style={{ color: 'var(--text-faint)' }}>{r.saved_at ? new Date(r.saved_at).toLocaleDateString() : '—'}</td>
                 <td>{r.sme || '—'}</td>
               </tr>
@@ -909,15 +869,7 @@ function TabSourceFiles() {
 // with the source slide and confidence the value was extracted with.
 function TabFieldProvenance() {
   const { provMetrics, loading: fieldsLoading } = useFields();
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getRecords()
-      .then(data => setRecords(Array.isArray(data) ? data : []))
-      .catch(() => setRecords([]))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: records = [], isLoading: loading } = useRecords();
 
   const rows = useMemo(() => {
     const out = [];
@@ -927,7 +879,7 @@ function TabFieldProvenance() {
         if (r[k] == null && !fm[k]) continue;
         const meta = fm[k] || {};
         out.push({
-          record_id: r.record_id, client: r.client, publisher: r.publisher, year: r.year, month: r.month,
+          record_id: r.record_id, client_scope_name: r.client_scope_name, publisher: r.publisher, applicable_from: r.applicable_from, applicable_to: r.applicable_to,
           metric: label, value: r[k],
           source_slide: meta.source_slide, confidence: meta.confidence,
           alternates: (meta.alternates || []).map(a => `${a.value} (${a.confidence}%)`).join(', '),
@@ -949,7 +901,7 @@ function TabFieldProvenance() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Record</th><th>Client</th><th>Publisher</th><th>Year</th><th>Month</th>
+                <th>Record</th><th>Scope</th><th>Publisher</th><th>Start Date</th><th>End Date</th>
                 <th>Metric</th><th>Value</th><th>Source slide</th><th>Confidence</th><th>Alternates</th>
               </tr>
             </thead>
@@ -959,10 +911,10 @@ function TabFieldProvenance() {
               ) : rows.map((row, i) => (
                 <tr key={i}>
                   <td style={{ fontSize: 11, color: 'var(--text-faint)' }}>{row.record_id}</td>
-                  <td>{row.client}</td>
+                  <td>{row.client_scope_name}</td>
                   <td>{row.publisher}</td>
-                  <td>{row.year}</td>
-                  <td>{row.month || '—'}</td>
+                  <td>{row.applicable_from || '—'}</td>
+                  <td>{row.applicable_to || '—'}</td>
                   <td>{row.metric}</td>
                   <td>{fmtAmount(row.value)}</td>
                   <td style={{ textAlign: 'center' }}>{row.source_slide ?? '—'}</td>

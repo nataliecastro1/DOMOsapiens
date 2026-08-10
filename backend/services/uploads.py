@@ -19,6 +19,7 @@ filesystem path.
 import hashlib
 import logging
 import os
+import time
 from datetime import datetime, timezone
 
 from services import db
@@ -130,7 +131,25 @@ def local_path(stored_name: str) -> str | None:
         fh.write(store.get(key))
     os.replace(tmp, cache_path)
     log.info("Materialised %s from %s store into render cache", safe, store.name)
+    evict_old_cache()
     return cache_path
+
+def evict_old_cache(max_age_seconds: int = 3600):
+    """Purge old render cache files to prevent ephemeral disk exhaustion."""
+    if not os.path.exists(UPLOAD_DIR):
+        return
+    now = time.time()
+    try:
+        for f in os.listdir(UPLOAD_DIR):
+            path = os.path.join(UPLOAD_DIR, f)
+            if os.path.isfile(path):
+                if now - os.path.getmtime(path) > max_age_seconds:
+                    try:
+                        os.remove(path)
+                    except Exception as e:
+                        log.warning("Failed to evict cache file %s: %s", f, e)
+    except Exception as e:
+        log.warning("Cache eviction failed: %s", e)
 
 
 def resolve_by_id_prefix(file_id_prefix: str) -> str | None:

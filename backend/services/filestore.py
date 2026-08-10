@@ -25,13 +25,14 @@ load_dotenv()  # env is read at import time — don't depend on config.py's impo
 
 log = logging.getLogger("roi.filestore")
 
-# Alfred-managed bucket (platform-injected, cannot be overridden by secrets)
-BUCKET_NAME = os.getenv("BUCKET_NAME", "")
-BUCKET_REGION = os.getenv("BUCKET_REGION") or None
-BUCKET_ENDPOINT = os.getenv("BUCKET_ENDPOINT") or None
-BUCKET_ACCESS_KEY_ID = os.getenv("BUCKET_ACCESS_KEY_ID") or None
-BUCKET_SECRET_ACCESS_KEY = os.getenv("BUCKET_SECRET_ACCESS_KEY") or None
-BUCKET_PREFIX = os.getenv("BUCKET_PREFIX", "").strip("/")
+# Alfred-managed bucket (platform-injected, prioritizing app-delivery-hub shared bucket)
+BUCKET_NAME = os.getenv("BUCKET_NAME_APP_DELIVERY_HUB") or os.getenv("BUCKET_NAME", "")
+BUCKET_REGION = os.getenv("BUCKET_REGION_APP_DELIVERY_HUB") or os.getenv("BUCKET_REGION") or None
+BUCKET_ENDPOINT = os.getenv("BUCKET_ENDPOINT_APP_DELIVERY_HUB") or os.getenv("BUCKET_ENDPOINT") or None
+BUCKET_ACCESS_KEY_ID = os.getenv("BUCKET_ACCESS_KEY_ID_APP_DELIVERY_HUB") or os.getenv("BUCKET_ACCESS_KEY_ID") or None
+BUCKET_SECRET_ACCESS_KEY = os.getenv("BUCKET_SECRET_ACCESS_KEY_APP_DELIVERY_HUB") or os.getenv("BUCKET_SECRET_ACCESS_KEY") or None
+BUCKET_PREFIX = os.getenv("BUCKET_PREFIX_APP_DELIVERY_HUB") or os.getenv("BUCKET_PREFIX", "")
+BUCKET_PREFIX = BUCKET_PREFIX.strip("/")
 
 # Generic S3 (non-Alfred deployments)
 S3_BUCKET = os.getenv("S3_BUCKET", "")

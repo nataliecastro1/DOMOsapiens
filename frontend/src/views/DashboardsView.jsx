@@ -1203,20 +1203,20 @@ function PublisherChipBar({ allPublishers, activePubs, onToggle, onToggleOthers,
 
 // ─── Value at a Glance banner ────────────────────────────────────────────────
 function ValueAtAGlance({ records = [], loginClient = '', selectedClient, onClientChange, fromYear, onFromYearChange, toYear, onToYearChange }) {
-  const allYears   = useMemo(() => [...new Set(records.map(r => r.year).filter(Boolean))].sort(), [records]);
-  const allClients = useMemo(() => [...new Set(records.map(r => r.client).filter(Boolean))].sort(), [records]);
+  const allYears   = useMemo(() => [...new Set(records.map(r => r.applicable_from ? parseInt(r.applicable_from.split('-')[0]) : null).filter(Boolean))].sort(), [records]);
+  const allClients = useMemo(() => [...new Set(records.map(r => r.client_scope_name).filter(Boolean))].sort(), [records]);
 
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting]   = useState(false);
 
   const clientFiltered = useMemo(() => {
     if (!selectedClient) return records;
-    return records.filter(r => r.client === selectedClient);
+    return records.filter(r => r.client_scope_name === selectedClient);
   }, [records, selectedClient]);
 
   const yearFiltered = useMemo(() => clientFiltered.filter(r => {
-    const y = r.year;
-    if (!y) return true;
+    const y = r.applicable_from ? parseInt(r.applicable_from.split('-')[0]) : null;
+    if (!y || isNaN(y)) return true;
     if (fromYear && y < fromYear) return false;
     if (toYear && y > toYear) return false;
     return true;
@@ -1342,7 +1342,7 @@ function ValueAtAGlance({ records = [], loginClient = '', selectedClient, onClie
     });
     return {
       period: periodLabel,
-      client: selectedClient || '',
+      client_scope_name: selectedClient || '',
       rows:   pubRows.map(({ pub, vals }) => ({ pub, ...toRow(vals) })),
       total:  { pub: 'Total', ...toRow(totalVals) },
     };
@@ -1626,18 +1626,18 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
   // Use allRecords for full publisher/year lists (not scoped)
   const pubList = useMemo(() => {
     const base = allRecords.length ? allRecords : records;
-    const matched = client ? base.filter(r => (r.client || '') === client) : base;
+    const matched = client ? base.filter(r => (r.client_scope_name || '') === client) : base;
     return [...new Set(matched.map(r => r.publisher).filter(Boolean))].sort();
   }, [allRecords, records, client]);
 
   const yearList = useMemo(() => {
     const base = allRecords.length ? allRecords : records;
     const matched = base.filter(r => {
-      if (client && (r.client || '') !== client) return false;
+      if (client && (r.client_scope_name || '') !== client) return false;
       if (pubMode === 'Select specific' && selPubs.length && !selPubs.includes(r.publisher)) return false;
       return true;
     });
-    return [...new Set(matched.map(r => String(r.year || '')).filter(Boolean))].sort();
+    return [...new Set(matched.map(r => r.applicable_from ? String(parseInt(r.applicable_from.split('-')[0])) : null).filter(Boolean))].sort();
   }, [allRecords, records, client, pubMode, selPubs]);
 
   const togglePub  = (p) => setSelPubs(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
@@ -1699,7 +1699,7 @@ function CustomDashBuilder({ records, allRecords = [], options, loginClient, onC
       const updated = await augmentExecutiveSummary({
         existing_summary: currentSummary,
         additional_text: text,
-        client,
+        client_scope_name: client,
         publisher: pubMode === 'Select specific' && selPubs.length === 1 ? selPubs[0] : '',
       });
       // Apply AI response back to the summary text fields
@@ -1973,13 +1973,13 @@ function buildSlideData(records, client, fromYear, toYear) {
   const yAxisMax = Math.ceil(yMax / 5) * 5 || 10;
 
   const pubs  = [...new Set(records.map(r => r.publisher).filter(Boolean))];
-  const years = [...new Set(records.map(r => r.year).filter(Boolean))].sort();
+  const years = [...new Set(records.map(r => r.applicable_from ? parseInt(r.applicable_from.split('-')[0]) : null).filter(Boolean))].sort();
   const scope = pubs.length && years.length
     ? `${pubs.length} publisher${pubs.length === 1 ? '' : 's'} · FY${years[0]}–FY${years[years.length - 1]}`
     : 'All engagements';
 
   return {
-    client: client || 'Client',
+    client_scope_name: client || 'Client',
     scope,
     groups: [
       { accent: 'opt', tag: 'Optimization Activities', metric: 'Realized Risk Avoidance',

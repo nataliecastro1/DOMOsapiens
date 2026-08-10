@@ -9,7 +9,7 @@ import { BASE } from '../services/api';
 // gate access. The form this replaced compared a hardcoded username against a
 // password kept in localStorage, which offered no protection at all: the check
 // ran in the browser, so anyone could bypass it from the console.
-export default function LoginView() {
+export default function LoginView({ onDevLogin }) {
   const [checking, setChecking] = useState(false);
 
   const retry = async () => {
@@ -50,6 +50,10 @@ export default function LoginView() {
 
         <button type="button" className="btn primary login-submit" onClick={retry} disabled={checking}>
           {checking ? 'Checking…' : 'Check again'}
+        </button>
+
+        <button type="button" onClick={onDevLogin} style={{ marginTop: 16, background: 'transparent', border: '1px dashed var(--border)', color: 'var(--text-muted)', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', width: '100%' }}>
+          DEV Mode (Bypass)
         </button>
       </div>
     </div>

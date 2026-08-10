@@ -1,42 +1,43 @@
 import React from 'react';
+import { NavLink } from 'react-router-dom';
 
 const NAV_ITEMS = [
-  { id: 'extract',    icon: 'ti-report-analytics', label: 'ROI Extraction' },
-  { id: 'dashboards', icon: 'ti-layout-dashboard',  label: 'Dashboards'     },
-  { id: 'tracker',    icon: 'ti-table',              label: 'ROI Tracker'    },
+  { id: 'extract',    icon: 'ti-report-analytics', label: 'ROI Extraction', path: '/extract' },
+  { id: 'queue',      icon: 'ti-stack-2',          label: 'Queue',          path: '/queue' },
+  { id: 'dashboards', icon: 'ti-layout-dashboard',  label: 'Dashboards',    path: '/dashboards' },
 ];
 
 const BOTTOM_ITEMS = [
-  { id: 'help',     icon: 'ti-help-circle', label: 'Help & Docs' },
-  { id: 'settings', icon: 'ti-settings',    label: 'Settings'    },
+  { id: 'help',     icon: 'ti-help-circle', label: 'Help & Docs', path: '/help' },
+  { id: 'settings', icon: 'ti-settings',    label: 'Settings',    path: '/settings' },
 ];
 
-export default function Sidebar({ activeView, onNav }) {
+export default function Sidebar() {
   return (
     <nav className="sidebar" aria-label="Main navigation">
       <div className="sidebar-section">
         <div className="sidebar-label">Tools</div>
         {NAV_ITEMS.map(item => (
-          <button
+          <NavLink
             key={item.id}
-            className={`nav-item ${activeView === item.id ? 'active' : ''}`}
-            onClick={() => onNav(item.id)}
+            to={item.path}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
             <i className={`ti ${item.icon}`} aria-hidden="true" />
             <span>{item.label}</span>
-          </button>
+          </NavLink>
         ))}
       </div>
       <div className="sidebar-section bottom">
         {BOTTOM_ITEMS.map(item => (
-          <button
+          <NavLink
             key={item.id}
-            className={`nav-item ${activeView === item.id ? 'active' : ''}`}
-            onClick={() => onNav(item.id)}
+            to={item.path}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
             <i className={`ti ${item.icon}`} aria-hidden="true" />
             <span>{item.label}</span>
-          </button>
+          </NavLink>
         ))}
       </div>
     </nav>

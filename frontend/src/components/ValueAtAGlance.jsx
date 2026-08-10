@@ -32,25 +32,7 @@ const fmtVal = (v) => {
 };
 
 export default function ValueAtAGlance({ records = [] }) {
-  const allYears = [...new Set(records.map(r => r.year).filter(Boolean))].sort();
-  const [fromYear, setFromYear] = useState(allYears[0] ?? null);
-  const [toYear,   setToYear]   = useState(allYears[allYears.length - 1] ?? null);
-
-  useEffect(() => {
-    const ys = [...new Set(records.map(r => r.year).filter(Boolean))].sort();
-    setFromYear(ys[0] ?? null);
-    setToYear(ys[ys.length - 1] ?? null);
-  }, [records]);
-
-  const yearFiltered = records.filter(r => {
-    const y = r.year;
-    if (!y) return true;
-    if (fromYear && y < fromYear) return false;
-    if (toYear   && y > toYear)   return false;
-    return true;
-  });
-
-  const allPublishers = [...new Set(yearFiltered.map(r => r.publisher).filter(Boolean))].sort();
+  const allPublishers = [...new Set(records.map(r => r.publisher).filter(Boolean))].sort();
   const [selectedPubs, setSelectedPubs] = useState(null);
   const activePubs = selectedPubs ?? allPublishers;
 
@@ -66,36 +48,29 @@ export default function ValueAtAGlance({ records = [] }) {
     }
   };
 
-  const finalRecords = yearFiltered.filter(r =>
+  const pubFiltered = records.filter(r =>
     !r.publisher ? activePubs.length === 0 : activePubs.includes(r.publisher)
   );
 
+  const allScopes = [...new Set(pubFiltered.map(r => r.client_scope_name).filter(Boolean))].sort();
+
+  const finalRecords = pubFiltered;
+
   const kpis    = METRICS.map(m => ({ ...m, value: sumMetric(finalRecords, m.key) }));
-  const pubRows = allPublishers
-    .filter(p => activePubs.includes(p))
-    .map(pub => ({ pub, values: METRICS.map(m => sumMetric(finalRecords.filter(r => r.publisher === pub), m.key)) }));
+  const scopeRows = allScopes
+    .map(scope => ({ scope, values: METRICS.map(m => sumMetric(finalRecords.filter(r => r.client_scope_name === scope), m.key)) }));
   const totalRow = { values: METRICS.map(m => sumMetric(finalRecords, m.key)) };
 
-  if (allYears.length === 0) return null;
+  if (records.length === 0) return null;
 
   return (
     <div style={{ marginBottom: 28, borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.10)' }}>
       {/* Header */}
       <div style={{ background: '#001941', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         <span style={{ color: '#fff', fontWeight: 700, fontSize: 15, flex: '0 0 auto' }}>Value at a Glance</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-          <span style={{ color: '#aab4c4' }}>From</span>
-          <select value={fromYear ?? ''} onChange={e => setFromYear(e.target.value || null)}
-            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}>
-            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <span style={{ color: '#aab4c4' }}>To</span>
-          <select value={toYear ?? ''} onChange={e => setToYear(e.target.value || null)}
-            style={{ background: '#0a2a5e', color: '#fff', border: '1px solid #2a4a7e', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }}>
-            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
+        
         <div style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <span style={{ color: '#aab4c4', fontSize: 13, marginRight: 8, alignSelf: 'center' }}>Publishers:</span>
           {allPublishers.map(pub => {
             const on = activePubs.includes(pub);
             return (
@@ -121,21 +96,21 @@ export default function ValueAtAGlance({ records = [] }) {
         ))}
       </div>
 
-      {/* Publisher table */}
-      {pubRows.length > 0 && (
+      {/* Scope table */}
+      {scopeRows.length > 0 && (
         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#001941', fontSize: 13 }}>
           <thead>
             <tr>
-              <th style={{ padding: '10px 16px', textAlign: 'left', color: '#fff', fontWeight: 700, borderBottom: '1px solid #0a2a5e', background: '#0a1f4e' }}>Publisher</th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', color: '#fff', fontWeight: 700, borderBottom: '1px solid #0a2a5e', background: '#0a1f4e' }}>Scope</th>
               {METRICS.map(m => (
                 <th key={m.key} style={{ padding: '10px 12px', textAlign: 'right', color: m.color, fontWeight: 700, borderBottom: '1px solid #0a2a5e', background: '#0a1f4e', fontSize: 12 }}>{m.label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {pubRows.map(({ pub, values }, ri) => (
-              <tr key={pub} style={{ background: ri % 2 === 0 ? '#001941' : '#00204e' }}>
-                <td style={{ padding: '9px 16px', color: '#fff', fontWeight: 600 }}>{pub}</td>
+            {scopeRows.map(({ scope, values }, ri) => (
+              <tr key={scope} style={{ background: ri % 2 === 0 ? '#001941' : '#00204e' }}>
+                <td style={{ padding: '9px 16px', color: '#fff', fontWeight: 600 }}>{scope || '—'}</td>
                 {values.map((v, ci) => (
                   <td key={ci} style={{ padding: '9px 12px', textAlign: 'right', color: METRICS[ci].color, fontWeight: 500 }}>{fmtVal(v)}</td>
                 ))}

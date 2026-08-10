@@ -9,8 +9,8 @@ Extract the following fields and return ONLY a valid JSON object. Metadata field
 
 Required JSON structure:
 {
-  "year":               <integer — the year of the ROAR report>,
-  "client":             <string — client/company name>,
+  "applicable_from":    <string — start date of the applicable range for this ROI, format YYYY-MM-DD or null>,
+  "applicable_to":      <string — end date of the applicable range for this ROI, format YYYY-MM-DD or null>,
   "publisher":          <string — software publisher e.g. Oracle, Microsoft, SAP, IBM>,
   "date_delivered":     <string — date delivered, format YYYY-MM-DD or null>,
   "currency":           <string — currency code e.g. USD, EUR. Default USD if not found>,

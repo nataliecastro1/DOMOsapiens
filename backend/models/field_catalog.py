@@ -47,16 +47,12 @@ FIELD_CATALOG: list[FieldDef] = [
         ui_visible=False, exportable=True,
     ),
     FieldDef(
-        key="client", label="Client", type="text",
-        notes="Client/account name the ROAR was delivered to.",
+        key="client_scope_name", label="Client Scope Name", type="text",
+        notes="Client scope name passed from the hub.",
     ),
     FieldDef(
         key="publisher", label="Publisher", type="text",
         notes="Software publisher the engagement covers (e.g. Oracle, SAP).",
-    ),
-    FieldDef(
-        key="year", label="Year", type="text",
-        notes="Reporting year the ROAR covers.",
     ),
     FieldDef(
         key="month", label="Month", type="text",
@@ -128,17 +124,17 @@ FIELD_CATALOG: list[FieldDef] = [
         ui_visible=False,
     ),
     FieldDef(
-        key="applicable_from", label="Applicable From", type="date",
+        key="applicable_from", label="Applicable Range Start", type="date",
         notes="Start of the date range during which this record's ROI values are considered active. "
               "Used for time-based reporting (e.g. show only value in effect during Q2). "
-              "Defaults to Jan 1 of the delivery year; confirmed or adjusted by the SME during review.",
-        ui_visible=False, editable=True,
+              "Confirmed or adjusted by the SME during review.",
+        ui_visible=True, editable=True,
     ),
     FieldDef(
-        key="applicable_to", label="Applicable To", type="date",
+        key="applicable_to", label="Applicable Range End", type="date",
         notes="End of the date range during which this record's ROI values are considered active. "
-              "Defaults to Dec 31 of the delivery year; confirmed or adjusted by the SME during review.",
-        ui_visible=False, editable=True,
+              "Confirmed or adjusted by the SME during review.",
+        ui_visible=True, editable=True,
     ),
     FieldDef(
         key="field_dates", label="Field Date Overrides", type="text",

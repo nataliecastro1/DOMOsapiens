@@ -131,9 +131,9 @@ def _name_matches(typed: str, text: str) -> bool:
 
 
 @router.get("/uploads/{stored_name}/check")
-def check_upload(stored_name: str, client: str = '', publisher: str = '', year: str = '', original_filename: str = ''):
+def check_upload(stored_name: str, client_scope_name: str = '', publisher: str = '', original_filename: str = ''):
     """Scan an uploaded file for red flags: draft/copy/versioned filename, and
-    whether the first page text mentions the expected client, publisher, and year."""
+    whether the first page text mentions the expected client scope name and publisher."""
     safe = os.path.basename(stored_name)
     path = _resolve(safe)
 
@@ -143,12 +143,10 @@ def check_upload(stored_name: str, client: str = '', publisher: str = '', year: 
     first_text = _first_slide_text(path)
     title = first_text[:120] if first_text else safe
 
-    if client and not _name_matches(client, first_text):
-        warnings.append(f'No match found for "{client}" — this document may belong to a different client.')
+    if client_scope_name and not _name_matches(client_scope_name, first_text):
+        warnings.append(f'No match found for "{client_scope_name}" — this document may belong to a different client.')
     if publisher and not _name_matches(publisher, first_text):
         warnings.append(f'No match found for "{publisher}" — this document may be for a different publisher.')
-    if year and not re.search(re.escape(year), first_text):
-        warnings.append(f'No match found for "{year}" — the document might be from a different year.')
 
     return {
         'title': title,

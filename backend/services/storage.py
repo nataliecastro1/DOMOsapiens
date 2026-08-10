@@ -35,7 +35,7 @@ from services import audit, db, record_columns
 # from the catalog; the catalog's `notes`/flags for these keys ship in the
 # Field_Definitions sheet (see export_xlsx).
 DOMO_COLUMNS = [
-    "year", "client", "publisher", "date_delivered", "currency",
+    "publisher", "date_delivered", "currency",
     "identified_risk", "id_cost_avoidance", "acc_cost_avoidance",
     "id_cost_optimization", "acc_cost_optimization", "realized_savings",
     "contract_spend", "pricing_available", "notes", "elevate_deliverable",
@@ -146,32 +146,26 @@ def get_record(record_id: str) -> dict | None:
     return _row_to_dict(row) if row else None
 
 
-def existing_natural_keys() -> dict[tuple, dict]:
-    """Existing (client, publisher, year) keys, for bulk-import duplicate checks.
-
-    Reads only the columns the duplicate report needs, over the
-    (client, publisher, year) index, instead of loading every full record.
-    """
+def existing_hub_ids() -> dict[int, dict]:
+    """Existing hub_deliverable_id keys, for bulk-import duplicate checks."""
     db.require_db()
     with db.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
-                "SELECT record_id, client, publisher, year, saved_at, source_file, sme,"
+                "SELECT record_id, hub_deliverable_id, publisher, saved_at, source_file, sme,"
                 "       identified_risk, acc_cost_avoidance, realized_savings"
                 " FROM roi_records"
+                " WHERE hub_deliverable_id IS NOT NULL"
             )
             rows = cur.fetchall()
-    out: dict[tuple, dict] = {}
+    out: dict[int, dict] = {}
     for r in rows:
-        client = (r["client"] or "").strip().lower()
-        publisher = (r["publisher"] or "").strip().lower()
-        if client and publisher and r["year"] is not None:
-            out[(client, publisher, int(r["year"]))] = _row_to_dict(r)
+        out[int(r["hub_deliverable_id"])] = _row_to_dict(r)
     return out
 
 
 # ── writes ────────────────────────────────────────────────────────────────────
-def save_record(record: ROIRecord) -> dict:
+def save_record(record: ROIRecord, auth_user: dict | None = None) -> dict:
     """Upsert a record, matching an existing one by stored_name or source_file.
 
     Assigns a stable record_id, preserves an executive summary the incoming
@@ -220,21 +214,25 @@ def save_record(record: ROIRecord) -> dict:
 
     # Audit only after the write has committed — the log must never describe a
     # change that rolled back. append_event uses its own connection anyway.
+    user_name = auth_user.get("username") if auth_user else entry.get("sme")
+    user_email = auth_user.get("email") if auth_user else None
+    user_id = auth_user.get("id") if auth_user else None
+
     for field, old, new in changed:
         audit.append_event(
-            saved["record_id"], "edit", user=entry.get("sme"), field=field,
+            saved["record_id"], "edit", user=user_name, user_email=user_email, user_id=user_id, field=field,
             old_value=old, new_value=new,
             note="SME review — updated on re-extraction",
         )
     audit.append_event(
-        saved["record_id"], action, user=entry.get("sme"),
+        saved["record_id"], action, user=user_name, user_email=user_email, user_id=user_id,
         note="Re-stored from extraction" if action == "update" else "Stored from extraction",
     )
     return saved
 
 
 def update_record(record_id: str, changes: dict, user: str | None = None,
-                  note: str | None = None) -> dict:
+                  note: str | None = None, auth_user: dict | None = None) -> dict:
     """Apply a partial edit, logging one audit event per changed field.
 
     Raises KeyError when the record is missing and ValueError for a field that
@@ -284,8 +282,12 @@ def update_record(record_id: str, changes: dict, user: str | None = None,
         # Most likely two records claiming one hub deliverable.
         raise Conflict(_conflict_message(e)) from e
 
+    user_name = auth_user.get("username") if auth_user else user
+    user_email = auth_user.get("email") if auth_user else None
+    user_id = auth_user.get("id") if auth_user else None
+
     for field, old, new in changed:
-        audit.append_event(record_id, "edit", user=user, field=field,
+        audit.append_event(record_id, "edit", user=user_name, user_email=user_email, user_id=user_id, field=field,
                            old_value=old, new_value=new, note=note)
     return updated
 
@@ -402,8 +404,8 @@ def export_xlsx() -> bytes:
     # ─── Sheet 2: SME_Audit_Log (event history) ──────────────────────────────
     ws_audit = wb.create_sheet("SME_Audit_Log")
     audit_columns = [
-        "timestamp", "record_id", "client", "publisher", "year",
-        "user", "action", "field", "old_value", "new_value", "note",
+        "timestamp", "record_id", "publisher",
+        "user", "user_email", "user_id", "action", "field", "old_value", "new_value", "note",
     ]
     _style_header(ws_audit, audit_columns, header_fill, header_font)
 
@@ -424,10 +426,10 @@ def export_xlsx() -> bytes:
         rec = by_id.get(e.get("record_id"), {})
         ws_audit.cell(row=row_idx, column=1, value=e.get("timestamp"))
         ws_audit.cell(row=row_idx, column=2, value=e.get("record_id"))
-        ws_audit.cell(row=row_idx, column=3, value=rec.get("client"))
-        ws_audit.cell(row=row_idx, column=4, value=rec.get("publisher"))
-        ws_audit.cell(row=row_idx, column=5, value=rec.get("year"))
-        ws_audit.cell(row=row_idx, column=6, value=e.get("user"))
+        ws_audit.cell(row=row_idx, column=3, value=rec.get("publisher"))
+        ws_audit.cell(row=row_idx, column=4, value=e.get("user"))
+        ws_audit.cell(row=row_idx, column=5, value=e.get("user_email"))
+        ws_audit.cell(row=row_idx, column=6, value=e.get("user_id"))
         ws_audit.cell(row=row_idx, column=7, value=e.get("action"))
         ws_audit.cell(row=row_idx, column=8, value=e.get("field"))
         ws_audit.cell(row=row_idx, column=9, value=e.get("old_value"))
@@ -438,7 +440,7 @@ def export_xlsx() -> bytes:
     # ─── Sheet 3: Field_Provenance (long format) ──────────────────────────────
     ws_prov = wb.create_sheet("Field_Provenance")
     prov_columns = [
-        "record_id", "client", "publisher", "year",
+        "record_id", "publisher",
         "metric", "value", "source_slide", "confidence", "alternates",
     ]
     _style_header(ws_prov, prov_columns, header_fill, header_font)
@@ -456,14 +458,12 @@ def export_xlsx() -> bytes:
                 f"{a.get('value')} ({a.get('confidence')}%)" for a in alts
             ) if alts else None
             ws_prov.cell(row=prov_row, column=1, value=record.get("record_id"))
-            ws_prov.cell(row=prov_row, column=2, value=record.get("client"))
-            ws_prov.cell(row=prov_row, column=3, value=record.get("publisher"))
-            ws_prov.cell(row=prov_row, column=4, value=record.get("year"))
-            ws_prov.cell(row=prov_row, column=5, value=label)
-            ws_prov.cell(row=prov_row, column=6, value=record.get(key))
-            ws_prov.cell(row=prov_row, column=7, value=meta.get("source_slide"))
-            ws_prov.cell(row=prov_row, column=8, value=meta.get("confidence"))
-            ws_prov.cell(row=prov_row, column=9, value=alts_str)
+            ws_prov.cell(row=prov_row, column=2, value=record.get("publisher"))
+            ws_prov.cell(row=prov_row, column=3, value=label)
+            ws_prov.cell(row=prov_row, column=4, value=record.get(key))
+            ws_prov.cell(row=prov_row, column=5, value=meta.get("source_slide"))
+            ws_prov.cell(row=prov_row, column=6, value=meta.get("confidence"))
+            ws_prov.cell(row=prov_row, column=7, value=alts_str)
             prov_row += 1
     _autowidth(ws_prov, prov_columns)
 

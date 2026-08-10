@@ -39,18 +39,22 @@ The app is two pieces that run side by side on a developer/analyst machine:
 │  • TrackerView (table)      │   POST /api/extract           │  models/   ── data shapes + catalog    │
 │  • DashboardsView (charts)  │   POST /api/executive-summary │                                        │
 │  • ClientsView / Settings   │   GET  /api/records           │   ┌──────────────┐  ┌───────────────┐ │
-│                             │   PATCH/api/records/{id}      │   │ Claude API   │  │ Local files   │ │
-│  services/api.js  ◀─────────┼───────────────────────────────┼──▶│ (Anthropic)  │  │ data/*.json   │ │
+│                             │   PATCH/api/records/{id}      │   │ Claude API   │  │ Postgres DB / │ │
+│  services/api.js  ◀─────────┼───────────────────────────────┼──▶│ (Anthropic)  │  │ Local JSON    │ │
 └─────────────────────────────┘                               │   └──────────────┘  └───────────────┘ │
                                                                └──────────────────────────────────────┘
 ```
 
-There is **no database**. State is plain files on disk under `backend/data/`:
+The application uses a **hybrid storage model** depending on the environment:
 
-- `roi_records.json` — every stored ROI record.
-- `audit_log.json` — the append-only event history (creates + edits).
-- `clients.json` — the client roster for the dropdown.
-- `uploads/` — the raw uploaded source documents (stored under a UUID filename).
+- **On Alfred (Production):** State is stored durably in a managed **Postgres** database (injected via `DATABASE_URL`) and uploaded documents are stored in an S3 bucket.
+- **Local Development:** When `DATABASE_URL` is absent, the app falls back to using plain JSON files on disk under `backend/data/`:
+  - `roi_records.json` — every stored ROI record.
+  - `audit_log.json` — the append-only event history (creates + edits).
+  - `clients.json` — the client roster for the dropdown.
+  - `uploads/` — the raw uploaded source documents (stored under a UUID filename).
+
+For deep details on the data schema and Alfred integration, see [`documentation-schema.md`](./documentation-schema.md).
 
 ---
 

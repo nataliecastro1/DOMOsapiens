@@ -21,8 +21,11 @@ function parse() {
     hub_pathfinder_id: pathfinderId || null,
     workstream: p.get('workstream') || null,
     client_scope_name: p.get('client_scope_name') || null,
-    year: p.get('year') ? Number(p.get('year')) : null,
+    start_dates: p.getAll('start_date'),
+    end_dates: p.getAll('end_date'),
     mode: p.get('mode') || null,         // 'edit' | 'new'
+    s3_key: p.get('s3_key') || null,
+    attached_file_name: p.get('attached_file_name') || null,
   };
 }
 

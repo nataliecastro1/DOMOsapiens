@@ -4,9 +4,9 @@ Local document search endpoint.
 How it works:
   - Documents live in:  DOMOsapiens/backend/documents/
   - To add more files:  drop any .pdf or .pptx file into that folder.
-  - The search filters by client, year, and publisher using the filename.
-  - Naming convention (recommended): CLIENT_PUBLISHER_YEAR.pdf
-    Example: UPS_IBM_ROAR_2025.pdf
+  - The search filters by hub_deliverable_id and publisher using the filename.
+  - Naming convention (recommended): PUBLISHER_HUB_DELIVERABLE_ID.pdf
+    Example: IBM_12345.pdf
 
 No restart needed when adding new files — the folder is scanned on every request.
 """
@@ -21,25 +21,24 @@ router = APIRouter(prefix="/api")
 SUPPORTED_EXTENSIONS = {".pdf", ".pptx", ".ppt", ".xlsx"}
 
 
-def _file_matches(filename: str, client: str, year: str, publisher: str) -> bool:
+def _file_matches(filename: str, hub_deliverable_id: str, publisher: str) -> bool:
     """
     Return True if the filename contains all non-empty filter terms.
     Matching is case-insensitive and ignores underscores/spaces.
     """
     name = filename.lower().replace("_", " ").replace("-", " ")
-    filters = [f for f in [client, year, publisher] if f and f.strip()]
+    filters = [f for f in [hub_deliverable_id, publisher] if f and f.strip()]
     return all(f.lower() in name for f in filters)
 
 
 @router.get("/documents/search")
-def search_documents(client: str = "", year: str = "", publisher: str = ""):
+def search_documents(hub_deliverable_id: str = "", publisher: str = ""):
     """
     Search the local documents folder.
 
     Query params (all optional):
-      client     — e.g. "UPS"
-      year       — e.g. "2025"
-      publisher  — e.g. "IBM"
+      hub_deliverable_id — e.g. "12345"
+      publisher          — e.g. "IBM"
 
     Returns a list of matching files with metadata.
     """
@@ -53,7 +52,7 @@ def search_documents(client: str = "", year: str = "", publisher: str = ""):
         if ext not in SUPPORTED_EXTENSIONS:
             continue
 
-        if not _file_matches(entry.name, client, year, publisher):
+        if not _file_matches(entry.name, hub_deliverable_id, publisher):
             continue
 
         stat = entry.stat()

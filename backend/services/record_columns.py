@@ -10,7 +10,7 @@ uses them to decide which keys of a legacy JSONB document map onto real columns
 # Scalar columns, in table order. `record_id`, `seq`, `saved_at` and
 # `updated_at` are managed separately by storage.py.
 SCALAR: list[str] = [
-    "year", "month", "client", "publisher", "date_delivered", "currency",
+    "month", "publisher", "date_delivered", "currency",
     "identified_risk", "id_cost_avoidance", "acc_cost_avoidance",
     "id_cost_optimization", "acc_cost_optimization", "realized_savings",
     "contract_spend",
@@ -21,6 +21,7 @@ SCALAR: list[str] = [
     # publisher was chosen from, not a replacement for it.
     "workstream",
     "hub_deliverable_id", "hub_deliverable_name", "hub_pathfinder_id",
+    "client_scope_name",
     "hub_saved_at", "hub_roi_metric_id",
     "batch_id",
 ]
@@ -32,18 +33,14 @@ JSON: list[str] = ["field_meta", "executive_summary", "field_dates"]
 WRITABLE: list[str] = SCALAR + JSON
 
 # Columns that are NOT NULL in the table, with the value to coerce blanks to.
-# `year` is deliberately absent — there is no sensible default for it, so a
-# record without a parseable year is a genuine error rather than something to
-# paper over.
 NOT_NULL_TEXT_DEFAULTS: dict[str, str] = {
-    "client": "",
     "publisher": "",
     "currency": "USD",
 }
 
 # Integer-typed columns, for coercing values that arrive as strings.
 INT_COLUMNS: set[str] = {
-    "year", "confidence", "hub_deliverable_id", "hub_roi_metric_id",
+    "confidence", "hub_deliverable_id", "hub_roi_metric_id",
 }
 
 # Money columns, all DOUBLE PRECISION.
@@ -60,5 +57,5 @@ AUDITED: list[str] = [
     "identified_risk", "id_cost_avoidance", "acc_cost_avoidance",
     "id_cost_optimization", "acc_cost_optimization", "realized_savings",
     "contract_spend", "applicable_from", "applicable_to", "field_dates",
-    "publisher", "client", "year",
+    "publisher",
 ]

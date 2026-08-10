@@ -23,6 +23,10 @@ export default function SendToHubModal({ record, onClose }) {
     getHubClientScopes()
       .then(list => {
         setScopes(list);
+        if (record.hub_scope_id) {
+          const hit = list.find(s => s.id === record.hub_scope_id);
+          if (hit) { setScopeId(hit.id); return; }
+        }
         // A record created from the Status View ROI button already knows its
         // pathfinder id — match that rather than guessing from the client name.
         if (record.hub_pathfinder_id) {

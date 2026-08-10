@@ -1,9 +1,11 @@
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, Response
 from typing import Optional
 from pydantic import BaseModel
+import httpx
+import os
 
 from models import ROIRecord, RecordUpdate
 from models.field_catalog import FIELD_CATALOG
@@ -19,10 +21,12 @@ from services.storage import (
     update_record,
 )
 from services.audit import get_events
-from services.identity import current_username
+from services.identity import current_user, current_username
+import io
 import io
 
 router = APIRouter(prefix="/api")
+HUB_API_URL = os.getenv("HUB_API_URL", "http://localhost:3501")
 
 
 @router.get("/fields")
@@ -34,16 +38,63 @@ def list_fields():
     return [f.model_dump() for f in FIELD_CATALOG]
 
 
+def _sync_to_hub_bg(record_id: str, payload: dict, auth_email: str):
+    import logging
+    try:
+        hub_resp = httpx.post(
+            f"{HUB_API_URL}/v1/roi/save",
+            json=payload,
+            headers={"X-Alfred-User-Email": auth_email},
+            timeout=10.0
+        )
+        hub_resp.raise_for_status()
+        hub_data = hub_resp.json()
+        
+        update_record(
+            record_id, 
+            {
+                "hub_roi_metric_id": hub_data.get("id"), 
+                "hub_saved_at": datetime.utcnow().isoformat()
+            },
+            user="system",
+            note="Background sync from Hub"
+        )
+    except Exception as e:
+        logging.getLogger("roi.sync").error(f"Background sync to Hub failed: {e}")
+
+
 @router.post("/records")
-def create_record(record: ROIRecord, request: Request):
+def create_record(record: ROIRecord, request: Request, background_tasks: BackgroundTasks):
     """Save an extracted ROI record.
 
     The reviewing SME is taken from Alfred's SSO identity, so the audit trail
     records who actually saved it rather than a name the client asserted."""
-    sso_user = current_username(request)
-    if sso_user:
-        record.sme = sso_user
-    saved = save_record(record)
+    if not record.hub_deliverable_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Save will not be performed since it is missing QA'd deliverable provenance available in the hub."
+        )
+
+    auth_user = current_user(request)
+    if auth_user and auth_user.get("username"):
+        record.sme = auth_user["username"]
+    
+    # Save locally first
+    saved = save_record(record, auth_user=auth_user)
+    
+    # Dual-write: decoupled via BackgroundTasks
+    if record.hub_deliverable_id:
+        payload = record.model_dump()
+        payload["deliverable_id"] = record.hub_deliverable_id
+        auth_email = request.headers.get("X-Alfred-User-Email", "local@local")
+        
+        background_tasks.add_task(
+            _sync_to_hub_bg, 
+            record_id=saved.get("record_id"), 
+            payload=payload, 
+            auth_email=auth_email
+        )
+
     return {"status": "saved", "record": saved}
 
 
@@ -93,10 +144,11 @@ def delete_one_record(record_id: str, reason: str = ""):
 def edit_record(record_id: str, update: RecordUpdate, request: Request):
     """Apply a partial edit to a stored record. Each changed field is logged to
     the append-only audit log with the editor (from SSO) and an optional note."""
-    editor = current_username(request) or update.user
+    auth_user = current_user(request)
+    editor = auth_user.get("username") or update.user
     try:
         updated = update_record(
-            record_id, update.changes, user=editor, note=update.note,
+            record_id, update.changes, user=editor, note=update.note, auth_user=auth_user
         )
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Record not found: {record_id}")

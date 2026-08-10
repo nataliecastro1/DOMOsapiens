@@ -101,3 +101,20 @@ export function saveRoiToHub(record, { deliverableId, clientScopeId }) {
     body: JSON.stringify(payload),
   });
 }
+
+/**
+ * Fetch a deliverable file from the Hub's S3 bucket, returning it as a browser File.
+ */
+export async function fetchHubDeliverableFile(scopeId, deliverableId, fileName) {
+  const res = await fetch(`${HUB_BASE}/sows/${encodeURIComponent(scopeId)}/deliverables/${deliverableId}/file`, {
+    headers: { Accept: '*/*' }
+  });
+  if (res.status === 401 || res.status === 403) {
+    throw new Error('Not authorized on the delivery hub to download this file.');
+  }
+  if (!res.ok) {
+    throw new Error(`Failed to download deliverable file: ${res.status}`);
+  }
+  const blob = await res.blob();
+  return new File([blob], fileName || 'Deliverable_File', { type: blob.type || 'application/octet-stream' });
+}

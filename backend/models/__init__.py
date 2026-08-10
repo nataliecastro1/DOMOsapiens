@@ -18,9 +18,7 @@ class FieldMeta(BaseModel):
 class ROIRecord(BaseModel):
     """One extracted ROAR document mapped to the 15 Domo export columns."""
     record_id:               Optional[str]   = None   # stable join key across all sheets/logs
-    year:                    int
     month:                   Optional[str]   = None
-    client:                  str
     # The ROI dimension. The hub hands over a `workstream` (its team); the user
     # picks the publisher it covers from that workstream's allowed set — see
     # services/workstreams.py. Publisher is what both apps store on the record.
@@ -59,6 +57,7 @@ class ROIRecord(BaseModel):
     hub_deliverable_id:      Optional[int]   = None
     hub_deliverable_name:    Optional[str]   = None
     hub_pathfinder_id:       Optional[str]   = None  # the canonical cross-system scope key
+    client_scope_name:       Optional[str]   = None  # the hub's scope name
     workstream:              Optional[str]   = None  # the hub's team; maps to publisher
     hub_saved_at:            Optional[str]   = None  # set once pushed to the hub
     hub_roi_metric_id:       Optional[int]   = None  # roi_metrics.id returned by the hub

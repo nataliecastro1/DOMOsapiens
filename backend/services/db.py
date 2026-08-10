@@ -20,9 +20,10 @@ import time
 from contextlib import contextmanager
 
 import psycopg
+from psycopg_pool import ConnectionPool
 from dotenv import load_dotenv
 
-from services import schema
+
 
 load_dotenv()  # env is read at import time — don't depend on config.py's import order
 
@@ -39,9 +40,22 @@ _state = {"available": False, "probed_at": 0.0}
 _probe_lock = threading.Lock()
 
 
+_pool = None
+
+def get_pool():
+    global _pool
+    if _pool is None and DATABASE_URL:
+        # Create a connection pool to avoid TCP connection exhaustion.
+        # open=True opens it immediately (sync pool).
+        _pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=20, timeout=5, open=True)
+    return _pool
+
 @contextmanager
 def _raw_conn():
-    with psycopg.connect(DATABASE_URL, connect_timeout=5) as conn:
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("DATABASE_URL is not set")
+    with pool.connection() as conn:
         yield conn
 
 
@@ -71,12 +85,12 @@ _conn = connection
 
 
 def _probe() -> bool:
-    """Connect and ensure the schema. Returns True when Postgres is usable."""
+    """Connect and ensure Postgres is usable."""
     try:
         with _raw_conn() as conn:
-            schema.apply(conn)
+            conn.execute("SELECT 1")
         if not _state["available"]:
-            log.info("Postgres connected; all tables ready")
+            log.info("Postgres connected")
         _state["available"] = True
         return True
     except Exception as e:
@@ -86,7 +100,7 @@ def _probe() -> bool:
 
 
 def init_db() -> bool:
-    """Create every table at startup. Returns True when Postgres is usable.
+    """Run database migrations at startup. Returns True when Postgres is usable.
 
     A False return is not fatal on a developer machine, but on Alfred it means
     records cannot be saved — services.jsonstore and services.storage both
@@ -100,10 +114,31 @@ def init_db() -> bool:
         _state["probed_at"] = time.monotonic()
         ok = _probe()
     if ok:
-        # Imported here rather than at module scope: migrate depends on db.
-        from services import migrate
-
-        migrate.run_all()
+        try:
+            import os
+            from alembic.config import Config
+            from alembic import command
+            
+            # Find alembic.ini relative to this file
+            backend_dir = os.path.dirname(os.path.dirname(__file__))
+            alembic_cfg_path = os.path.join(backend_dir, "alembic.ini")
+            alembic_cfg = Config(alembic_cfg_path)
+            # Must set main config to backend_dir so it finds 'alembic/env.py'
+            alembic_cfg.set_main_option("script_location", os.path.join(backend_dir, "alembic"))
+            alembic_cfg.attributes["configure_logger"] = False
+            
+            log.info("Running Alembic migrations...")
+            command.upgrade(alembic_cfg, "head")
+            log.info("Alembic migrations complete.")
+            
+            # Run data backfills
+            from services import migrate
+            migrate.run_all()
+        except Exception as e:
+            log.error("Failed to run database migrations: %s", e)
+            ok = False
+            _state["available"] = False
+            
     return ok
 
 
@@ -219,3 +254,74 @@ def _row_to_dict(row) -> dict | None:
         "uploaded_by": row[8],
         "uploaded_by_email": row[9],
     }
+
+# ─── Extraction Jobs ─────────────────────────────────────────────────────────
+
+import uuid
+import json
+
+def create_extraction_job(file_path: str, user_id: str | None = None, user_email: str | None = None, original_filename: str | None = None) -> str:
+    job_id = str(uuid.uuid4())
+    with connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO extraction_jobs (job_id, status, file_path, user_id, user_email, original_filename)
+            VALUES (%s, 'PENDING', %s, %s, %s, %s)
+            """,
+            (job_id, file_path, user_id, user_email, original_filename)
+        )
+    return job_id
+
+def get_user_extraction_jobs(user_id: str) -> list[dict]:
+    with connection() as conn:
+        res = conn.execute(
+            """
+            SELECT job_id, status, file_path, result_data, error_message, created_at, original_filename
+            FROM extraction_jobs 
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            """,
+            (user_id,)
+        )
+        return [
+            {
+                "job_id": row[0],
+                "status": row[1],
+                "file_path": row[2],
+                "result_data": row[3],
+                "error_message": row[4],
+                "created_at": row[5].isoformat() if row[5] else None,
+                "original_filename": row[6],
+            }
+            for row in res.fetchall()
+        ]
+
+def update_extraction_job(job_id: str, status: str, result_data: dict | None = None, error_message: str | None = None) -> None:
+    # psycopg jsonb binding
+    from psycopg.types.json import Jsonb
+    
+    with connection() as conn:
+        conn.execute(
+            """
+            UPDATE extraction_jobs 
+            SET status = %s, result_data = %s, error_message = %s, updated_at = now()
+            WHERE job_id = %s
+            """,
+            (status, Jsonb(result_data) if result_data else None, error_message, job_id)
+        )
+
+def get_extraction_job(job_id: str) -> dict | None:
+    with connection() as conn:
+        row = conn.execute(
+            "SELECT job_id, status, file_path, result_data, error_message FROM extraction_jobs WHERE job_id = %s",
+            (job_id,)
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "job_id": row[0],
+            "status": row[1],
+            "file_path": row[2],
+            "result_data": row[3],
+            "error_message": row[4]
+        }

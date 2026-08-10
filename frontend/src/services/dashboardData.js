@@ -23,10 +23,11 @@ function num(v) {
 
 /** Derive filter option lists from the records actually present. */
 export function deriveOptions(records) {
-  const clients    = [...new Set(records.map(r => r.client).filter(Boolean))].sort();
+  const clientScopeNames = [...new Set(records.map(r => r.client_scope_name).filter(Boolean))].sort();
   const publishers = [...new Set(records.map(r => r.publisher).filter(Boolean))].sort();
-  const years      = [...new Set(records.map(r => r.year).filter(Boolean))].sort((a, b) => b - a);
-  return { clients, publishers, years };
+  // For years, we can parse the year from applicable_from (e.g. "2024-01-01" -> 2024)
+  const years = [...new Set(records.map(r => r.applicable_from ? parseInt(r.applicable_from.split('-')[0]) : null).filter(Boolean))].sort((a, b) => b - a);
+  return { clients: clientScopeNames, publishers, years };
 }
 
 /** Sum a numeric field across records, ignoring nulls/non-numbers. */
@@ -59,9 +60,12 @@ export function formatCurrency(n) {
  */
 export function matchFilters(records, { client = null, publishers = null, years = null } = {}) {
   return records.filter(r => {
-    if (client && r.client !== client) return false;
+    if (client && r.client_scope_name !== client) return false;
     if (Array.isArray(publishers) && !publishers.includes(r.publisher)) return false;
-    if (Array.isArray(years) && !years.map(String).includes(String(r.year))) return false;
+    if (Array.isArray(years)) {
+      const recYear = r.applicable_from ? String(r.applicable_from).split('-')[0] : null;
+      if (!years.map(String).includes(String(recYear))) return false;
+    }
     return true;
   });
 }
@@ -74,8 +78,11 @@ export function matchFilters(records, { client = null, publishers = null, years 
 export function groupSum(records, groupKey, metricKey) {
   const map = new Map();
   for (const r of records) {
-    const raw = r[groupKey];
-    const label = (raw === '' || raw == null) ? 'Unassigned' : String(raw);
+    let raw = r[groupKey];
+    if (groupKey === 'year' && r.applicable_from) {
+      raw = parseInt(String(r.applicable_from).split('-')[0]);
+    }
+    const label = (raw === '' || raw == null || Number.isNaN(raw)) ? 'Unassigned' : String(raw);
     map.set(label, (map.get(label) || 0) + (num(r[metricKey]) || 0));
   }
   return [...map.entries()]
@@ -96,8 +103,8 @@ export function groupSum(records, groupKey, metricKey) {
 export function yearSeries(records, metricKey) {
   const map = new Map();
   for (const r of records) {
-    const yr = num(r.year);
-    if (yr == null) continue;
+    const yr = r.applicable_from ? parseInt(r.applicable_from.split('-')[0]) : null;
+    if (yr == null || isNaN(yr)) continue;
     map.set(yr, (map.get(yr) || 0) + (num(r[metricKey]) || 0));
   }
   return [...map.entries()]

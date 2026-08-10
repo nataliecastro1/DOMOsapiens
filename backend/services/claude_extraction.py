@@ -11,6 +11,8 @@ import json
 import re
 from pathlib import Path
 
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
 from config import ANTHROPIC_API_KEY, ROI_MODEL, ROI_MAX_TOKENS
 from services.prompt import EXTRACTION_PROMPT
 
@@ -19,7 +21,11 @@ def _pdf_to_base64(file_path: str) -> str:
     with open(file_path, "rb") as f:
         return base64.standard_b64encode(f.read()).decode("utf-8")
 
-
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(Exception)
+)
 async def extract_with_claude(file_path: str) -> dict:
     """
     Send a document file directly to Claude and return extracted ROI fields.
@@ -33,7 +39,7 @@ async def extract_with_claude(file_path: str) -> dict:
 
     import anthropic
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
     ext = Path(file_path).suffix.lower()
 
@@ -113,7 +119,7 @@ async def extract_with_claude(file_path: str) -> dict:
             }
         ]
 
-    message = client.messages.create(
+    message = await client.messages.create(
         model=ROI_MODEL,
         max_tokens=ROI_MAX_TOKENS,
         system=EXTRACTION_PROMPT,
@@ -126,4 +132,14 @@ async def extract_with_claude(file_path: str) -> dict:
     if not json_match:
         raise ValueError(f"Claude did not return valid JSON. Raw: {raw[:300]}")
 
-    return json.loads(json_match.group())
+    json_string = json_match.group()
+    
+    try:
+        return json.loads(json_string)
+    except json.JSONDecodeError:
+        # Fallback: Strip trailing commas which commonly break strict JSON parsers
+        cleaned = re.sub(r',\s*([\]}])', r'\1', json_string)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse Claude output as JSON even after cleanup. Error: {e}")

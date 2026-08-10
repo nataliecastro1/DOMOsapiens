@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
-import ExtractionView from './views/ExtractionView';
-import DashboardsView from './views/DashboardsView';
-import TrackerView from './views/TrackerView';
-import ClientsView from './views/ClientsView';
-import HelpView from './views/HelpView';
-import LoginView from './views/LoginView';
-import SettingsView from './views/SettingsView';
+
+// Code splitting: dynamically import heavy views so the initial bundle stays small
+const ExtractionView = lazy(() => import('./views/ExtractionView'));
+const QueueView      = lazy(() => import('./views/QueueView'));
+const DashboardsView = lazy(() => import('./views/DashboardsView'));
+const ClientsView    = lazy(() => import('./views/ClientsView'));
+const HelpView       = lazy(() => import('./views/HelpView'));
+const LoginView      = lazy(() => import('./views/LoginView'));
+const SettingsView   = lazy(() => import('./views/SettingsView'));
 import TutorialOverlay, { shouldShowTutorial } from './components/TutorialOverlay';
 import AccessGuard from './components/AccessGuard';
 import { BASE } from './services/api';
@@ -18,11 +21,12 @@ import './index.css';
 
 const VIEW_META = {
   extract:    { title: 'ROI Report Extraction', sub: 'Extract, validate, and store client ROI data',                              ctx: '/ ROI Extraction' },
-  dashboards: { title: 'Dashboards',             sub: 'Build and save custom ROI views',                                           ctx: '/ Dashboards'     },
-  tracker:    { title: 'ROI Tracker',            sub: 'Client_ROI_Tracker.xlsx — All_ROI_Data · SME_Audit_Log · Source_File_Log', ctx: '/ ROI Tracker'    },
-  clients:    { title: 'Clients',                sub: 'Manage active client accounts',                                             ctx: '/ Clients'        },
-  help:       { title: 'Help & Docs',            sub: 'Quick reference and documentation',                                         ctx: '/ Help'           },
-  settings:   { title: 'Settings',               sub: 'Appearance and account preferences',                                        ctx: '/ Settings'       },
+  queue:      { title: 'Extraction Queue',      sub: 'Monitor background extraction jobs',                                        ctx: '/ Queue'          },
+  dashboards: { title: 'Dashboards',            sub: 'Build and save custom ROI views',                                           ctx: '/ Dashboards'     },
+
+  clients:    { title: 'Clients',               sub: 'Manage active client accounts',                                             ctx: '/ Clients'        },
+  help:       { title: 'Help & Docs',           sub: 'Quick reference and documentation',                                         ctx: '/ Help'           },
+  settings:   { title: 'Settings',              sub: 'Appearance and account preferences',                                        ctx: '/ Settings'       },
 };
 
 export default function App() {
@@ -32,7 +36,9 @@ export default function App() {
   // ROI capabilities per the hub's RBAC. null = still resolving or hub
   // unreachable (fail open, since the hub enforces the real gate server-side).
   const [roiAccess, setRoiAccess]       = useState(null);
-  const [activeView, setActiveView]     = useState('extract');
+  const location                        = useLocation();
+  const navigate                        = useNavigate();
+  const activePath                      = location.pathname.split('/')[1] || 'extract';
   const [theme, setTheme]               = useState(() => localStorage.getItem('theme') || 'light');
 
   // Silent sign-in: Alfred SSO headers when deployed, auto dev user locally.
@@ -72,46 +78,47 @@ export default function App() {
   const [dashboardSeed, setDashboardSeed] = useState(null);
   const [dashboardTarget, setDashboardTarget] = useState(null); // record to open directly
   const [newDashId, setNewDashId] = useState(null); // newly saved auto-dashboard to highlight
-  const meta = VIEW_META[activeView] || VIEW_META.extract;
+  const meta = VIEW_META[activePath] || VIEW_META.extract;
 
   // Jump to Dashboards scoped to exactly the rows currently shown in the Tracker.
   const sendToDashboards = (records) => {
     setDashboardSeed(Array.isArray(records) ? records : null);
-    setActiveView('dashboards');
+    navigate('/dashboards');
   };
 
   if (!authChecked) {
-    return null; // avoid flashing the notice while /api/auth/me resolves
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)' }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+          <i className="ti ti-loader-2 spinning" style={{ fontSize: 40, color: 'var(--blue)', marginBottom: 16 }} />
+          <div>Starting ROI Workspace...</div>
+        </div>
+      </div>
+    );
   }
 
   if (!loggedIn) {
-    return <LoginView />;
+    return (
+      <Suspense fallback={null}>
+        <LoginView onDevLogin={() => {
+          // Set mock Hub Context for local DEV testing
+          localStorage.setItem('hub_deliverable_id', 'dev-deliv-1234');
+          localStorage.setItem('hub_workstream_name', 'Dev Workstream');
+          localStorage.setItem('hub_client_name', 'Anglepoint Demo');
+          localStorage.setItem('hub_applicable_from', '2023-01-01');
+          localStorage.setItem('hub_applicable_to', '2024-12-31');
+          setLoggedIn(true);
+          setLoggedInUser('dev_user');
+        }} />
+      </Suspense>
+    );
   }
-
-  const renderView = () => {
-    switch (activeView) {
-      case 'extract':
-        // The hub gates the extraction engine by roster role; when it says no,
-        // show the guard screen instead of a UI whose every action would 403.
-        if (roiAccess && roiAccess.can_extract === false) {
-          return <AccessGuard role={roiAccess.role} allowedRoles={roiAccess.allowed_roles} user={roiAccess.user || loggedInUser} />;
-        }
-        return <ExtractionView key={extractionKey} onNav={(view, dashId) => { if (dashId) setNewDashId(dashId); setActiveView(view); }} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} onOpenRecord={r => { setDashboardTarget(r); setActiveView('dashboards'); }} />;
-      case 'dashboards': return <DashboardsView seed={dashboardSeed} onSeedConsumed={() => setDashboardSeed(null)} loginClient={loginClient} loginPublisher={loginPublisher} targetRecord={dashboardTarget} onTargetConsumed={() => setDashboardTarget(null)} loggedInUser={loggedInUser} newDashId={newDashId} onNewDashConsumed={() => setNewDashId(null)} />;
-      case 'tracker':    return <TrackerView loggedInUser={loggedInUser} onSendToDashboards={sendToDashboards} />;
-      case 'clients':    return <ClientsView />;
-      case 'help':       return <HelpView />;
-      case 'settings':   return <SettingsView theme={theme} onThemeChange={setTheme} />;
-      default:           return <ExtractionView onNav={setActiveView} loggedInUser={loggedInUser} initialClient={loginClient} initialPublisher={loginPublisher} />;
-    }
-  };
 
   return (
     <div className="app">
-      {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
       <TopBar ctxLabel={meta.ctx} onLogout={() => setLoggedIn(false)} />
       <div className="app-body">
-        <Sidebar activeView={activeView} onNav={setActiveView} />
+        <Sidebar />
         <main className="main">
           <div className="topstrip">
             <div>
@@ -119,7 +126,52 @@ export default function App() {
               <div className="page-sub">{meta.sub}</div>
             </div>
           </div>
-          <div className="content">{renderView()}</div>
+          <div className="content">
+            <Suspense fallback={
+              <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                <i className="ti ti-loader-2 spinning" style={{ fontSize: 24, marginRight: 8 }} /> Loading view...
+              </div>
+            }>
+              <Routes>
+                <Route path="/" element={<Navigate to="/extract" replace />} />
+                
+                <Route path="/extract" element={
+                  (roiAccess && roiAccess.can_extract === false) ? 
+                    <AccessGuard role={roiAccess.role} allowedRoles={roiAccess.allowed_roles} user={roiAccess.user || loggedInUser} /> :
+                    <ExtractionView 
+                      key={extractionKey} 
+                      onNav={(view, dashId) => { if (dashId) setNewDashId(dashId); navigate(`/${view}`); }} 
+                      loggedInUser={loggedInUser} 
+                      initialClient={loginClient} 
+                      initialPublisher={loginPublisher} 
+                      onOpenRecord={r => { setDashboardTarget(r); navigate('/dashboards'); }} 
+                    />
+                } />
+
+                <Route path="/queue" element={<QueueView />} />
+                
+                <Route path="/dashboards" element={
+                  <DashboardsView 
+                    seed={dashboardSeed} 
+                    onSeedConsumed={() => setDashboardSeed(null)} 
+                    loginClient={loginClient} 
+                    loginPublisher={loginPublisher} 
+                    targetRecord={dashboardTarget} 
+                    onTargetConsumed={() => setDashboardTarget(null)} 
+                    loggedInUser={loggedInUser} 
+                    newDashId={newDashId} 
+                    onNewDashConsumed={() => setNewDashId(null)} 
+                  />
+                } />
+                
+                <Route path="/clients" element={<ClientsView />} />
+                <Route path="/help" element={<HelpView />} />
+                <Route path="/settings" element={<SettingsView theme={theme} onThemeChange={setTheme} />} />
+                
+                <Route path="*" element={<Navigate to="/extract" replace />} />
+              </Routes>
+            </Suspense>
+          </div>
         </main>
       </div>
     </div>
